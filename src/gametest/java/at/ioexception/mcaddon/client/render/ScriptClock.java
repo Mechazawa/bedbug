@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.animation.AnimationPlayer;
 import at.ioexception.mcaddon.bedrock.animation.BonePose;
+import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.entity.AddonEntity;
 
 import java.util.List;
@@ -42,9 +43,12 @@ public final class ScriptClock {
         return pose == null ? new BonePose() : pose;
     }
 
-    /** A variable of the entity's script as it stands now, zero where nothing has set it. */
+    /**
+     * A variable of the entity's script as it stands now, zero where nothing has set it. A name may
+     * go on into the struct the variable holds, as `pose.r.y` does.
+     */
     public float variable(String name) {
-        return entry.animator().environment().variable(name).asFloat();
+        return MolangParser.parse("v." + name).asFloat(entry.animator().environment());
     }
 
     /** The passes the entity's render controllers pick from the script as it stands now. */

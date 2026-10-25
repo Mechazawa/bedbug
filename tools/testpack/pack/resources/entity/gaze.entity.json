@@ -10,8 +10,10 @@
         "default": "textures/entity/ember"
       },
       "geometry": {
-        "default": "geometry.tp.gaze"
+        "default": "geometry.tp.gaze",
+        "tall": "geometry.tp.gaze_tall"
       },
+      "queryable_geometry": "tall",
       "animations": {
         "lean": "animation.tp.gaze.lean",
         "stir": "animation.tp.gaze.stir",
@@ -19,7 +21,11 @@
         "wake": "controller.animation.tp.gaze.wake"
       },
       "scripts": {
-        "pre_animation": ["v.ground_speed = q.ground_speed;", "v.distance_moved = q.modified_distance_moved;"],
+        "pre_animation": [
+          "v.ground_speed = q.ground_speed;",
+          "v.distance_moved = q.modified_distance_moved;",
+          "v.head_pose = q.bone_orientation_trs('head');"
+        ],
         "animate": ["lean", "wake", {"stride": "q.modified_move_speed"}]
       },
       "render_controllers": ["controller.render.tp.sprite"]

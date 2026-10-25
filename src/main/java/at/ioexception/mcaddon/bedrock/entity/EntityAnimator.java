@@ -95,11 +95,7 @@ public final class EntityAnimator {
         this.definition = definition;
         this.player = new AnimationPlayer(assets, entity);
 
-        // A render controller picks a geometry per pass out of the same list, so a query asked before
-        // any pass is resolved reads the one the entity names `default`, or its first when it names
-        // none. Bedrock calls that the queryable geometry.
-        String named = definition.geometry().getOrDefault("default",
-            definition.geometry().values().stream().findFirst().orElse(null));
+        String named = definition.queryableGeometry();
         BedrockGeometry geometry = named == null ? null : assets.geometry(named);
         if (geometry == null) return;
 

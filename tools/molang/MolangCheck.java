@@ -6,21 +6,21 @@ import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 /** Parses every expression a real pack contains, then checks the answers that can be worked out. */
 public final class MolangCheck {
     public static void main(String[] args) throws Exception {
         List<String> expressions = Files.readAllLines(Path.of(args[0]));
         MolangEnvironment environment = new MolangEnvironment();
-        // A query answering with several numbers at once is asked for one member at a time, and the
-        // member reaches the answering side as part of the name whether or not the call took
-        // arguments. These stand in for the ones the game answers from an entity.
+        // A query answering with several numbers at once answers with a struct, and the expression
+        // reads its member off it. These stand in for the ones the game answers from an entity.
         environment.setQueries((name, arguments) -> switch (name) {
             case "is_baby" -> MolangValue.ONE;
             case "anim_time" -> MolangValue.of(0.5);
-            case "bone_rotation.x" -> MolangValue.of(arguments.size());
-            case "bone_aabb.min.y" -> MolangValue.of(-7);
-            case "spellcolor.r" -> MolangValue.of(0.25);
+            case "bone_rotation" -> MolangValue.struct(Map.of("x", MolangValue.of(arguments.size())));
+            case "bone_aabb" -> MolangValue.struct(Map.of("min", MolangValue.struct(Map.of("y", MolangValue.of(-7)))));
+            case "spellcolor" -> MolangValue.struct(Map.of("r", MolangValue.of(0.25)));
             case "key_frame_lerp_time" -> MolangValue.of(0.5);
             default -> MolangValue.ZERO;
         });
@@ -67,6 +67,7 @@ public final class MolangCheck {
         failed += check(environment, "q.key_frame_lerp_time * 4", 2);
         failed += check(environment, "q.bone_rotation('head').x + 1", 2);
         failed += check(environment, "q.bone_rotation('head').z", 0);
+        failed += check(environment, "{v.p.t.x = 2; v.q = v.p; return v.q.t.x;}", 2);
         System.out.println(failed == 0 ? "every assertion held" : failed + " assertions failed");
     }
 

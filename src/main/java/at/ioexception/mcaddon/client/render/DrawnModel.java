@@ -1,9 +1,10 @@
 package at.ioexception.mcaddon.client.render;
 
-import at.ioexception.mcaddon.bedrock.animation.BonePose;
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
 import at.ioexception.mcaddon.bedrock.entity.EntityQueries;
+import at.ioexception.mcaddon.bedrock.model.BakedGeometry;
 import at.ioexception.mcaddon.bedrock.model.BedrockBone;
+import at.ioexception.mcaddon.bedrock.model.BoneOrientation;
 import at.ioexception.mcaddon.platform.Platform;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -13,6 +14,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 /**
@@ -22,7 +24,7 @@ import org.joml.Vector3f;
  * camera, an atlas or a posed skeleton is answered on both sides and lives in `EntityQueries`. What
  * is here is the rest.
  */
-public record DrawnModel(EntityAnimator animator, int entityId, boolean attached)
+public record DrawnModel(EntityAnimator animator, AddonModels models, int entityId, boolean attached)
     implements EntityQueries.Drawn {
     @Override
     public BedrockBone bone(String name) {
@@ -30,8 +32,10 @@ public record DrawnModel(EntityAnimator animator, int entityId, boolean attached
     }
 
     @Override
-    public BonePose poseOf(String name) {
-        return animator.poseOf(name);
+    public BoneOrientation orientationOf(String name) {
+        BakedGeometry geometry = models.queryable(animator.definition());
+        Matrix4f pose = geometry == null ? null : BedrockModelRenderer.anchorOf(geometry, animator, name);
+        return pose == null ? BoneOrientation.IDENTITY : BoneOrientation.ofDrawn(pose);
     }
 
     @Override

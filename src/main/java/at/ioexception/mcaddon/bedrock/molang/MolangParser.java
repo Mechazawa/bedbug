@@ -10,7 +10,7 @@ import java.util.Locale;
  * Molang is the small expression language Bedrock uses wherever a value has to be computed at
  * render time. This covers the subset the add-on actually uses: arithmetic, comparisons, the
  * ternary and null coalescing operators, `Math.*` functions, `q.*` queries, `v.*` and `t.*`
- * variables, `this`, and statement lists ending in `return`.
+ * variables and the structs they hold, `this`, and statement lists ending in `return`.
  */
 public final class MolangParser {
     /** Bedrock caps a loop's iterations too, so a pack cannot hang the game inside one expression. */
@@ -367,27 +367,30 @@ public final class MolangParser {
         skipSpace();
         if (peek() != '.') throw new Malformed();
         at += 1;
-        // A variable can hold a struct, so the name may carry further dotted segments.
+        // A variable or a query can hold a struct, so the name may carry members after it.
         StringBuilder path = new StringBuilder(readName());
+        List<String> members = new ArrayList<>();
         while (peek() == '.' && (Character.isLetter(peekAt(1)) || peekAt(1) == '_')) {
             at += 1;
-            path.append('.').append(readName());
+            String member = readName();
+            path.append('.').append(member);
+            members.add(member.toLowerCase(Locale.ROOT));
         }
         String name = path.toString();
         String insensitive = name.toLowerCase(Locale.ROOT);
+        String root = members.isEmpty() ? insensitive : insensitive.substring(0, insensitive.indexOf('.'));
 
         return arrow(switch (head) {
             case "math" -> parseCall(arguments -> MolangMath.call(insensitive, arguments));
             case "query", "q", "context", "c" -> {
                 List<MolangExpression> arguments = readArguments();
-                // A query answering with a struct is read one member at a time. The member follows
-                // the call, so it joins the name the way a dotted path does and the query answers
-                // for one member at a time.
-                String whole = insensitive + trailingMembers();
-                yield environment -> environment.query(whole, evaluateAll(arguments, environment));
+                // A query taking arguments names the member it wants after the call.
+                members.addAll(trailingMembers());
+                List<String> member = List.copyOf(members);
+                yield environment -> environment.query(root, evaluateAll(arguments, environment)).member(member);
             }
-            case "variable", "v" -> parseVariable(insensitive, false);
-            case "temp", "t" -> parseVariable(insensitive, true);
+            case "variable", "v" -> parseVariable(root, List.copyOf(members), false);
+            case "temp", "t" -> parseVariable(root, List.copyOf(members), true);
             // A render controller names its textures, geometries and materials rather than computing them.
             case "texture", "geometry", "material" -> {
                 MolangValue key = MolangValue.of(name);
@@ -443,7 +446,7 @@ public final class MolangParser {
         return arguments.get(2);
     }
 
-    private MolangExpression parseVariable(String name, boolean temporary) {
+    private MolangExpression parseVariable(String name, List<String> members, boolean temporary) {
         skipSpace();
         // An assignment is a statement in its own right and evaluates to the value it stored.
         if (peek() == '=' && peekAt(1) != '=') {
@@ -451,20 +454,21 @@ public final class MolangParser {
             MolangExpression value = parseExpression();
             return environment -> {
                 MolangValue result = value.evaluate(environment);
-                if (temporary) environment.setTemporary(name, result);
-                else environment.setVariable(name, result);
+                if (temporary) environment.setTemporary(name, environment.temporary(name).with(members, result));
+                else environment.setVariable(name, environment.variable(name).with(members, result));
                 return result;
             };
         }
         return new MolangExpression.Maybe() {
             @Override
             public MolangValue evaluate(MolangEnvironment environment) {
-                return temporary ? environment.temporary(name) : environment.variable(name);
+                return (temporary ? environment.temporary(name) : environment.variable(name)).member(members);
             }
 
             @Override
             public boolean isPresent(MolangEnvironment environment) {
-                return temporary ? environment.hasTemporary(name) : environment.hasVariable(name);
+                if (temporary) return environment.hasTemporary(name) && environment.temporary(name).hasMember(members);
+                return environment.hasVariable(name) && environment.variable(name).hasMember(members);
             }
         };
     }
@@ -486,13 +490,13 @@ public final class MolangParser {
     }
 
     /** The `.x` chain trailing a call, which names one member of the struct the call answered with. */
-    private String trailingMembers() {
-        StringBuilder members = new StringBuilder();
+    private List<String> trailingMembers() {
+        List<String> members = new ArrayList<>();
         while (peek() == '.' && (Character.isLetter(peekAt(1)) || peekAt(1) == '_')) {
             at += 1;
-            members.append('.').append(readName().toLowerCase(Locale.ROOT));
+            members.add(readName().toLowerCase(Locale.ROOT));
         }
-        return members.toString();
+        return members;
     }
 
     private List<MolangExpression> readArguments() {

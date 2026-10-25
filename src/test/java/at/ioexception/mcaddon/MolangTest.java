@@ -9,6 +9,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -98,39 +99,62 @@ class MolangTest {
     }
 
     /**
-     * A query answering with a struct is asked for one member at a time, and the member reaches the
-     * answering side as the tail of the query's name rather than as a read of its own.
-     *
-     * Whoever answers `q.surface_particle_color.r` therefore has to split the channel off the name,
-     * which is only correct while the parser keeps handing the two over together and lowercased.
+     * A query is asked by its own name, and the member a pack names after it is read off the struct
+     * it answers with, whether the member follows the name or the call.
      */
     @Test
-    void carriesAStructMemberInTheQueryName() {
+    void readsAStructMemberOffWhatAQueryAnswers() {
         List<String> asked = new ArrayList<>();
         environment.setQueries((name, arguments) -> {
             asked.add(name);
-            return MolangValue.of(arguments.size());
+            return MolangValue.struct(Map.of("r", MolangValue.of(2),
+                "max", MolangValue.struct(Map.of("y", MolangValue.of(arguments.size())))));
         });
 
-        assertEquals(2, evaluate("q.surface_particle_color.r + q.Block_State('age', 1)"), 1e-6);
-        assertEquals(List.of("surface_particle_color.r", "block_state"), asked);
+        assertEquals(3, evaluate("q.surface_particle_color.R + q.bone_aabb('leg1a').max.y"), 1e-6);
+        assertEquals(List.of("surface_particle_color", "bone_aabb"), asked);
+        assertEquals(0, evaluate("q.bone_aabb('leg1a').min.y"), 1e-6);
     }
 
-    /**
-     * A query that takes an argument names its member after the call rather than before it, and the
-     * two still have to reach the answering side together for `q.bone_aabb('leg').max.y` to answer
-     * anything. The member chain runs as deep as the struct does.
-     */
     @Test
-    void carriesAStructMemberThatFollowsACall() {
-        List<String> asked = new ArrayList<>();
-        environment.setQueries((name, arguments) -> {
-            asked.add(name);
-            return MolangValue.of(arguments.size());
-        });
+    void keepsAStructAQueryAnsweredWith() {
+        environment.setQueries((name, arguments) -> MolangValue.struct(Map.of(
+            "r", MolangValue.struct(Map.of("x", MolangValue.of(30))))));
 
-        assertEquals(2, evaluate("q.bone_rotation('head').X + q.bone_aabb('leg1a').max.y"), 1e-6);
-        assertEquals(List.of("bone_rotation.x", "bone_aabb.max.y"), asked);
+        assertEquals(30, evaluate("v.pose = q.bone_orientation_trs('head'); return v.pose.r.x;"), 1e-6);
+    }
+
+    /** Mojang's own examples, less the arrows, which need an entity at the other end. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "v.test.a.b.c = 1.23; v.moo = v.test; return v.moo.a.b.c;",
+        "v.test.a.b.c = 1.23; v.moo = v.test.a; return v.moo.b.c;",
+        "v.test.a.b.c = 1.23; v.moo = v.test.a.b; return v.moo.c;",
+        "v.test.a.b.c = 1.23; v.moo = v.test.a.b.c; return v.moo;",
+        "t.test.a.b.c = 1.23; return t.test.A.b.C;",
+    })
+    void buildsStructsByUse(String source) {
+        assertEquals(1.23, evaluate(source), 1e-6, source);
+    }
+
+    @Test
+    void copiesAStructByAssignment() {
+        assertEquals(1, evaluate("v.a.x = 1; v.b = v.a; v.a.x = 2; return v.b.x;"), 1e-6);
+        assertEquals(2, evaluate("v.a.x"), 1e-6);
+    }
+
+    @Test
+    void readsAMissingMemberAsZero() {
+        assertEquals(0, evaluate("v.a.x = 1; return v.a.y + v.a.x.z + v.never.x;"), 1e-6);
+        assertEquals(5, evaluate("v.a.y ?? 5"), 1e-6);
+        assertEquals(1, evaluate("v.a.x ?? 5"), 1e-6);
+    }
+
+    /** How a pack declares a struct before any query fills it: each level set to zero, then its members. */
+    @Test
+    void turnsANumberIntoAStructWhenAMemberIsSet() {
+        assertEquals(3, evaluate("v.pose = 0; v.pose.t = 0; v.pose.t.x = 3; return v.pose.t.x;"), 1e-6);
+        assertEquals(0, evaluate("v.pose"), 1e-6);
     }
 
     @Test

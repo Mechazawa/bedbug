@@ -43,6 +43,7 @@ public final class ClientEntityParser {
             scripts.has("should_update_bones_and_effects_offscreen")
                 && scripts.get("should_update_bones_and_effects_offscreen").getAsBoolean(),
             strings(json, "geometry"),
+            json.has("queryable_geometry") ? json.get("queryable_geometry").getAsString() : null,
             strings(json, "textures"),
             strings(json, "materials"),
             strings(json, "animations"),

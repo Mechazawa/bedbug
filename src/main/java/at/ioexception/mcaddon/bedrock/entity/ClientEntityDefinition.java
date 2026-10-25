@@ -37,6 +37,8 @@ public record ClientEntityDefinition(
     /** Keeps its bones moving as well, so it is posed where it should be when it comes back. */
     boolean bonesRunOffscreen,
     Map<String, String> geometry,
+    /** The `geometry` key the bone queries answer from, null where the pack names none. */
+    String queryable,
     Map<String, String> textures,
     Map<String, String> materials,
     Map<String, String> animations,
@@ -74,7 +76,7 @@ public record ClientEntityDefinition(
      */
     public static ClientEntityDefinition drawnByJava(String identifier) {
         return new ClientEntityDefinition(identifier, SemVer.ZERO, true, false, null, false, null, false, false,
-            Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(),
+            Map.of(), null, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(),
             List.of(), List.of(), List.of(), List.of(), List.of(), Set.of(), null, null, null, null, null);
     }
 
@@ -86,6 +88,15 @@ public record ClientEntityDefinition(
      */
     public boolean runsOffscreen() {
         return effectsRunOffscreen || bonesRunOffscreen;
+    }
+
+    /**
+     * The geometry the bone queries answer from: the one `queryable_geometry` names, else the one
+     * named `default`, else the first.
+     */
+    public String queryableGeometry() {
+        if (queryable != null && geometry.containsKey(queryable)) return geometry.get(queryable);
+        return geometry.getOrDefault("default", geometry.values().stream().findFirst().orElse(null));
     }
 
     public String resolveAnimation(String shortName) {

@@ -23,7 +23,7 @@ public final class Animators {
         static Entry of(Entity entity, AddonClientAssets.Binding binding, boolean attached, float ageInTicks) {
             EntityAnimator animator = new EntityAnimator(binding.models().assets(), entity, binding.definition());
             EntityQueries queries = new EntityQueries(entity, animator.player(),
-                new DrawnModel(animator, entity.getId(), attached),
+                new DrawnModel(animator, binding.models(), entity.getId(), attached),
                 () -> EntityProperties.of(entity.getId()), attached);
             animator.environment().setQueries(queries);
             animator.setEffects(AddonEffects.of(entity, animator, binding.models()));
