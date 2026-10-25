@@ -23,6 +23,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.SculkSensorBlock;
@@ -165,7 +166,8 @@ public final class KeeperGoalGameTests {
         helper.onEachTick(() -> {
             if (helper.getBlockState(STAND).is(Blocks.TURTLE_EGG)) return;
             BlockState state = helper.getBlockState(sensor);
-            stirred[0] |= state.is(Blocks.SCULK_SENSOR) && SculkSensorBlock.getPhase(state) != SculkSensorPhase.INACTIVE;
+            stirred[0] |= state.is(Blocks.SCULK_SENSOR)
+                && SculkSensorBlock.getPhase(state) != SculkSensorPhase.INACTIVE;
         });
         helper.succeedWhen(() -> {
             helper.assertBlockPresent(Blocks.TURTLE_EGG, STAND);
@@ -179,15 +181,16 @@ public final class KeeperGoalGameTests {
      * `minecraft:behavior.work` with `work_in_rain_tolerance` keeps working through rain that comes
      * when no more of its `active_time` ticks are left than the tolerance, and a worker stating
      * neither `can_work_in_rain` nor a tolerance stops at the first drop. The batch's own weather
-     * environment keeps the rain away from every other test.
+     * environment keeps the rain away from every other test, and clears what an earlier batch left
+     * falling, which takes a few seconds to stop.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200, skyAccess = true,
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 400, skyAccess = true,
         environment = CLEAR_SKY)
     public void aWorkerKeepsWorkingInRainOnlyWithinItsTolerance(GameTestHelper helper) {
         workingInRain(helper, "working", Blocks.LECTERN);
     }
 
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200, skyAccess = true,
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 400, skyAccess = true,
         environment = CLEAR_SKY)
     public void aCompostingWorkerKeepsWorkingInRainOnlyWithinItsTolerance(GameTestHelper helper) {
         workingInRain(helper, "composting", Blocks.COMPOSTER);
@@ -202,36 +205,39 @@ public final class KeeperGoalGameTests {
      */
     private static final int RAIN_AFTER = 60;
 
-    private static void workingInRain(GameTestHelper helper, String goal, net.minecraft.world.level.block.Block station) {
+    private static void workingInRain(GameTestHelper helper, String goal, Block station) {
         BlockPos tolerantAt = new BlockPos(1, 0, 1);
         BlockPos strictAt = new BlockPos(1, 0, 4);
+        BlockPos rainedOn = helper.absolutePos(tolerantAt.east().above());
         helper.setBlock(tolerantAt.east(), station);
         helper.setBlock(strictAt.east(), station);
-        AddonEntity tolerant = keeper(helper, "tp:keeper_make_" + goal + "_tolerant", tolerantAt);
-        AddonEntity strict = keeper(helper, "tp:keeper_make_" + goal + "_strict", strictAt);
-        if (tolerant == null || strict == null) {
-            helper.succeed();
-            return;
-        }
-
+        AddonEntity[] keepers = new AddonEntity[2];
         helper.startSequence()
+            .thenWaitUntil(() -> helper.assertFalse(helper.getLevel().isRainingAt(rainedOn),
+                "The rain of an earlier test is still falling."))
+            .thenExecute(() -> {
+                keepers[0] = keeper(helper, "tp:keeper_make_" + goal + "_tolerant", tolerantAt);
+                keepers[1] = keeper(helper, "tp:keeper_make_" + goal + "_strict", strictAt);
+            })
             .thenWaitUntil(() -> {
-                helper.assertTrue(Boolean.TRUE.equals(tolerant.value("tp:arrived")), KEEPER + " never reached its station.");
-                helper.assertTrue(Boolean.TRUE.equals(strict.value("tp:arrived")), KEEPER + " never reached its station.");
+                for (AddonEntity keeper : keepers) {
+                    helper.assertTrue(keeper == null || Boolean.TRUE.equals(keeper.value("tp:arrived")),
+                        KEEPER + " never reached its station.");
+                }
             })
             .thenExecuteAfter(RAIN_AFTER, () -> {
-                helper.assertTrue(working(tolerant) && working(strict), KEEPER + " stopped working under a clear sky.");
+                helper.assertTrue(keepers[0] == null || working(keepers[0]) && working(keepers[1]),
+                    KEEPER + " stopped working under a clear sky.");
                 Platform.setWeather(helper.getLevel(), true, false, RAIN_TICKS);
             })
-            .thenWaitUntil(() -> helper.assertTrue(
-                helper.getLevel().isRainingAt(helper.absolutePos(tolerantAt.east().above())),
+            .thenWaitUntil(() -> helper.assertTrue(keepers[0] == null || helper.getLevel().isRainingAt(rainedOn),
                 "No rain falls on the station."))
             .thenExecuteAfter(RAIN_NOTICED, () -> {
-                helper.assertTrue(working(tolerant),
+                if (keepers[0] == null) return;
+                helper.assertTrue(working(keepers[0]),
                     KEEPER + " stopped in rain with fewer ticks of its shift left than its tolerance.");
-                helper.assertFalse(working(strict), KEEPER + " that may not work in rain kept working in it.");
+                helper.assertFalse(working(keepers[1]), KEEPER + " that may not work in rain kept working in it.");
             })
-            .thenExecute(() -> Platform.setWeather(helper.getLevel(), false, false, RAIN_TICKS))
             .thenSucceed();
     }
 
@@ -262,7 +268,7 @@ public final class KeeperGoalGameTests {
     /** Past the station search's ten seconds after a 20 tick shift, inside the 400 tick cooldown. */
     private static final int STILL_RESTING = 300;
 
-    private static void workingAgain(GameTestHelper helper, String goal, net.minecraft.world.level.block.Block station) {
+    private static void workingAgain(GameTestHelper helper, String goal, Block station) {
         helper.setBlock(STAND.east(), station);
         AddonEntity keeper = keeper(helper, "tp:keeper_make_" + goal + "_cooling");
         if (keeper == null) {
@@ -383,10 +389,12 @@ public final class KeeperGoalGameTests {
         static Listener join(GameTestHelper helper, BlockPos at) {
             MinecraftServer server = helper.getLevel().getServer();
             GameProfile profile = new GameProfile(UUID.randomUUID(), "Listener");
-            ServerPlayer player = new ServerPlayer(server, helper.getLevel(), profile, ClientInformation.createDefault());
+            ServerPlayer player =
+                new ServerPlayer(server, helper.getLevel(), profile, ClientInformation.createDefault());
             Connection connection = new Connection(PacketFlow.SERVERBOUND);
             EmbeddedChannel channel = new EmbeddedChannel(connection);
-            server.getPlayerList().placeNewPlayer(connection, player, CommonListenerCookie.createInitial(profile, false));
+            server.getPlayerList()
+                .placeNewPlayer(connection, player, CommonListenerCookie.createInitial(profile, false));
             BlockPos spot = helper.absolutePos(at);
             Platform.placeAt(player, spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5, 0f, 0f);
             player.setGameMode(GameType.SPECTATOR);

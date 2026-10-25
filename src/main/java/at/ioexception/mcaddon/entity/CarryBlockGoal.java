@@ -202,7 +202,9 @@ public final class CarryBlockGoal extends Goal {
 
             Map<String, String> states = new LinkedHashMap<>();
             JsonObject stated = descriptor == null ? null : Goals.object(descriptor, "states");
-            if (stated != null) stated.entrySet().forEach(state -> states.put(state.getKey(), state.getValue().getAsString()));
+            if (stated != null) {
+                stated.entrySet().forEach(state -> states.put(state.getKey(), state.getValue().getAsString()));
+            }
             BlockState state = AddonBlocks.stateOf(name, states, AddonEntities::unsupported);
             int weight = (int) Goals.number(entry, "weight", 1);
             return state == null || weight <= 0 ? null : new RandomBlock(state, Goals.filter(entry, "filter"), weight);
