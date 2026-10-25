@@ -1,0 +1,402 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:drifter",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:untempted": {
+          "type": "bool",
+          "default": false
+        }
+      }
+    },
+    "component_groups": {
+      "tp:drifter_homebound": {
+        "minecraft:navigation.fly": {},
+        "minecraft:movement.hover": {},
+        "minecraft:home": {
+          "restriction_type": "random_movement",
+          "restriction_radius": 2
+        },
+        "minecraft:behavior.float_wander": {
+          "priority": 0,
+          "xz_dist": 6,
+          "y_dist": 1,
+          "use_home_position_restriction": true
+        }
+      },
+      "tp:drifter_roaming": {
+        "minecraft:navigation.fly": {},
+        "minecraft:movement.hover": {},
+        "minecraft:home": {
+          "restriction_type": "random_movement",
+          "restriction_radius": 2
+        },
+        "minecraft:behavior.float_wander": {
+          "priority": 0,
+          "xz_dist": 6,
+          "y_dist": 1,
+          "use_home_position_restriction": false
+        }
+      },
+      "tp:drifter_reaching": {
+        "minecraft:navigation.fly": {},
+        "minecraft:movement.hover": {},
+        "minecraft:behavior.float_wander": {
+          "priority": 0,
+          "xz_dist": 6,
+          "y_dist": 1,
+          "must_reach": true
+        }
+      },
+      "tp:drifter_hugging": {
+        "minecraft:navigation.fly": {},
+        "minecraft:movement.hover": {},
+        "minecraft:behavior.float_wander": {
+          "priority": 0,
+          "xz_dist": 6,
+          "y_dist": 1,
+          "navigate_around_surface": true,
+          "surface_xz_dist": 1,
+          "surface_y_dist": 1
+        }
+      },
+      "tp:drifter_dry": {
+        "minecraft:navigation.fly": {},
+        "minecraft:movement.hover": {},
+        "minecraft:behavior.float_wander": {
+          "priority": 0,
+          "xz_dist": 6,
+          "y_dist": 1,
+          "allow_navigating_through_liquids": false
+        }
+      },
+      "tp:drifter_wary": {
+        "minecraft:navigation.fly": {},
+        "minecraft:movement.hover": {},
+        "minecraft:behavior.float_wander": {
+          "priority": 0,
+          "xz_dist": 3,
+          "y_dist": 1,
+          "additional_collision_buffer": true
+        }
+      },
+      "tp:drifter_free": {
+        "minecraft:navigation.fly": {},
+        "minecraft:movement.hover": {},
+        "minecraft:behavior.float_wander": {
+          "priority": 0,
+          "xz_dist": 6,
+          "y_dist": 1,
+          "float_wander_has_move_control": false
+        }
+      },
+      "tp:drifter_tempted": {
+        "minecraft:navigation.fly": {},
+        "minecraft:movement.fly": {},
+        "minecraft:behavior.float_tempt": {
+          "priority": 0,
+          "items": [
+            "minecraft:snowball"
+          ],
+          "within_radius": 16,
+          "stop_distance": 6,
+          "can_tempt_vertically": true,
+          "on_tempt_end": {
+            "event": "tp:drifter_untempted"
+          }
+        }
+      },
+      "tp:drifter_perching": {
+        "minecraft:navigation.fly": {},
+        "minecraft:movement.hover": {},
+        "minecraft:behavior.random_fly": {
+          "priority": 0,
+          "interval": 1,
+          "xz_dist": 4,
+          "y_dist": 2
+        }
+      },
+      "tp:drifter_careful": {
+        "minecraft:navigation.fly": {},
+        "minecraft:movement.hover": {},
+        "minecraft:behavior.random_fly": {
+          "priority": 0,
+          "interval": 1,
+          "xz_dist": 4,
+          "y_dist": 1,
+          "avoid_damage_blocks": true,
+          "can_land_on_trees": false
+        }
+      },
+      "tp:drifter_breaching": {
+        "minecraft:behavior.random_breach": {
+          "priority": 0,
+          "interval": 1,
+          "xz_dist": 4,
+          "cooldown_time": 2
+        }
+      },
+      "tp:drifter_escorting": {
+        "minecraft:behavior.swim_with_entity": {
+          "priority": 0,
+          "success_rate": 1,
+          "chance_to_stop": 1,
+          "state_check_interval": 0.25,
+          "catch_up_threshold": 6,
+          "match_direction_threshold": 2,
+          "catch_up_multiplier": 2,
+          "speed_multiplier": 1.5,
+          "search_range": 10,
+          "stop_distance": 3,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ]
+        }
+      },
+      "tp:drifter_leaping": {
+        "minecraft:behavior.jump_to_block": {
+          "priority": 0,
+          "cooldown_range": [
+            0.5,
+            0.5
+          ],
+          "search_width": 3,
+          "search_height": 2,
+          "minimum_distance": 2,
+          "minimum_path_length": 0,
+          "scale_factor": 0.5,
+          "max_velocity": 1
+        }
+      },
+      "tp:drifter_choosy": {
+        "minecraft:behavior.jump_to_block": {
+          "priority": 0,
+          "cooldown_range": [
+            0.5,
+            0.5
+          ],
+          "search_width": 3,
+          "search_height": 2,
+          "minimum_distance": 2,
+          "minimum_path_length": 0,
+          "max_velocity": 1,
+          "preferred_blocks": [
+            "minecraft:gold_block"
+          ],
+          "preferred_blocks_chance": 0
+        }
+      },
+      "tp:drifter_strolling": {
+        "minecraft:behavior.jump_to_block": {
+          "priority": 0,
+          "cooldown_range": [
+            0.25,
+            0.25
+          ],
+          "search_width": 3,
+          "search_height": 2,
+          "minimum_distance": 2,
+          "minimum_path_length": 30,
+          "max_velocity": 1
+        }
+      },
+      "tp:drifter_gliding": {
+        "minecraft:movement.glide": {
+          "start_speed": 0.3,
+          "speed_when_turning": 0.02,
+          "max_turn": 5
+        }
+      },
+      "tp:drifter_circling": {
+        "minecraft:navigation.fly": {},
+        "minecraft:movement.fly": {},
+        "minecraft:behavior.circle_around_anchor": {
+          "priority": 0,
+          "radius_range": [
+            2,
+            2
+          ],
+          "goal_radius": 1,
+          "height_above_target_range": [
+            8,
+            8
+          ]
+        }
+      },
+      "tp:drifter_turning": {
+        "minecraft:behavior.slime_random_direction": {
+          "priority": 0,
+          "min_change_direction_time": 1,
+          "add_random_time_range": 0,
+          "turn_range": 20
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_drifter",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 0.6
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:drifter_make_homebound": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_homebound"
+          ]
+        }
+      },
+      "tp:drifter_make_roaming": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_roaming"
+          ]
+        }
+      },
+      "tp:drifter_make_reaching": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_reaching"
+          ]
+        }
+      },
+      "tp:drifter_make_hugging": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_hugging"
+          ]
+        }
+      },
+      "tp:drifter_make_dry": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_dry"
+          ]
+        }
+      },
+      "tp:drifter_make_wary": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_wary"
+          ]
+        }
+      },
+      "tp:drifter_make_free": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_free"
+          ]
+        }
+      },
+      "tp:drifter_make_tempted": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_tempted"
+          ]
+        }
+      },
+      "tp:drifter_make_perching": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_perching"
+          ]
+        }
+      },
+      "tp:drifter_make_careful": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_careful"
+          ]
+        }
+      },
+      "tp:drifter_make_breaching": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_breaching"
+          ]
+        }
+      },
+      "tp:drifter_make_escorting": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_escorting"
+          ]
+        }
+      },
+      "tp:drifter_make_leaping": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_leaping"
+          ]
+        }
+      },
+      "tp:drifter_make_choosy": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_choosy"
+          ]
+        }
+      },
+      "tp:drifter_make_strolling": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_strolling"
+          ]
+        }
+      },
+      "tp:drifter_make_gliding": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_gliding"
+          ]
+        }
+      },
+      "tp:drifter_make_circling": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_circling"
+          ]
+        }
+      },
+      "tp:drifter_make_turning": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_turning"
+          ]
+        }
+      },
+      "tp:drifter_untempted": {
+        "set_property": {
+          "tp:untempted": true
+        }
+      }
+    }
+  }
+}

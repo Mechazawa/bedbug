@@ -2319,6 +2319,44 @@ mason's; `BehaviourGameTests` covers them.
 - `minecraft:behavior.drink_milk` waits `cooldown_seconds` (default 5) after each drink.
 - `rail_sensor` `tick_command_block_on_activate` and `_on_deactivate` stay reported. In Bedrock they only mean something on `minecraft:command_block_minecart`, whose command lives in the entity's own data and cannot be written by a pack; Java's `MinecartCommandBlock` runs its command on a powered rail by itself.
 
+## Air and water goals
+
+`tp:drifter` carries one group per field of these goals and `DriftGoalGameTests` reads each back.
+Mojang publishes the fields and not the rules behind them, so these are decided here:
+
+- `minecraft:behavior.float_wander` is `FloatWanderGoal`. It picks a spot the way Java's ghast
+  does, anywhere in the box `xz_dist` and `y_dist` give, and tries 64. `navigate_around_surface`
+  prefers a spot with a block that is neither air nor liquid within `surface_xz_dist` along X or Z
+  or `surface_y_dist` along Y, the six rays Java's happy ghast checks, and takes the first other
+  spot when none turns up. `additional_collision_buffer` asks for one block of room round the box,
+  as Java's careful ghast control does. Without `allow_navigating_through_liquids` the straight line
+  to the spot may cross no liquid. `must_reach` asks the navigator for a path, at most eight a pick.
+- `minecraft:behavior.float_tempt` steers the move control at a random point between the entity and
+  the player's eyes, which is Java's `TemptGoal.ForNonPathfinders` for the happy ghast.
+- `minecraft:behavior.random_fly` under `can_land_on_trees` lands where Java's parrot does, on a
+  log or leaves three blocks across and six up or down. `avoid_damage_blocks` passes over a spot
+  Java's walk evaluator calls fire, damaging, either of those beside it, or lava.
+- `minecraft:behavior.random_breach` leaps on a one in `interval` chance towards a water surface up
+  to `xz_dist` across, fast enough across to come down there after about fifteen ticks of air.
+- `minecraft:behavior.swim_with_entity` (`SwimWithEntityGoal`) closes in at `speed_multiplier` past
+  `catch_up_threshold`, at its own pace past `stop_distance`, holds still inside it, and within
+  `match_direction_threshold` swims the way the other faces at `catch_up_multiplier`. With no
+  `entity_types` it follows players, as Java's dolphin does.
+- `minecraft:behavior.jump_to_block` counts a walk's length in path nodes and asks for at most
+  sixteen walks an attempt. `cooldown_range` counts from every attempt. A jump flies in
+  `Pose.LONG_JUMPING`, whose box `AddonEntity.getDefaultDimensions` scales by `scale_factor`.
+- `minecraft:movement.glide` is `GlideMoveControl`, Java's phantom control with the pack's
+  `start_speed` and `speed_when_turning` (Java's own are Bedrock phantom's 0.1 and 0.2).
+- `minecraft:behavior.circle_around_anchor` anchors over its target at `height_above_target_range`
+  each time the target changes, as Java's phantom does over the player it attacks.
+- `minecraft:behavior.slime_random_direction` turns after `min_change_direction_time` and a whole
+  number of seconds up to `add_random_time_range`, by up to `turn_range` degrees in all.
+
+Two things met writing the tests: `GameTestHelper.relativePos` turns an unturned test's position half
+a circle on 26.2, so the tests subtract `absolutePos(BlockPos.ZERO)`; and a navigator's
+`getTargetPos` moves whenever a path is asked for, so a goal that tests paths is read through
+`getPath().getTarget()`.
+
 ## Molang structs
 
 A `MolangValue` is a number, a string or a struct of lowercase members, and it is never changed in

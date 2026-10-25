@@ -4,19 +4,16 @@ import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.Comparator;
 import java.util.EnumSet;
-import java.util.List;
 
 /**
- * The three things Bedrock has a dolphin do that no other mob does.
+ * Two things Bedrock has a dolphin do that no other mob does: leaping clear of the water and leading
+ * a swimmer to buried treasure.
  *
- * Leaping clear of the water, leading a swimmer to buried treasure, and keeping pace with one. Java
- * writes all three into `Dolphin` itself, so a pack's own sea creature can reach none of them, and
- * each is short enough that the three belong together rather than in three files.
+ * Java writes both into `Dolphin` itself, so a pack's own sea creature can reach neither of them,
+ * and each is short enough that the two belong together.
  */
 public final class DolphinGoal extends Goal {
     /** How hard a breach throws the entity upward, which clears the surface from just below it. */
@@ -24,6 +21,15 @@ public final class DolphinGoal extends Goal {
 
     /** How far above the water a breach still counts as being in it. */
     private static final int SURFACE_REACH = 3;
+
+    /** How many spots a breach looks at for water to come down in. */
+    private static final int LANDING_ATTEMPTS = 10;
+
+    /** What is left of an entity's speed across after a tick in the air. */
+    private static final double AIR_DRAG = 0.91;
+
+    /** About how long a breach is out of the water, rising at its lift and falling back. */
+    private static final int BREACH_TICKS = 15;
 
     /** Ticks between two searches for buried treasure. */
     private static final int SEARCH_INTERVAL = 200;
@@ -34,13 +40,14 @@ public final class DolphinGoal extends Goal {
     private final double searchRange;
     private final double stopDistance;
     private final int interval;
-    private final double reach;
+    private final int across;
+    private final int cooldown;
     private int readyAt;
     private int untilSearch;
-    private Player swimmer;
     private BlockPos treasure;
+    private Vec3 landing;
 
-    private enum Kind { BREACH, TREASURE, ESCORT }
+    private enum Kind { BREACH, TREASURE }
 
     private DolphinGoal(AddonEntity mob, JsonObject component, Kind kind) {
         this.mob = mob;
@@ -48,12 +55,16 @@ public final class DolphinGoal extends Goal {
         this.speed = Goals.number(component, "speed_multiplier", 1);
         this.searchRange = Goals.number(component, "search_range", 30);
         this.stopDistance = Goals.number(component, "stop_distance", 50);
-        this.interval = (int) Goals.number(component, "interval", 50);
-        this.reach = Goals.number(component, "catch_up_threshold", 12);
+        this.interval = Math.max(1, (int) Goals.number(component, "interval", 120));
+        this.across = Math.max(1, (int) Goals.number(component, "xz_dist", 10));
+        this.cooldown = Goals.ticks(component, "cooldown_time", 0);
         setFlags(EnumSet.of(Goal.Flag.MOVE));
     }
 
-    /** `minecraft:behavior.random_breach`, which leaps clear of the water every so often. */
+    /**
+     * `minecraft:behavior.random_breach`, which leaps clear of the water on a one in `interval` chance,
+     * towards water up to `xz_dist` across, and then waits `cooldown_time` before it may again.
+     */
     public static DolphinGoal breaching(AddonEntity mob, JsonObject component) {
         return new DolphinGoal(mob, component, Kind.BREACH);
     }
@@ -63,17 +74,12 @@ public final class DolphinGoal extends Goal {
         return new DolphinGoal(mob, component, Kind.TREASURE);
     }
 
-    /** `minecraft:behavior.swim_with_entity`, which keeps pace with a player who is swimming. */
-    public static DolphinGoal escorting(AddonEntity mob, JsonObject component) {
-        return new DolphinGoal(mob, component, Kind.ESCORT);
-    }
-
     @Override
     public boolean canUse() {
         if (!mob.isInWater()) return false;
 
         return switch (kind) {
-            case BREACH -> mob.tickCount >= readyAt && nearTheSurface();
+            case BREACH -> readyToBreach();
             case TREASURE -> {
                 // Finding a structure searches generated chunks, which is far too heavy to ask on
                 // every tick, so the goal keeps whatever it last found until it looks again.
@@ -82,10 +88,6 @@ public final class DolphinGoal extends Goal {
                     treasure = buriedNearby();
                 }
                 yield treasure != null;
-            }
-            default -> {
-                swimmer = swimmerNearby();
-                yield swimmer != null;
             }
         };
     }
@@ -96,7 +98,6 @@ public final class DolphinGoal extends Goal {
             case BREACH -> false;
             case TREASURE -> treasure != null
                 && mob.distanceToSqr(Vec3.atCenterOf(treasure)) < stopDistance * stopDistance;
-            default -> swimmer != null && swimmer.isAlive() && swimmer.isSwimming();
         };
     }
 
@@ -104,14 +105,15 @@ public final class DolphinGoal extends Goal {
     public void start() {
         if (kind != Kind.BREACH) return;
 
-        readyAt = mob.tickCount + Math.max(1, interval);
-        Vec3 moving = mob.getDeltaMovement();
-        mob.setDeltaMovement(moving.x, BREACH_LIFT, moving.z);
+        readyAt = mob.tickCount + cooldown;
+        // Fast enough across that the leap comes down at the spot, slowed by the air as it goes.
+        double carried = (1 - Math.pow(AIR_DRAG, BREACH_TICKS)) / (1 - AIR_DRAG);
+        Vec3 drift = landing.subtract(mob.position()).multiply(1, 0, 1).scale(1 / carried);
+        mob.setDeltaMovement(drift.x, BREACH_LIFT, drift.z);
     }
 
     @Override
     public void stop() {
-        swimmer = null;
         treasure = null;
     }
 
@@ -120,19 +122,42 @@ public final class DolphinGoal extends Goal {
         if (kind == Kind.TREASURE && treasure != null) {
             mob.getNavigation().moveTo(treasure.getX() + 0.5, treasure.getY() + 0.5,
                 treasure.getZ() + 0.5, speed);
-            return;
         }
-        if (kind != Kind.ESCORT || swimmer == null) return;
+    }
 
-        mob.getLookControl().setLookAt(swimmer, 30f, 30f);
-        // Falling behind is what the catch-up threshold is for: past it the entity swims harder.
-        double urgency = mob.distanceTo(swimmer) > reach ? speed * 2 : speed;
-        mob.getNavigation().moveTo(swimmer, urgency);
+    private boolean readyToBreach() {
+        if (mob.tickCount < readyAt || mob.getRandom().nextInt(reducedTickDelay(interval)) != 0) return false;
+        if (!nearTheSurface()) return false;
+
+        landing = landing();
+        return landing != null;
     }
 
     /** Whether there is open air close enough above for a leap to break the surface. */
     private boolean nearTheSurface() {
         return mob.level().getBlockState(mob.blockPosition().above(SURFACE_REACH)).isAir();
+    }
+
+    /**
+     * Somewhere up to `xz_dist` across where the surface of the water lies at the height it lies at
+     * over the entity, which is where the leap comes down.
+     */
+    private Vec3 landing() {
+        BlockPos surface = mob.blockPosition();
+        while (surface.getY() < mob.blockPosition().getY() + SURFACE_REACH && water(surface)) {
+            surface = surface.above();
+        }
+
+        for (int attempt = 0; attempt < LANDING_ATTEMPTS; attempt++) {
+            BlockPos spot = surface.offset(mob.getRandom().nextInt(across * 2 + 1) - across, 0,
+                mob.getRandom().nextInt(across * 2 + 1) - across);
+            if (water(spot.below()) && mob.level().getBlockState(spot).isAir()) return Vec3.atBottomCenterOf(spot);
+        }
+        return null;
+    }
+
+    private boolean water(BlockPos at) {
+        return mob.level().getFluidState(at).is(net.minecraft.tags.FluidTags.WATER);
     }
 
     /**
@@ -146,12 +171,5 @@ public final class DolphinGoal extends Goal {
 
         return level.findNearestMapStructure(net.minecraft.tags.StructureTags.DOLPHIN_LOCATED,
             mob.blockPosition(), (int) searchRange, false);
-    }
-
-    /** The nearest player who is actually swimming, which is who a dolphin keeps pace with. */
-    private Player swimmerNearby() {
-        List<Player> nearby = mob.level().getEntitiesOfClass(Player.class,
-            mob.getBoundingBox().inflate(searchRange), Player::isSwimming);
-        return nearby.stream().min(Comparator.comparingDouble(mob::distanceToSqr)).orElse(null);
     }
 }
