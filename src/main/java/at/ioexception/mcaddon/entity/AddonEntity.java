@@ -3216,8 +3216,8 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.eat_block" ->
                 goals.add(priority, new GrazeGoal(this, goal));
             // Bedrock's find_cover and flee_sun both end with the mob standing out of the light.
-            case "minecraft:behavior.flee_sun", "minecraft:behavior.find_cover" ->
-                goals.add(priority, new FleeSunGoal(this, 1.0));
+            case "minecraft:behavior.flee_sun" -> goals.add(priority, new FleeSunGoal(this, 1.0));
+            case "minecraft:behavior.find_cover" -> goals.add(priority, new FindCoverGoal(this, goal));
             case "minecraft:behavior.restrict_sun" ->
                 goals.add(priority, new RestrictSunGoal(this));
             // Java asks per difficulty whether a door may be broken; Bedrock states the ability

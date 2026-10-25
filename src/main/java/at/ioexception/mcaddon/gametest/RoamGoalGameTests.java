@@ -99,6 +99,47 @@ public final class RoamGoalGameTests {
             ROAMER + " walks the village at any hour and never set off."));
     }
 
+    /**
+     * `minecraft:behavior.find_cover` walks under the roof by day and, once there, waits its three
+     * second `cooldown_time` before it looks for cover again.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS * 3)
+    public void aMobThatFoundCoverWaitsItsCooldownBeforeLookingAgain(GameTestHelper helper) {
+        floor(helper);
+        BlockPos.betweenClosed(new BlockPos(4, 3, 0), new BlockPos(7, 3, 7))
+            .forEach(at -> helper.setBlock(at, Blocks.STONE));
+        BlockPos open = new BlockPos(1, 1, 4);
+        AddonEntity[] roamer = {null};
+        long[] hiddenAt = {-1};
+        setDay(helper);
+        helper.startSequence()
+            .thenExecuteAfter(LIGHT_SETTLES, () -> roamer[0] = roamer(helper, "tp:roamer_shy", open))
+            .thenWaitUntil(() -> helper.assertTrue(roamer[0] == null
+                    || hidden(helper, roamer[0]) && !runs(roamer[0], "FindCoverGoal"),
+                ROAMER + " seeks cover by day and is still under the sky."))
+            .thenExecute(() -> {
+                if (roamer[0] == null) return;
+                BlockPos at = helper.absolutePos(open);
+                roamer[0].teleportTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
+                hiddenAt[0] = helper.getLevel().getGameTime();
+            })
+            .thenExecuteFor(COOLDOWN - SLACK, () -> helper.assertTrue(roamer[0] == null || !hidden(helper, roamer[0]),
+                ROAMER + " waits three seconds before seeking cover again and was under the roof after "
+                    + (helper.getLevel().getGameTime() - hiddenAt[0]) + " ticks."))
+            .thenWaitUntil(() -> helper.assertTrue(roamer[0] == null || hidden(helper, roamer[0]),
+                ROAMER + " never sought cover again once its cooldown was over."))
+            .thenSucceed();
+    }
+
+    /** The cover group's three second cooldown, in ticks. */
+    private static final int COOLDOWN = 60;
+
+    /** Java's two ticks between goal checks and a step or two of walking. */
+    private static final int SLACK = 10;
+
+    /** Java works out the light under a new roof over the ticks after it is built. */
+    private static final int LIGHT_SETTLES = 20;
+
     private static final long DAY_TICKS = 24000L;
     private static final long NIGHT_FROM = 12000L;
 
@@ -106,6 +147,10 @@ public final class RoamGoalGameTests {
     private static void setDay(GameTestHelper helper) {
         net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
         server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "time set day");
+    }
+
+    private static boolean hidden(GameTestHelper helper, AddonEntity roamer) {
+        return !helper.getLevel().canSeeSky(roamer.blockPosition());
     }
 
     /**

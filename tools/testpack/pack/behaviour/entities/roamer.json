@@ -29,6 +29,13 @@
           "only_at_night": false
         }
       },
+      "tp:roamer_shy": {
+        "minecraft:behavior.find_cover": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "cooldown_time": 3
+        }
+      },
       "tp:roamer_sampling": {
         "minecraft:behavior.move_to_water": {
           "priority": 0,
@@ -131,6 +138,13 @@
         "add": {
           "component_groups": [
             "tp:roamer_day_patrol"
+          ]
+        }
+      },
+      "tp:roamer_shy": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_shy"
           ]
         }
       },
