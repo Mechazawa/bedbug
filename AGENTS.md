@@ -2283,7 +2283,17 @@ offers with their uses, trade experience, spent `single_use` keys and inventory 
 from `restoreGroups`. `minecraft:spawn_entity` `should_leash` leashes the spawned mob to the producer.
 `tp:hawker` in the test pack names the vanilla path; `BehaviourGameTests` covers all three.
 
-## JSON UI
+## Molang structs
+
+A `MolangValue` is a number, a string or a struct of lowercase members, and it is never changed in
+place, so `v.a = v.b` copies the whole struct by sharing it. `v.x.t.x = 1` rebuilds `v.x` with the
+member set, making a struct of any step that held a number, which is how a pack declares one
+(`v.pose = 0; v.pose.t = 0; v.pose.t.x = 0;`). A missing member reads as zero and a struct read as a
+number is zero, as Mojang's Molang documentation says of errors. A query is asked by its own name and
+answers a struct whole; the parser reads the member a pack names after the name or after the call
+off it, so `v.c = q.spellcolor; return v.c.r;` works. Entity references are not values here, so the
+documentation's `v.cowcow.friend->v.test` examples have no answer.
+
 
 `bedrock/ui/` reads a resource pack's `ui/` files and lays out what packs do with them to a server's
 forms and to the heads-up display's title and action bar; `client/screen/PackUi` holds the active

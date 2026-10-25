@@ -66,6 +66,7 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
 import java.util.HashSet;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.List;
 import java.util.Set;
@@ -213,15 +214,9 @@ public final class EntityQueries implements MolangEnvironment.Queries {
     }
 
     @Override
-    public MolangValue query(String path, List<MolangValue> arguments) {
+    public MolangValue query(String name, List<MolangValue> arguments) {
         MolangEnvironment environment = player.environment();
         Map<String, Object> properties = this.properties.get();
-
-        // A few queries answer with a struct that a pack reads one member off, and the parser hands
-        // the member over as part of the name.
-        int dot = path.indexOf('.');
-        String name = dot < 0 ? path : path.substring(0, dot);
-        String member = dot < 0 ? "" : path.substring(dot + 1);
 
         return switch (name) {
             case "anim_time" -> MolangValue.of(environment.animTime());
@@ -473,9 +468,9 @@ public final class EntityQueries implements MolangEnvironment.Queries {
                 MolangValue.of(biomeTags(arguments, true));
             case "entity_biome_has_any_identifier" -> MolangValue.of(biomeNamed(arguments));
             case "above_top_solid", "heightmap" -> MolangValue.of(surfaceHeight(arguments));
-            case "surface_particle_color" -> surfaceColour(member);
-            case "surface_particle_texture_coordinate" -> surfaceTextureAt(member);
-            case "surface_particle_texture_size" -> surfaceTextureSize(member);
+            case "surface_particle_color" -> surfaceColour();
+            case "surface_particle_texture_coordinate" -> surfaceTextureAt();
+            case "surface_particle_texture_size" -> surfaceTextureSize();
 
             // Bedrock answers these while a block is being placed, and an entity being drawn is
             // never that moment.
@@ -491,9 +486,10 @@ public final class EntityQueries implements MolangEnvironment.Queries {
                 : entity.getVehicle().getYRot());
 
             case "get_animation_frame" -> MolangValue.of(environment.animTime());
-            case "bone_orientation_trs", "bone_origin" -> boneOrigin(arguments);
-            case "bone_rotation" -> boneRotation(arguments, member);
-            case "bone_aabb" -> boneBox(arguments, member);
+            case "bone_orientation_trs" -> boneOrigin(arguments);
+            case "bone_origin" -> xyz(restingBone(arguments, BedrockBone::pivot));
+            case "bone_rotation" -> xyz(restingBone(arguments, BedrockBone::rotation));
+            case "bone_aabb" -> boneBox(arguments);
             case "get_default_bone_pivot" -> MolangValue.of(bonePivot(arguments));
             case "get_locator_offset" ->
                 MolangValue.of(locatorOffset(drawn.locator(text(arguments, 0)), arguments));
@@ -516,7 +512,7 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             case "has_armor_slot" -> hasArmourSlot(arguments);
             case "armor_damage_slot" -> armourDamage(arguments);
             case "armor_texture_slot", "armor_material_slot" -> armourNamed(arguments);
-            case "armor_color_slot" -> armourColour(arguments, member);
+            case "armor_color_slot" -> armourColour(arguments);
 
             // How much of the cooldown a use put the held item under is left. Java keeps it as the
             // share still to run rather than as a count of ticks, which is what the swing is drawn
@@ -588,7 +584,7 @@ public final class EntityQueries implements MolangEnvironment.Queries {
                 ? Platform.wolfShakeAngle(wolf, partialTick) : 0);
             case "shield_blocking_bob" -> MolangValue.of(shieldBob());
             case "overlay_alpha" -> MolangValue.of(overlayAlpha());
-            case "spellcolor" -> spellColour(member);
+            case "spellcolor" -> spellColour();
             // Bedrock draws an elder guardian's curse as a ghost of the guardian itself. Java draws
             // that same curse over the screen instead, so no entity is ever one.
             case "is_ghost" -> MolangValue.ZERO;
@@ -960,18 +956,11 @@ public final class EntityQueries implements MolangEnvironment.Queries {
      * channel carries anything. Ground the scan never reached leaves every channel at zero, the
      * alpha included.
      */
-    private MolangValue surfaceColour(String channel) {
+    private MolangValue surfaceColour() {
         BlockPos ground = groundBelow();
-        if (ground == null) return MolangValue.ZERO;
+        if (ground == null) return colour(0, 0, 0, 0);
 
-        int colour = entity.level().getBlockState(ground).getMapColor(entity.level(), ground).col;
-        return switch (channel) {
-            case "r" -> MolangValue.of((colour >> 16 & 255) / 255d);
-            case "g" -> MolangValue.of((colour >> 8 & 255) / 255d);
-            case "b" -> MolangValue.of((colour & 255) / 255d);
-            case "a" -> MolangValue.ONE;
-            default -> MolangValue.ZERO;
-        };
+        return opaque(entity.level().getBlockState(ground).getMapColor(entity.level(), ground).col);
     }
 
     private BlockPos groundBelow() {
@@ -994,10 +983,10 @@ public final class EntityQueries implements MolangEnvironment.Queries {
         return pose == null ? MolangValue.ZERO : MolangValue.of(alongAxis(pose.position, arguments));
     }
 
-    /** The resting rotation a bone was modelled at, along one axis, in degrees. */
-    private MolangValue boneRotation(List<MolangValue> arguments, String axis) {
+    /** A field of one bone of the model as the pack modelled it, nowhere for a bone it has not got. */
+    private Vector3f restingBone(List<MolangValue> arguments, Function<BedrockBone, Vector3f> field) {
         BedrockBone bone = drawn.bone(text(arguments, 0));
-        return along(bone == null ? NOWHERE : bone.rotation(), axis, "bone_rotation");
+        return bone == null ? NOWHERE : field.apply(bone);
     }
 
     /**
@@ -1005,7 +994,7 @@ public final class EntityQueries implements MolangEnvironment.Queries {
      *
      * A bone with no boxes of its own encloses nothing, so both of its corners sit on its pivot.
      */
-    private MolangValue boneBox(List<MolangValue> arguments, String member) {
+    private MolangValue boneBox(List<MolangValue> arguments) {
         BedrockBone bone = drawn.bone(text(arguments, 0));
         Vector3f smallest = new Vector3f(bone == null ? NOWHERE : bone.pivot());
         Vector3f largest = new Vector3f(smallest);
@@ -1018,34 +1007,25 @@ public final class EntityQueries implements MolangEnvironment.Queries {
                 largest.max(new Vector3f(cube.origin()).add(cube.size()).add(grown, grown, grown));
             });
         }
-
-        int split = member.indexOf('.');
-        String corner = split < 0 ? member : member.substring(0, split);
-        String axis = split < 0 ? "" : member.substring(split + 1);
-        return switch (corner) {
-            case "min" -> along(smallest, axis, "bone_aabb");
-            case "max" -> along(largest, axis, "bone_aabb");
-            default -> unanswered("bone_aabb");
-        };
+        return MolangValue.struct(Map.of("min", xyz(smallest), "max", xyz(largest)));
     }
 
     /** What a bone query answers with for a bone the model does not have. */
     private static final Vector3f NOWHERE = new Vector3f();
 
-    /**
-     * One axis of a vector a query answers with.
-     *
-     * A value here is a number or a string, so a query answering with several numbers at once only
-     * answers when the expression names the one it wants. A pack storing the whole of it in a
-     * variable is told rather than handed a zero that reads like an answer.
-     */
-    private static MolangValue along(Vector3f vector, String axis, String query) {
-        return switch (axis) {
-            case "x" -> MolangValue.of(vector.x());
-            case "y" -> MolangValue.of(vector.y());
-            case "z" -> MolangValue.of(vector.z());
-            default -> unanswered(query);
-        };
+    private static MolangValue xyz(Vector3f vector) {
+        return MolangValue.struct(Map.of(
+            "x", MolangValue.of(vector.x()), "y", MolangValue.of(vector.y()), "z", MolangValue.of(vector.z())));
+    }
+
+    private static MolangValue colour(double red, double green, double blue, double alpha) {
+        return MolangValue.struct(Map.of("r", MolangValue.of(red), "g", MolangValue.of(green),
+            "b", MolangValue.of(blue), "a", MolangValue.of(alpha)));
+    }
+
+    /** A packed RGB colour as a struct, each channel between nothing and one. */
+    private static MolangValue opaque(int rgb) {
+        return colour((rgb >> 16 & 255) / 255d, (rgb >> 8 & 255) / 255d, (rgb & 255) / 255d, 1);
     }
 
     /** The sprite the block under the entity makes its own particles out of, cut from the atlas. */
@@ -1055,23 +1035,17 @@ public final class EntityQueries implements MolangEnvironment.Queries {
     }
 
     /** Where in the atlas that sprite begins, in pixels. Ground the scan never reached has none. */
-    private MolangValue surfaceTextureAt(String axis) {
+    private MolangValue surfaceTextureAt() {
         Drawn.Sprite sprite = groundSprite();
-        return switch (axis) {
-            case "u" -> MolangValue.of(sprite == null ? 0 : sprite.x());
-            case "v" -> MolangValue.of(sprite == null ? 0 : sprite.y());
-            default -> unanswered("surface_particle_texture_coordinate");
-        };
+        return MolangValue.struct(Map.of("u", MolangValue.of(sprite == null ? 0 : sprite.x()),
+            "v", MolangValue.of(sprite == null ? 0 : sprite.y())));
     }
 
     /** How large that sprite is, in pixels. */
-    private MolangValue surfaceTextureSize(String axis) {
+    private MolangValue surfaceTextureSize() {
         Drawn.Sprite sprite = groundSprite();
-        return switch (axis) {
-            case "u" -> MolangValue.of(sprite == null ? 0 : sprite.width());
-            case "v" -> MolangValue.of(sprite == null ? 0 : sprite.height());
-            default -> unanswered("surface_particle_texture_size");
-        };
+        return MolangValue.struct(Map.of("u", MolangValue.of(sprite == null ? 0 : sprite.width()),
+            "v", MolangValue.of(sprite == null ? 0 : sprite.height())));
     }
 
     /**
@@ -1081,7 +1055,7 @@ public final class EntityQueries implements MolangEnvironment.Queries {
      * with it. Java mixes the same colour out of the visible effects, each counting for as much as
      * it is strong. An entity under nothing has no colour at all, alpha included.
      */
-    private MolangValue spellColour(String channel) {
+    private MolangValue spellColour() {
         int weight = 0;
         double red = 0;
         double green = 0;
@@ -1097,13 +1071,8 @@ public final class EntityQueries implements MolangEnvironment.Queries {
             weight += strength;
         }
 
-        return switch (channel) {
-            case "r" -> MolangValue.of(weight == 0 ? 0 : red / weight / 255);
-            case "g" -> MolangValue.of(weight == 0 ? 0 : green / weight / 255);
-            case "b" -> MolangValue.of(weight == 0 ? 0 : blue / weight / 255);
-            case "a" -> MolangValue.of(weight != 0);
-            default -> unanswered("spellcolor");
-        };
+        return weight == 0 ? colour(0, 0, 0, 0)
+            : colour(red / weight / 255, green / weight / 255, blue / weight / 255, 1);
     }
 
     /** The effects on the entity, which anything that is not alive is under none of. */
@@ -1356,9 +1325,9 @@ public final class EntityQueries implements MolangEnvironment.Queries {
     }
 
     /** The dyed colour of the item worn in one armour slot, by channel. */
-    private MolangValue armourColour(List<MolangValue> arguments, String channel) {
+    private MolangValue armourColour(List<MolangValue> arguments) {
         int index = arguments.isEmpty() ? -1 : (int) arguments.get(0).number();
-        if (index < 0 || index >= ARMOUR.size()) return MolangValue.ZERO;
+        if (index < 0 || index >= ARMOUR.size()) return colour(0, 0, 0, 0);
 
         //? if >=1.21 {
         int colour = net.minecraft.world.item.component.DyedItemColor.getOrDefault(
@@ -1366,13 +1335,7 @@ public final class EntityQueries implements MolangEnvironment.Queries {
         //?} else {
         /*int colour = 0;
         *///?}
-        return switch (channel) {
-            case "r" -> MolangValue.of((colour >> 16 & 255) / 255d);
-            case "g" -> MolangValue.of((colour >> 8 & 255) / 255d);
-            case "b" -> MolangValue.of((colour & 255) / 255d);
-            case "a" -> MolangValue.ONE;
-            default -> MolangValue.ZERO;
-        };
+        return opaque(colour);
     }
 
     /** How much of the held item's cooldown is still to run, between nothing and one. */
