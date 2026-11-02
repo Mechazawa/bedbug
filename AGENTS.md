@@ -2891,8 +2891,11 @@ publishes nothing on, decided here:
   `only_at_night` tell day from night by the clock, as the shelter goals do.
 - `flee_sun` is the same walk with no cooldown (`FindCoverGoal`). Mojang says only that it runs
   from direct sunlight to shade, and every vanilla entity declaring it also burns in daylight, so
-  nothing says whether it waits for the fire. It starts unburnt, as the wiki's skeleton seeks
-  shelter by day.
+  nothing says whether it waits for the fire. It starts unburnt and whatever the mob wears on its
+  head. The Minecraft Wiki's skeleton, zombie and drowned pages say nothing Bedrock-specific about
+  either: skeletons "seek out shelter during the day" and drowned on land by day "seek out nearby
+  water or shade", with no fire or helmet named. A helmet is named only as stopping the burn, and
+  only the Legacy Console Edition waited for the fire.
 
 **The game test world is dark.** `isBrightOutside` answered false there at a clock of 25020, so a test
 about the day runs `time set day` and a goal asks the clock.
