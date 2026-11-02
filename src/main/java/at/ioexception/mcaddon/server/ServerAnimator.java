@@ -116,6 +116,10 @@ public final class ServerAnimator {
         current.seconds += SECONDS_PER_TICK;
         environment.setStateTime(current.seconds);
 
+        // The finished queries answer for the state's own clips, as on the client.
+        player.scopeFinishedTo(state.animations().stream()
+            .map(entry -> script.resolve(entry.animation()))
+            .filter(name -> clips.animationController(name) == null).toList());
         for (AnimationController.Transition transition : firstRun ? List.<AnimationController.Transition>of()
             : state.transitions()) {
             if (!transition.condition().evaluate(environment).truthy()) continue;
@@ -128,6 +132,7 @@ public final class ServerAnimator {
             run(state.onEntry(), environment);
             break;
         }
+        player.scopeFinishedTo(null);
 
         for (AnimationController.Entry entry : state.animations()) {
             if (entry.weight() != null && !entry.weight().evaluate(environment).truthy()) continue;
