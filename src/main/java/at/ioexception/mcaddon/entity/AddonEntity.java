@@ -3603,10 +3603,6 @@ public class AddonEntity extends PathfinderMob
         // declaring it is what makes the entity able to damage the mobs around it.
         if (declares("minecraft:area_attack")) setValue("can_damage_nearby_mobs", true);
 
-        if (declares("minecraft:heartbeat")) {
-            setValue("heartbeat_interval", number(definition, "minecraft:heartbeat", "interval", 1));
-        }
-
         // `minecraft:walk_animation_speed` scales how fast a pack's own walk animation runs, which
         // its controllers read back off the entity's speed, so the number goes with the speed.
         if (declares("minecraft:walk_animation_speed")) {
@@ -4243,21 +4239,28 @@ public class AddonEntity extends PathfinderMob
     /**
      * `minecraft:heartbeat` is a sound the entity makes on its own clock.
      *
-     * The interval is a Molang expression on the warden, because its heart quickens as it gets
-     * angrier. A pack that wrote a plain number gets that number; one that wrote an expression gets
-     * the two seconds Bedrock's own default is, because the expression is answered on the drawing
-     * side and there is no drawing here.
+     * The interval is Molang, because the warden's heart quickens as it gets angrier, so it is
+     * answered for the entity at each beat and the next beat is that far off. The interval is
+     * published as `query.heartbeat_interval` each time it is worked out.
      */
     private void beat() {
-        if (!declares("minecraft:heartbeat")) return;
+        com.google.gson.JsonObject heartbeat = liveComponent("minecraft:heartbeat");
+        if (heartbeat == null || tickCount < nextBeat) return;
 
-        int interval = (int) (number(definition, "minecraft:heartbeat", "interval", 1)
-            * Goals.TICKS_PER_SECOND);
-        if (interval <= 0 || tickCount % interval != 0) return;
+        com.google.gson.JsonElement written = heartbeat.get("interval");
+        double interval = written == null || !written.isJsonPrimitive()
+            ? 1 : answer(written.getAsString()).asFloat();
+        setValue("heartbeat_interval", interval);
+        nextBeat = tickCount + Math.max(1, (int) Math.round(interval * Goals.TICKS_PER_SECOND));
+        if (interval <= 0) return;
 
-        playSound(sound(liveText("minecraft:heartbeat", "sound_event"), SoundEvents.WARDEN_HEARTBEAT),
+        playSound(sound(at.ioexception.mcaddon.util.Json.text(heartbeat, "sound_event", null),
+            SoundEvents.WARDEN_HEARTBEAT),
             getSoundVolume(), getVoicePitch());
     }
+
+    /** The tick the next heartbeat falls on. */
+    private int nextBeat;
 
     /** `minecraft:ground_offset` is how far above the ground the entity is meant to sit. */
     private void hover() {

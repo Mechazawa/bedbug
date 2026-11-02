@@ -1,0 +1,65 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:abacus",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:count": {
+          "type": "int",
+          "range": [
+            0,
+            10
+          ],
+          "default": 0
+        }
+      }
+    },
+    "component_groups": {
+      "tp:abacus_beating": {
+        "minecraft:heartbeat": {
+          "interval": "2.0 - math.clamp(query.property('tp:count') / 2, 0, 1.5)"
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_abacus",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 0.8
+      },
+      "minecraft:health": {
+        "value": 10,
+        "max": 10
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:movement.basic": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:abacus_make_beating": {
+        "add": {
+          "component_groups": [
+            "tp:abacus_beating"
+          ]
+        }
+      },
+      "tp:abacus_count": {
+        "set_property": {
+          "tp:count": 2
+        }
+      }
+    }
+  }
+}

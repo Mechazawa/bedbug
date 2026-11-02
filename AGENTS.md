@@ -3014,6 +3014,14 @@ look at the target, whose height is capped at `max_head_look_at_height` over the
 goal naming no `loot_table` drops what the entity holds. `search_count` is not read: every block
 is checked in one tick, which is its default.
 
+## Molang in entity components and events
+
+`tp:abacus` carries the Molang a behaviour pack writes into components and events, and
+`AbacusGameTests` reads each back.
+
+- `minecraft:heartbeat` `interval` is read from the live set and answered with the entity's own
+  queries at each beat; the next beat is that many seconds later.
+
 ## Conventions
 
 **No add-on content is committed.** No textures, sounds, models or text from any pack. Real packs
