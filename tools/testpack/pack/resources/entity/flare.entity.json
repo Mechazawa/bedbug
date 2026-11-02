@@ -1,0 +1,33 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "tp:flare",
+      "materials": {
+        "default": "entity"
+      },
+      "textures": {
+        "default": "textures/entity/ember"
+      },
+      "geometry": {
+        "default": "geometry.tp.sprite",
+        "young": "geometry.tp.sprite"
+      },
+      "particle_effects": {
+        "puff": "tp:puff"
+      },
+      "animations": {
+        "rise": "animation.tp.flare.rise"
+      },
+      "scripts": {
+        "should_update_effects_offscreen": true,
+        "animate": [
+          "rise"
+        ]
+      },
+      "render_controllers": [
+        "controller.render.tp.sprite"
+      ]
+    }
+  }
+}

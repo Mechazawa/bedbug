@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.bedrock.animation.AnimationPlayer;
 import at.ioexception.mcaddon.bedrock.entity.EntityAnimator;
+import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
@@ -38,8 +39,8 @@ public final class AddonEffects {
             }
 
             @Override
-            public void particle(String particleId, String locator) {
-                spawn(entity, animator, models, particleId, locator);
+            public void particle(String particleId, String locator, List<MolangExpression> preEffectScript) {
+                spawn(entity, animator, models, particleId, locator, preEffectScript);
             }
         };
     }
@@ -70,14 +71,14 @@ public final class AddonEffects {
      * than silently doing nothing.
      */
     private static void spawn(Entity entity, EntityAnimator animator, AddonModels models, String particleId,
-        String locator) {
+        String locator, List<MolangExpression> preEffectScript) {
         if (particleId == null || entity.level() == null) return;
 
         Vector3f at = anchor(entity, animator, models, locator);
         if (AddonParticles.definitionOf(particleId) != null) {
             AddonEmitters.start(particleId, entity,
                 new net.minecraft.world.phys.Vec3(at.x() - entity.getX(), at.y() - entity.getY(),
-                    at.z() - entity.getZ()));
+                    at.z() - entity.getZ()), animator.environment()::query, preEffectScript);
             return;
         }
 

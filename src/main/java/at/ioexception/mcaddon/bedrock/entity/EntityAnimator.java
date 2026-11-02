@@ -67,8 +67,8 @@ public final class EntityAnimator {
             }
 
             @Override
-            public void particle(String effect, String locator) {
-                listener.particle(definition.resolveParticle(effect), locator);
+            public void particle(String effect, String locator, List<MolangExpression> preEffectScript) {
+                listener.particle(definition.resolveParticle(effect), locator, preEffectScript);
             }
         });
     }
@@ -279,7 +279,8 @@ public final class EntityAnimator {
     private void fireStateEffects(AnimationController.State state) {
         for (String effect : state.soundEffects()) listener.sound(definition.resolveSound(effect));
         for (AnimationController.Effect effect : state.particleEffects()) {
-            listener.particle(definition.resolveParticle(effect.effect()), effect.locator());
+            listener.particle(definition.resolveParticle(effect.effect()), effect.locator(),
+                effect.preEffectScript());
         }
     }
 

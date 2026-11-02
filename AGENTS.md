@@ -3033,6 +3033,10 @@ is checked in one tick, which is its default.
   emitter's `alive` list.
 - A collision's `enabled` is evaluated each tick before the particle moves, and its
   `collision_radius` sizes the particle whether or not it collides at birth.
+- An animation's or a controller state's `pre_effect_script` runs in the effect's emitter as it
+  starts, after the emitter randoms and before `creation_expression`. An emitter an entity's
+  animation started answers that entity's queries, which is what Mojang's own scripts read
+  (`query.surface_particle_color`).
 
 ## Conventions
 

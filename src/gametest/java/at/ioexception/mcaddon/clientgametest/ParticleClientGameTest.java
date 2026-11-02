@@ -58,6 +58,7 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             looped(context, world);
             capped(context, world);
             settling(context, world);
+            flare(context, world);
         }
     }
 
@@ -298,6 +299,23 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             () -> "tp:settle's particle lives a second and never reached 0.3 of it.");
         Assert.that(context.computeOnClient(client -> settle.collides()),
             "tp:settle's collision is evaluated every frame and was still off at 0.3 seconds.");
+    }
+
+    /**
+     * `tp:flare`'s clip starts `tp:puff` with a `pre_effect_script` setting `variable.burst` to three,
+     * which the effect's instant rate reads, so the script runs in the emitter.
+     */
+    private static void flare(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("execute as @p at @s run summon tp:flare ~ ~ ~3");
+        Worlds.waitForClient(context, client -> Born.of("tp:puff").size() >= 3, PATIENCE,
+            () -> "tp:flare's clip starts tp:puff with a pre_effect_script asking for three particles, and "
+                + Born.of("tp:puff").size() + " were made.");
+        context.waitTicks(5);
+        int puffs = context.computeOnClient(client -> Born.of("tp:puff").size());
+        Assert.that(puffs == 3, "tp:puff bursts the three particles its pre_effect_script asked for once, and made "
+            + puffs + ".");
+        world.getServer().runCommand("kill @e[type=tp:flare]");
     }
 
     /** Each of the four channels within one step of the colour asked for. */

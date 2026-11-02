@@ -146,7 +146,7 @@ public final class AnimationParser {
     }
 
     /** A pre-effect script, which computes the variables the effect reads and nothing else. */
-    private static List<MolangExpression> readExpressions(JsonElement json) {
+    static List<MolangExpression> readExpressions(JsonElement json) {
         List<MolangExpression> statements = new ArrayList<>();
         if (json.isJsonArray()) {
             for (JsonElement statement : json.getAsJsonArray()) {

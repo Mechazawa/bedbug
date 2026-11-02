@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
+import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.bedrock.particle.EmitterLifetime;
 import at.ioexception.mcaddon.bedrock.particle.EmitterRate;
@@ -80,14 +81,16 @@ public final class AddonEmitters {
         private Vec3 was;
 
         private Running(ParticleDefinition definition, SimpleParticleType type, Entity following,
-            Vec3 at, int depth) {
+            Vec3 at, int depth, MolangEnvironment.Queries queries, List<MolangExpression> preEffectScript) {
             this.definition = definition;
             this.type = type;
             this.following = following;
             this.at = at;
             this.depth = depth;
 
+            if (queries != null) environment.setQueries(queries);
             randomise(environment, "emitter_random_");
+            preEffectScript.forEach(statement -> statement.evaluate(environment));
             ParticleDefinition.Emitter.Initialization start = definition.emitter().initialization();
             if (start != null) start.creation().evaluate(environment);
             beginLoop(0f);
@@ -138,15 +141,25 @@ public final class AddonEmitters {
 
     /** Starts an effect at a point, or following an entity when one is given. */
     public static void start(String identifier, Entity following, Vec3 at) {
-        start(identifier, following, at, 0);
+        start(identifier, following, at, 0, null, List.of());
     }
 
-    private static void start(String identifier, Entity following, Vec3 at, int depth) {
+    /**
+     * Starts an effect an entity's animation asked for: its emitter answers the entity's queries,
+     * and the animation's `pre_effect_script` runs in the emitter as it starts.
+     */
+    public static void start(String identifier, Entity following, Vec3 at, MolangEnvironment.Queries queries,
+        List<MolangExpression> preEffectScript) {
+        start(identifier, following, at, 0, queries, preEffectScript);
+    }
+
+    private static void start(String identifier, Entity following, Vec3 at, int depth,
+        MolangEnvironment.Queries queries, List<MolangExpression> preEffectScript) {
         SimpleParticleType type = AddonParticles.typeOf(identifier);
         ParticleDefinition definition = AddonParticles.definitionOf(identifier);
         if (type == null || definition == null || depth > MAXIMUM_DEPTH) return;
 
-        Running effect = new Running(definition, type, following, at, depth);
+        Running effect = new Running(definition, type, following, at, depth, queries, preEffectScript);
         RUNNING.add(effect);
         raise(effect, definition.emitter().events().creation());
     }
@@ -401,7 +414,7 @@ public final class AddonEmitters {
         boolean bound = "emitter_bound".equals(visual.type());
         Entity carrier = bound ? following : null;
         Vec3 where = bound && following != null ? at.subtract(following.position()) : at;
-        start(visual.effect(), carrier, where, depth + 1);
+        start(visual.effect(), carrier, where, depth + 1, null, List.of());
     }
 
     /** Plays one of the pack's own sound events, under the namespace the effect itself carries. */
