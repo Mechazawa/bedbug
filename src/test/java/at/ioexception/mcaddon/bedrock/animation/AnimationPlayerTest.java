@@ -94,6 +94,18 @@ class AnimationPlayerTest {
         assertEquals(45f, rotation(player).y, 0.001f);
     }
 
+    /** The step that wraps a loop still fires what lies between its last position and the end. */
+    @Test
+    void firesATimelineEntryNearTheEndOfALoopOnEveryLoop() throws IOException {
+        AnimationPlayer player = playing("""
+            {"animations": {"animation.spin": {"loop": true, "animation_length": 1.0,
+              "timeline": {"0.97": "v.hits = v.hits + 1;"}}}}
+            """);
+
+        for (int tick = 0; tick < 25; tick++) player.tick(0.1f);
+        assertEquals(2f, player.environment().variable("hits").asFloat(), 0.001f);
+    }
+
     private static Vector3f rotation(AnimationPlayer player) {
         return player.poseOf("head").rotation;
     }

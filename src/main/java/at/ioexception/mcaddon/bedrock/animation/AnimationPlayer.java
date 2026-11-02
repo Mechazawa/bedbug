@@ -292,15 +292,19 @@ public final class AnimationPlayer {
         clip.waiting = clip.animation.loopDelaySeconds(environment);
         if (clip.waiting > 0f) return;
 
+        fireUpTo(clip, length);
         clip.animTime -= length * (float) Math.floor(clip.animTime / length);
         clip.lastFiredTime = -1;
     }
 
     private void fireTimeline(Running clip) {
-        float position = clip.position;
-        environment.setAnimTime(position);
-        if (position < clip.lastFiredTime) clip.lastFiredTime = -1;
+        if (clip.position < clip.lastFiredTime) clip.lastFiredTime = -1;
+        fireUpTo(clip, clip.position);
+    }
 
+    /** Fires every timeline entry and effect after the last one fired, up to and including `position`. */
+    private void fireUpTo(Running clip, float position) {
+        environment.setAnimTime(position);
         for (BedrockAnimation.TimelineEntry entry : clip.animation.timeline()) {
             if (entry.time() > position || entry.time() <= clip.lastFiredTime) continue;
             for (AnimationAction statement : entry.statements()) statement.run(entity, environment);
