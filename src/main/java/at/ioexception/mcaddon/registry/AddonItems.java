@@ -9,6 +9,7 @@ import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
 import at.ioexception.mcaddon.item.AddonScriptedItem;
 import at.ioexception.mcaddon.item.DurabilitySensor;
+import at.ioexception.mcaddon.item.RepairAmounts;
 import at.ioexception.mcaddon.item.AddonShooterItem;
 import at.ioexception.mcaddon.item.AddonThrowableItem;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -60,6 +61,7 @@ public final class AddonItems {
     private static final Map<Item, KineticTimings> KINETIC = new LinkedHashMap<>();
     private static final Map<Item, Float> COOLDOWNS = new LinkedHashMap<>();
     private static final Map<Item, DurabilitySensor> SENSORS = new LinkedHashMap<>();
+    private static final Map<Item, RepairAmounts> REPAIRS = new LinkedHashMap<>();
     private static final Set<Item> OFF_HAND_REFUSED = new HashSet<>();
     private static final Set<Item> LIQUID_CLIPPED = new HashSet<>();
     private static final Map<Item, SwingSounds> SWINGS = new LinkedHashMap<>();
@@ -82,6 +84,11 @@ public final class AddonItems {
     }
 
     /** How long `minecraft:cooldown` keeps a pack's own item busy, in seconds, or nothing. */
+    /** The repair amounts a pack stated on this item, or null where it stated none. */
+    public static RepairAmounts repairsOf(Item item) {
+        return REPAIRS.get(item);
+    }
+
     public static float cooldownOf(Item item) {
         return COOLDOWNS.getOrDefault(item, 0f);
     }
@@ -320,7 +327,7 @@ public final class AddonItems {
      * of the same item from another release of its add-on take over.
      */
     private static void bind(ItemDefinition definition, Item item) {
-        List.of(PROJECTILES, KINETIC, COOLDOWNS, SENSORS, ABSORBED, SWINGS, BAG_LIMITS, STORAGE_WEIGHTS)
+        List.of(PROJECTILES, KINETIC, COOLDOWNS, SENSORS, REPAIRS, ABSORBED, SWINGS, BAG_LIMITS, STORAGE_WEIGHTS)
             .forEach(map -> map.remove(item));
         List.of(KEPT, OFF_HAND_REFUSED, LIQUID_CLIPPED).forEach(held -> held.remove(item));
         DYEABLE.remove(item);
@@ -361,6 +368,8 @@ public final class AddonItems {
 
         DurabilitySensor sensor = DurabilitySensor.tryFrom(definition);
         if (sensor != null) SENSORS.put(item, sensor);
+        RepairAmounts repairs = RepairAmounts.tryFrom(definition);
+        if (repairs != null) REPAIRS.put(item, repairs);
 
         // The two editions disagree about the default: Java takes anything in the off hand and
         // Bedrock takes nothing there until `allow_off_hand` says so, which is why a pack's own item

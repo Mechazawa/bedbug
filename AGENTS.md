@@ -2422,7 +2422,7 @@ stand within the distance, itself included, of the type named where one is. `get
 is the same without the entity asking, a name found in no Mojang material today. Both are listed in
 `EntityQueries.EXPERIMENTAL`, which `components.py` reads as answered on purpose. `q.get_ride`,
 `q.target` and `context.player` appear in no Mojang material and are not answered. `context.other`
-is the repair target of an item's `repair_amount`, which nothing here evaluates.
+is the item repairing another in an item's `repair_amount`, which `item.RepairAmounts` answers.
 `BehaviourGameTests.anEntityReadsThePropertiesOfTheEntitiesNearItThroughAnArrow` has `tp:herald` add
 up `tp:settled` over two wisps through `->` inside `for_each` and count them through
 `combine_entities`; `MolangTest` runs Mojang's struct examples against stub entities.
@@ -3036,6 +3036,13 @@ is checked in one tick, which is its default.
   block passing it when the goal is built. A `minecraft:digger` rule is built on each data load
   from 26, against the tags that load brings. A pack block's own `tag:` components are not tags
   here, and `navigation.*` `blocks_to_avoid` is not read.
+- `minecraft:repairable` `repair_amount` is answered by `item.RepairAmounts` for the item being
+  repaired (`query.max_durability`, `query.remaining_durability`), with `context.other` the item
+  repairing it. `AnvilRepairMixin` uses it for a material in place of Java's quarter, and
+  `AnvilRepairMixin` and `RepairItemRecipeMixin` for a second copy of the item in place of that
+  copy's own durability. Mojang publishes no rule for combining, so Java's bonus of 12 in a hundred
+  at the anvil and 5 in the grid stays on top, as both editions' wikis describe. `RepairGameTests`
+  reads `tp:file` back. Which items repair at all still comes from the entries' plain names.
 
 ## Conventions
 

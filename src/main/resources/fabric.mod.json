@@ -51,7 +51,8 @@
       "at.ioexception.mcaddon.gametest.StorageGameTests",
       "at.ioexception.mcaddon.gametest.InteractGameTests",
       "at.ioexception.mcaddon.gametest.SentinelGameTests",
-      "at.ioexception.mcaddon.gametest.AbacusGameTests"
+      "at.ioexception.mcaddon.gametest.AbacusGameTests",
+      "at.ioexception.mcaddon.gametest.RepairGameTests"
     ]
   },
   "mixins": [
