@@ -1908,6 +1908,11 @@ decide what it acts on and a reported field is still a dropped one.
   `display`, Bedrock's `shelf` becoming Java's `on_shelf` from 26. The `embedded` context, the two
   pivots and `fit_to_frame` are reported in `BlockGeometry.display`, because Java has no context for
   an embedded visual, turns and scales a model about its middle, and never fits an item to its frame.
+- **A rotation element written as an object naming one axis** (`[{"y": "180 - this"}, ...]`).
+  Mojang's schema allows the shape and publishes nothing on what it means; the squid writes `y`,
+  `x` and `y` in turn, which may be three turns applied in order. The clip is reported as
+  `animation rotation written per axis` and left out. `BedrockAssets.readSection` reads each entry
+  of a file on its own, so the clips after it still load.
 - **`parent_setup`** is reported for a wearer Java draws with a model of its own, which has no
   variables to write into. **`binding`** on such a wearer finds the part `JavaModelParts` answers
   to the bone, with `rightItem` and `leftItem` seven pixels down each arm as Mojang's humanoid
@@ -2028,6 +2033,12 @@ plays once and stays finished while it is asked for, and `q.any_animation_finish
 `q.all_animations_finished` answer for the clips of the controller's current state, a looping clip
 counting once it has come round the first time. An effect a clip fires at a locator is born where
 the drawn model carries that locator, through its bone's pose.
+
+Clips are applied in the order the script asks for them on that frame: the animate list in its
+order, a controller's clips where the controller stands in it. A clip started on its own, by
+`/bedrock playanimation` or a script, comes after those, oldest first; Mojang publishes no order for
+it. A clip declaring `override_previous_animation` puts each bone it names back to rest before it
+adds its own pose, so it replaces what the clips before it did to those bones.
 
 **A clip played on a mob Java draws moves Java's model of it.** `/bedrock playanimation` on a vanilla
 villager names the bones of Bedrock's own villager geometry, so `JavaModelPoses` runs the clip on an

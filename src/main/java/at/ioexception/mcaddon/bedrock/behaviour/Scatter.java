@@ -110,7 +110,7 @@ public record Scatter(JsonObject body, MolangExpression iterations, MolangExpres
 
     /** The chance as a percentage: a number or an expression stated as one, or a fraction of its own. */
     private static MolangExpression chance(JsonElement declared) {
-        if (declared != null && declared.isJsonObject()) {
+        if (declared != null && declared.isJsonObject() && !declared.getAsJsonObject().has("expression")) {
             JsonObject fraction = declared.getAsJsonObject();
             double numerator = Json.number(fraction, "numerator", 1);
             double denominator = Json.number(fraction, "denominator", 1);
@@ -120,9 +120,8 @@ public record Scatter(JsonObject body, MolangExpression iterations, MolangExpres
     }
 
     private static MolangExpression expression(JsonElement declared, double fallback) {
-        if (declared == null || !declared.isJsonPrimitive()) return MolangExpression.constant(fallback);
-        return declared.getAsJsonPrimitive().isNumber()
-            ? MolangExpression.constant(declared.getAsDouble()) : MolangParser.parse(declared.getAsString());
+        if (declared == null || declared.isJsonNull()) return MolangExpression.constant(fallback);
+        return MolangParser.parse(declared);
     }
 
     /**
@@ -137,7 +136,7 @@ public record Scatter(JsonObject body, MolangExpression iterations, MolangExpres
 
         static Axis of(char letter, JsonElement declared) {
             int index = "xyz".indexOf(letter);
-            if (declared == null || !declared.isJsonObject()) {
+            if (declared == null || !declared.isJsonObject() || declared.getAsJsonObject().has("expression")) {
                 return new Axis(index, expression(declared, 0), null, null, null, 1, 0);
             }
 

@@ -7,7 +7,9 @@ import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 
 /** Reads one animation controller out of a pack's `animation_controllers` JSON. */
 public final class AnimationControllerParser {
@@ -32,9 +34,10 @@ public final class AnimationControllerParser {
         if (json.has("animations")) {
             for (JsonElement entry : json.getAsJsonArray("animations")) {
                 if (entry.isJsonObject()) {
-                    Map.Entry<String, JsonElement> single = entry.getAsJsonObject().entrySet().iterator().next();
-                    animations.add(new AnimationController.Entry(
-                        single.getKey(), MolangParser.parse(primitive(single.getValue()))));
+                    for (Map.Entry<String, JsonElement> blended : entry.getAsJsonObject().entrySet()) {
+                        animations.add(new AnimationController.Entry(
+                            blended.getKey(), MolangParser.parse(blended.getValue())));
+                    }
                 } else {
                     animations.add(new AnimationController.Entry(entry.getAsString(), null));
                 }
@@ -46,7 +49,7 @@ public final class AnimationControllerParser {
             for (JsonElement entry : json.getAsJsonArray("transitions")) {
                 Map.Entry<String, JsonElement> single = entry.getAsJsonObject().entrySet().iterator().next();
                 transitions.add(new AnimationController.Transition(
-                    single.getKey(), MolangParser.parse(primitive(single.getValue()))));
+                    single.getKey(), MolangParser.parse(single.getValue())));
             }
         }
 
@@ -72,6 +75,7 @@ public final class AnimationControllerParser {
         }
 
         return new AnimationController.State(
+            readVariables(json.get("variables")),
             List.copyOf(animations),
             List.copyOf(transitions),
             readStatements(json, "on_entry"),
@@ -80,6 +84,36 @@ public final class AnimationControllerParser {
             List.copyOf(particles),
             readBlendTransition(json.get("blend_transition")),
             json.has("blend_via_shortest_path") && json.get("blend_via_shortest_path").getAsBoolean());
+    }
+
+    /** A state's `variables`, each named with or without its `variable.` or `v.` prefix. */
+    private static List<AnimationController.Variable> readVariables(JsonElement json) {
+        if (json == null || !json.isJsonObject()) return List.of();
+
+        List<AnimationController.Variable> variables = new ArrayList<>();
+        for (Map.Entry<String, JsonElement> declared : json.getAsJsonObject().entrySet()) {
+            if (!declared.getValue().isJsonObject()) continue;
+            JsonObject body = declared.getValue().getAsJsonObject();
+
+            String name = declared.getKey().toLowerCase(Locale.ROOT).replaceFirst("^(variable|v)\\.", "");
+            TreeMap<Float, Float> curve = new TreeMap<>();
+            if (body.has("remap_curve") && body.get("remap_curve").isJsonObject()) {
+                for (Map.Entry<String, JsonElement> point : body.getAsJsonObject("remap_curve").entrySet()) {
+                    curve.put(Float.parseFloat(point.getKey()), point.getValue().getAsFloat());
+                }
+            }
+            float[] inputs = new float[curve.size()];
+            float[] outputs = new float[curve.size()];
+            int i = 0;
+            for (Map.Entry<Float, Float> point : curve.entrySet()) {
+                inputs[i] = point.getKey();
+                outputs[i++] = point.getValue();
+            }
+            variables.add(new AnimationController.Variable(name,
+                MolangParser.parse(body.get("input")),
+                inputs, outputs));
+        }
+        return List.copyOf(variables);
     }
 
     /**
@@ -109,12 +143,6 @@ public final class AnimationControllerParser {
             statements.add(AnimationAction.of(entry.getAsString()));
         }
         return List.copyOf(statements);
-    }
-
-    private static Object primitive(JsonElement json) {
-        if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isNumber()) return json.getAsDouble();
-        if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isBoolean()) return json.getAsBoolean() ? 1d : 0d;
-        return json.getAsString();
     }
 
 }

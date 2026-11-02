@@ -22,6 +22,20 @@
         "0.0": "/tag @s add tp_herald_heard"
       }
     },
+    "animation.tp.herald.hum": {
+      "loop": true,
+      "animation_length": 10.0,
+      "timeline": {
+        "5.0": "variable.hummed = 1;"
+      }
+    },
+    "animation.tp.herald.ring": {
+      "loop": false,
+      "animation_length": 0.25,
+      "timeline": {
+        "0.0": "variable.rang = 1;"
+      }
+    },
     "animation.tp.herald.counted": {
       "loop": true,
       "animation_length": 0.05,

@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.bedrock.particle;
 
 import at.ioexception.mcaddon.bedrock.animation.Vector3Expression;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
+import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import com.google.gson.JsonElement;
 
 /**
@@ -21,6 +22,6 @@ public sealed interface InitialSpeed {
     static InitialSpeed read(JsonElement value) {
         if (value == null) return null;
         if (value.isJsonArray()) return new Vector(ParticleJson.vector(value));
-        return new Scalar(ParticleJson.expression(value));
+        return new Scalar(MolangParser.parse(value));
     }
 }

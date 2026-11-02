@@ -45,7 +45,7 @@ public final class RenderControllerParser {
         for (JsonElement rule : json.getAsJsonArray(field)) {
             Map<String, MolangExpression> parsed = new LinkedHashMap<>();
             for (Map.Entry<String, JsonElement> bone : rule.getAsJsonObject().entrySet()) {
-                parsed.put(bone.getKey(), MolangParser.parse(bone.getValue().getAsString()));
+                parsed.put(bone.getKey(), MolangParser.parse(bone.getValue()));
             }
             rules.add(java.util.Collections.unmodifiableMap(parsed));
         }
@@ -58,7 +58,7 @@ public final class RenderControllerParser {
         List<MolangExpression> textures = new ArrayList<>();
         if (json.has("textures")) {
             for (JsonElement texture : json.getAsJsonArray("textures")) {
-                textures.add(MolangParser.parse(texture.getAsString()));
+                textures.add(MolangParser.parse(texture));
             }
         }
 
@@ -67,7 +67,7 @@ public final class RenderControllerParser {
 
         return new RenderController(
             name,
-            json.has("geometry") ? MolangParser.parse(json.get("geometry").getAsString()) : null,
+            json.has("geometry") ? MolangParser.parse(json.get("geometry")) : null,
             List.copyOf(textures),
             List.copyOf(visibility),
             List.copyOf(materials),
@@ -86,11 +86,7 @@ public final class RenderControllerParser {
 
     /** A field Mojang types as Molang and vanilla writes as a plain number. Null where absent. */
     private static MolangExpression molang(JsonElement value) {
-        if (value == null || value.isJsonNull()) return null;
-
-        return value.getAsJsonPrimitive().isString()
-            ? MolangParser.parse(value.getAsString())
-            : MolangExpression.constant(value.getAsFloat());
+        return value == null || value.isJsonNull() ? null : MolangParser.parse(value);
     }
 
     /**
