@@ -106,11 +106,46 @@ class AnimationPlayerTest {
         assertEquals(2f, player.environment().variable("hits").asFloat(), 0.001f);
     }
 
+    /** A clip overriding the ones before it puts its bones back to rest before adding its own pose. */
+    @Test
+    void anOverridingClipReplacesThePoseOfTheClipsBeforeIt() throws IOException {
+        AnimationPlayer player = overriding();
+        player.ensurePlaying("animation.turn", 1f, false);
+        player.ensurePlaying("animation.nod", 1f, false);
+        player.tick(0.05f);
+        assertEquals(new Vector3f(10, 0, 0), rotation(player));
+    }
+
+    @Test
+    void anOverridingClipLeavesTheClipsAfterItAlone() throws IOException {
+        AnimationPlayer player = overriding();
+        player.ensurePlaying("animation.nod", 1f, false);
+        player.ensurePlaying("animation.turn", 1f, false);
+        player.tick(0.05f);
+        assertEquals(new Vector3f(10, 90, 0), rotation(player));
+    }
+
+    private AnimationPlayer overriding() throws IOException {
+        return player("""
+            {"animations": {
+              "animation.turn": {"loop": true, "bones": {"head": {"rotation": [0, 90, 0]}}},
+              "animation.nod": {"loop": true, "override_previous_animation": true,
+                "bones": {"head": {"rotation": [10, 0, 0]}}}
+            }}
+            """);
+    }
+
     private static Vector3f rotation(AnimationPlayer player) {
         return player.poseOf("head").rotation;
     }
 
     private AnimationPlayer playing(String animations) throws IOException {
+        AnimationPlayer player = player(animations);
+        player.play("animation.spin", null, 0f);
+        return player;
+    }
+
+    private AnimationPlayer player(String animations) throws IOException {
         Path pack = directory.resolve("pack");
         Files.createDirectories(pack.resolve("animations"));
         Files.writeString(pack.resolve("animations").resolve("test.animation.json"), animations);
@@ -118,9 +153,6 @@ class AnimationPlayerTest {
         PackManifest manifest = PackManifest.tryFrom(Json.parse("""
             {"header": {"uuid": "00000000-0000-0000-0000-000000000000", "name": "test"}}
             """).getAsJsonObject());
-        AnimationPlayer player = new AnimationPlayer(
-            BedrockAssets.read(new BedrockPack(pack, manifest, "test.mcaddon")), null);
-        player.play("animation.spin", null, 0f);
-        return player;
+        return new AnimationPlayer(BedrockAssets.read(new BedrockPack(pack, manifest, "test.mcaddon")), null);
     }
 }

@@ -2029,6 +2029,12 @@ plays once and stays finished while it is asked for, and `q.any_animation_finish
 counting once it has come round the first time. An effect a clip fires at a locator is born where
 the drawn model carries that locator, through its bone's pose.
 
+Clips are applied in the order the script asks for them on that frame: the animate list in its
+order, a controller's clips where the controller stands in it. A clip started on its own, by
+`/bedrock playanimation` or a script, comes after those, oldest first; Mojang publishes no order for
+it. A clip declaring `override_previous_animation` puts each bone it names back to rest before it
+adds its own pose, so it replaces what the clips before it did to those bones.
+
 **A clip played on a mob Java draws moves Java's model of it.** `/bedrock playanimation` on a vanilla
 villager names the bones of Bedrock's own villager geometry, so `JavaModelPoses` runs the clip on an
 animator of its own and `JavaModelParts` finds each bone among the model's parts: the same name
