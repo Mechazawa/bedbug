@@ -3028,6 +3028,9 @@ is checked in one tick, which is its default.
   instant rate's `num_particles` are evaluated once as each loop starts, the four emitter randoms
   are rolled again for every loop after the first, `v.emitter_age` counts from the loop's start and
   `v.emitter_lifetime` is the loop's `active_time`. The timeline fires on every loop.
+- A steady rate's `max_particles` caps the emitter's particles alive at once, evaluated as each loop
+  starts. The provider hands each particle it makes to `AddonEmitters.adopt`, which keeps it in the
+  emitter's `alive` list.
 
 ## Conventions
 

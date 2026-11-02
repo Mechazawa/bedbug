@@ -53,11 +53,13 @@ public record AddonParticleProvider(String identifier, SpriteSet sprites)
         Vector3f speed = speed(definition, environment, offset);
 
         // A pack states a speed in blocks a second and Java moves a particle once a tick.
-        return new AddonParticle(level, x + offset.x(), y + offset.y(), z + offset.z(),
+        AddonParticle particle = new AddonParticle(level, x + offset.x(), y + offset.y(), z + offset.z(),
             dx + at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocksPerTick(speed.x()),
             dy + at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocksPerTick(speed.y()),
             dz + at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits.blocksPerTick(speed.z()),
             sprites.get(random), definition, environment);
+        AddonEmitters.adopt(particle);
+        return particle;
     }
 
     /** Where inside the emitter's shape this particle appears, measured from the emitter itself. */

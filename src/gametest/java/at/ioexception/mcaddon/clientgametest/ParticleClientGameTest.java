@@ -56,6 +56,7 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             curves(context, world);
             scoped(context, world);
             looped(context, world);
+            capped(context, world);
         }
     }
 
@@ -267,6 +268,19 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         int pulses = context.computeOnClient(client -> Born.of("tp:pulse").size());
         Assert.that(pulses >= 6, "tp:pulse bursts two particles every quarter second loop, and made " + pulses
             + " in two seconds.");
+        context.runOnClient(client -> AddonEmitters.clear());
+    }
+
+    /**
+     * `tp:capped` makes twenty particles a second, each living a tenth of a second, and allows five
+     * alive at once, so it keeps making them for as long as it runs.
+     */
+    private static void capped(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:capped ~ ~1 ~3");
+        Worlds.waitForClient(context, client -> Born.of("tp:capped").size() >= 30, PATIENCE,
+            () -> "tp:capped keeps at most five particles alive at once, each living a tenth of a second,"
+                + " and stopped after " + Born.of("tp:capped").size() + ".");
         context.runOnClient(client -> AddonEmitters.clear());
     }
 

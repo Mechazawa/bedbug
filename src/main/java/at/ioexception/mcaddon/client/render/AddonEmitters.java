@@ -71,6 +71,10 @@ public final class AddonEmitters {
         private float owed;
         private int made;
 
+        /** The particles this emitter made that are still alive, which a steady rate is capped by. */
+        private final List<AddonParticle> alive = new ArrayList<>();
+        private int cap;
+
         /** How far the emitter has moved since it started, which its travel events count in. */
         private float travelled;
         private Vec3 was;
@@ -102,6 +106,9 @@ public final class AddonEmitters {
             loopStart = start;
             made = 0;
             environment.setVariable("emitter_age", MolangValue.ZERO);
+            if (definition.emitter().rate() instanceof EmitterRate.Steady steady) {
+                cap = (int) steady.maxParticles().asFloat(environment);
+            }
 
             switch (definition.emitter().lifetime()) {
                 case null -> awake = 1f;
@@ -195,6 +202,11 @@ public final class AddonEmitters {
      */
     public static MolangEnvironment birthScope() {
         return emitting == null ? new MolangEnvironment() : emitting.environment.copy();
+    }
+
+    /** Counts a particle the emitter making particles at this moment just made among its own. */
+    public static void adopt(AddonParticle particle) {
+        if (emitting != null) emitting.alive.add(particle);
     }
 
     /** Writes each curve's answer to the Molang variable it is named after. */
@@ -305,8 +317,8 @@ public final class AddonEmitters {
                 int count = (int) effect.owed;
                 effect.owed -= count;
 
-                int most = (int) steady.maxParticles().asFloat(effect.environment);
-                yield most > 0 ? Math.min(count, Math.max(0, most - effect.made)) : count;
+                effect.alive.removeIf(particle -> !particle.isAlive());
+                yield effect.cap > 0 ? Math.min(count, Math.max(0, effect.cap - effect.alive.size())) : count;
             }
         };
         if (wanted <= 0) return;
