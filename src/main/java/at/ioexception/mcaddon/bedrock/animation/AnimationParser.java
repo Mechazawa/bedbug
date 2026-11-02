@@ -106,7 +106,7 @@ public final class AnimationParser {
 
     private static BedrockAnimation.EffectEntry readEffect(float time, JsonElement json) {
         if (!json.isJsonObject()) {
-            return new BedrockAnimation.EffectEntry(time, json.getAsString(), null, List.of());
+            return new BedrockAnimation.EffectEntry(time, json.getAsString(), null, List.of(), true);
         }
 
         JsonObject body = json.getAsJsonObject();
@@ -114,7 +114,13 @@ public final class AnimationParser {
             optionalString(body, "effect"),
             optionalString(body, "locator"),
             body.has("pre_effect_script")
-                ? readExpressions(body.get("pre_effect_script")) : List.of());
+                ? readExpressions(body.get("pre_effect_script")) : List.of(),
+            boundToActor(body));
+    }
+
+    /** `bind_to_actor`, which is true unless the pack says otherwise. */
+    static boolean boundToActor(JsonObject effect) {
+        return !effect.has("bind_to_actor") || effect.get("bind_to_actor").getAsBoolean();
     }
 
     private static BedrockAnimation.Loop readLoop(JsonElement json) {
@@ -146,7 +152,7 @@ public final class AnimationParser {
     }
 
     /** A pre-effect script, which computes the variables the effect reads and nothing else. */
-    private static List<MolangExpression> readExpressions(JsonElement json) {
+    static List<MolangExpression> readExpressions(JsonElement json) {
         List<MolangExpression> statements = new ArrayList<>();
         if (json.isJsonArray()) {
             for (JsonElement statement : json.getAsJsonArray()) {

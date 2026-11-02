@@ -29,6 +29,11 @@ public final class Born {
         public float age() {
             return ((AddonParticleAccessor) particle).mcaddon$age();
         }
+
+        /** Whether the particle collides with the world at this moment. */
+        public boolean collides() {
+            return ((ParticleMotionAccessor) particle).mcaddon$hasPhysics();
+        }
     }
 
     /** One of the game's own particles: where it was added, and the particle to ask about since. */

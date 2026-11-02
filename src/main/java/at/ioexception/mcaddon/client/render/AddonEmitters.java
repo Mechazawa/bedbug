@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.client.render;
 
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
+import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.bedrock.particle.EmitterLifetime;
 import at.ioexception.mcaddon.bedrock.particle.EmitterRate;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Supplier;
 
 /**
  * The effects currently running, each still deciding when to make its next particle.
@@ -43,6 +45,9 @@ public final class AddonEmitters {
 
     private static final List<Running> RUNNING = new ArrayList<>();
 
+    /** The emitter making a particle at this moment, whose variables the particle is born with. */
+    private static Running emitting;
+
     private AddonEmitters() {
     }
 
@@ -54,47 +59,117 @@ public final class AddonEmitters {
 
         /** Null for an effect standing still, which is how a one-off burst is left behind. */
         private final Entity following;
-        private final Vec3 at;
+
+        /** Where the emitter stands at this moment, which moves with the entity or locator it is bound to. */
+        private final Supplier<Vec3> anchor;
         private final int depth;
 
+        /** Seconds since the emitter started, and since its current loop started. */
         private float age;
+        private float loopStart;
+
+        /** How long this loop makes particles and then rests, evaluated as the loop starts. */
+        private float awake;
+        private float asleep;
+
         private float owed;
         private int made;
-        private boolean sleeping;
+
+        /** The particles this emitter made that are still alive, which a steady rate is capped by. */
+        private final List<AddonParticle> alive = new ArrayList<>();
+        private int cap;
 
         /** How far the emitter has moved since it started, which its travel events count in. */
         private float travelled;
         private Vec3 was;
 
         private Running(ParticleDefinition definition, SimpleParticleType type, Entity following,
-            Vec3 at, int depth) {
+            Supplier<Vec3> anchor, int depth, MolangEnvironment.Queries queries,
+            List<MolangExpression> preEffectScript) {
             this.definition = definition;
             this.type = type;
             this.following = following;
-            this.at = at;
+            this.anchor = anchor;
             this.depth = depth;
 
+            if (queries != null) environment.setQueries(queries);
             randomise(environment, "emitter_random_");
+            preEffectScript.forEach(statement -> statement.evaluate(environment));
             ParticleDefinition.Emitter.Initialization start = definition.emitter().initialization();
             if (start != null) start.creation().evaluate(environment);
+            beginLoop(0f);
+        }
+
+        private float loopAge() {
+            return age - loopStart;
+        }
+
+        /**
+         * Starts a loop: its times are evaluated once here, its randoms are rolled again for every
+         * loop after the first, and an instant emitter owes its burst again.
+         */
+        private void beginLoop(float start) {
+            if (start > 0f) randomise(environment, "emitter_random_");
+            loopStart = start;
+            made = 0;
+            environment.setVariable("emitter_age", MolangValue.ZERO);
+            if (definition.emitter().rate() instanceof EmitterRate.Steady steady) {
+                cap = (int) steady.maxParticles().asFloat(environment);
+            }
+
+            switch (definition.emitter().lifetime()) {
+                case null -> awake = 1f;
+                case EmitterLifetime.Once once -> awake = once.activeTime().asFloat(environment);
+                case EmitterLifetime.Looping looping -> {
+                    awake = Math.max(0.05f, looping.activeTime().asFloat(environment));
+                    asleep = Math.max(0f, looping.sleepTime().asFloat(environment));
+                }
+                case EmitterLifetime.Expression ignored -> awake = 0f;
+            }
+        }
+
+        /** Moves on to the next loop once a looping emitter has made particles and rested. */
+        private boolean looped() {
+            if (!(definition.emitter().lifetime() instanceof EmitterLifetime.Looping)
+                || loopAge() < awake + asleep) {
+                return false;
+            }
+            beginLoop(loopStart + awake + asleep);
+            return true;
         }
 
         private Vec3 where() {
-            return following == null ? at : following.position().add(at);
+            return anchor.get();
         }
     }
 
     /** Starts an effect at a point, or following an entity when one is given. */
     public static void start(String identifier, Entity following, Vec3 at) {
-        start(identifier, following, at, 0);
+        start(identifier, following, placed(following, at), 0, null, List.of());
     }
 
-    private static void start(String identifier, Entity following, Vec3 at, int depth) {
+    /** A point that stays put, or that keeps its offset from the entity it follows. */
+    private static Supplier<Vec3> placed(Entity following, Vec3 at) {
+        return following == null ? () -> at : () -> following.position().add(at);
+    }
+
+    /**
+     * Starts an effect an entity's animation asked for: its emitter stands wherever `anchor` says at
+     * each moment, answers the entity's queries, and runs the animation's `pre_effect_script` as it
+     * starts. An effect not bound to the entity is given no entity to follow.
+     */
+    public static void start(String identifier, Entity following, Supplier<Vec3> anchor,
+        MolangEnvironment.Queries queries, List<MolangExpression> preEffectScript) {
+        start(identifier, following, anchor, 0, queries, preEffectScript);
+    }
+
+    private static void start(String identifier, Entity following, Supplier<Vec3> anchor, int depth,
+        MolangEnvironment.Queries queries, List<MolangExpression> preEffectScript) {
         SimpleParticleType type = AddonParticles.typeOf(identifier);
         ParticleDefinition definition = AddonParticles.definitionOf(identifier);
         if (type == null || definition == null || depth > MAXIMUM_DEPTH) return;
 
-        Running effect = new Running(definition, type, following, at, depth);
+        Running effect = new Running(definition, type, following, anchor, depth, queries, preEffectScript);
         RUNNING.add(effect);
         raise(effect, definition.emitter().events().creation());
     }
@@ -143,6 +218,20 @@ public final class AddonEmitters {
         }
     }
 
+    /**
+     * The variables a particle starts with: the emitter's as they stand at its birth, so it reads
+     * what the emitter's own expressions set and `v.emitter_age` as of that moment. A particle made
+     * by no emitter of this mod starts with none.
+     */
+    public static MolangEnvironment birthScope() {
+        return emitting == null ? new MolangEnvironment() : emitting.environment.copy();
+    }
+
+    /** Counts a particle the emitter making particles at this moment just made among its own. */
+    public static void adopt(AddonParticle particle) {
+        if (emitting != null) emitting.alive.add(particle);
+    }
+
     /** Writes each curve's answer to the Molang variable it is named after. */
     public static void evaluateCurves(ParticleDefinition definition, MolangEnvironment environment) {
         for (Map.Entry<String, ParticleCurve> curve : definition.curves().entrySet()) {
@@ -152,13 +241,14 @@ public final class AddonEmitters {
 
     /** Whether the effect is still going after this tick. */
     private static boolean advance(Running effect) {
-        float was = effect.age;
+        float was = effect.loopAge();
         effect.age += 1f / 20f;
         if (effect.age > MAXIMUM_SECONDS) return false;
         if (effect.following != null && effect.following.isRemoved()) return false;
+        if (effect.looped()) was = 0f;
 
-        effect.environment.setVariable("emitter_age", MolangValue.of(effect.age));
-        effect.environment.setVariable("emitter_lifetime", MolangValue.of(lifetime(effect)));
+        effect.environment.setVariable("emitter_age", MolangValue.of(effect.loopAge()));
+        effect.environment.setVariable("emitter_lifetime", MolangValue.of(effect.awake));
         effect.environment.setVariable("entity_scale", MolangValue.of(scale(effect.following)));
         evaluateCurves(effect.definition, effect.environment);
 
@@ -171,26 +261,15 @@ public final class AddonEmitters {
         return !over(effect);
     }
 
-    /** The emitter's own length, which an expression emitter decides tick by tick and does not know. */
-    private static float lifetime(Running effect) {
-        EmitterLifetime lifetime = effect.definition.emitter().lifetime();
-        return switch (lifetime) {
-            case null -> 1f;
-            case EmitterLifetime.Once once -> once.activeTime().asFloat(effect.environment);
-            case EmitterLifetime.Looping looping -> looping.activeTime().asFloat(effect.environment);
-            case EmitterLifetime.Expression ignored -> 0f;
-        };
-    }
-
     /** How much bigger than usual the entity the effect hangs off is drawn. */
     private static float scale(Entity following) {
         return following instanceof LivingEntity living ? living.getScale() : 1f;
     }
 
-    /** Raises the timeline events the emitter passed over during this tick. */
+    /** Raises the timeline events the emitter passed over during this tick, on every loop. */
     private static void timeline(Running effect, float was) {
         for (ParticleEvent.Moment moment : effect.definition.emitter().events().timeline()) {
-            if (moment.at() > was && moment.at() <= effect.age) raise(effect, moment.events());
+            if (moment.at() > was && moment.at() <= effect.loopAge()) raise(effect, moment.events());
         }
     }
 
@@ -217,39 +296,24 @@ public final class AddonEmitters {
     /**
      * Whether the emitter is making particles at this moment.
      *
-     * A looping emitter alternates between making particles and sleeping, and an expression emitter
-     * is told directly when to start and stop.
+     * A looping emitter makes particles for the start of each loop and sleeps for the rest, and an
+     * expression emitter is told directly when to start and stop.
      */
     private static boolean active(Running effect) {
-        EmitterLifetime lifetime = effect.definition.emitter().lifetime();
-        return switch (lifetime) {
-            case null -> effect.age <= 1f;
-            case EmitterLifetime.Once once -> effect.age <= once.activeTime().asFloat(effect.environment);
-            case EmitterLifetime.Looping looping -> {
-                float awake = Math.max(0.05f, looping.activeTime().asFloat(effect.environment));
-                float asleep = Math.max(0f, looping.sleepTime().asFloat(effect.environment));
-                float round = awake + asleep;
-                boolean making = asleep <= 0f || effect.age % round < awake;
-
-                // A round starting again is a fresh burst for an emitter that makes them all at once.
-                if (making && effect.sleeping) effect.made = 0;
-                effect.sleeping = !making;
-                yield making;
-            }
-            case EmitterLifetime.Expression expression -> {
-                boolean on = expression.activation().evaluate(effect.environment).truthy();
-                yield on;
-            }
+        return switch (effect.definition.emitter().lifetime()) {
+            case null -> effect.loopAge() <= effect.awake;
+            case EmitterLifetime.Once ignored -> effect.loopAge() <= effect.awake;
+            case EmitterLifetime.Looping ignored -> effect.loopAge() < effect.awake;
+            case EmitterLifetime.Expression expression ->
+                expression.activation().evaluate(effect.environment).truthy();
         };
     }
 
     /** Whether the effect has finished for good, rather than merely pausing. */
     private static boolean over(Running effect) {
-        EmitterLifetime lifetime = effect.definition.emitter().lifetime();
-        return switch (lifetime) {
-            case null -> effect.age > 1f;
-            case EmitterLifetime.Once once ->
-                effect.age > once.activeTime().asFloat(effect.environment);
+        return switch (effect.definition.emitter().lifetime()) {
+            case null -> effect.age > effect.awake;
+            case EmitterLifetime.Once ignored -> effect.age > effect.awake;
             case EmitterLifetime.Looping ignored -> false;
             case EmitterLifetime.Expression expression ->
                 expression.expiration().evaluate(effect.environment).truthy();
@@ -276,15 +340,20 @@ public final class AddonEmitters {
                 int count = (int) effect.owed;
                 effect.owed -= count;
 
-                int most = (int) steady.maxParticles().asFloat(effect.environment);
-                yield most > 0 ? Math.min(count, Math.max(0, most - effect.made)) : count;
+                effect.alive.removeIf(particle -> !particle.isAlive());
+                yield effect.cap > 0 ? Math.min(count, Math.max(0, effect.cap - effect.alive.size())) : count;
             }
         };
         if (wanted <= 0) return;
 
         Vec3 where = effect.where();
-        for (int i = 0; i < Math.min(wanted, 256); i++) {
-            Minecraft.getInstance().level.addParticle(effect.type, where.x, where.y, where.z, 0, 0, 0);
+        emitting = effect;
+        try {
+            for (int i = 0; i < Math.min(wanted, 256); i++) {
+                Minecraft.getInstance().level.addParticle(effect.type, where.x, where.y, where.z, 0, 0, 0);
+            }
+        } finally {
+            emitting = null;
         }
         effect.made += wanted;
     }
@@ -355,7 +424,7 @@ public final class AddonEmitters {
         boolean bound = "emitter_bound".equals(visual.type());
         Entity carrier = bound ? following : null;
         Vec3 where = bound && following != null ? at.subtract(following.position()) : at;
-        start(visual.effect(), carrier, where, depth + 1);
+        start(visual.effect(), carrier, placed(carrier, where), depth + 1, null, List.of());
     }
 
     /** Plays one of the pack's own sound events, under the namespace the effect itself carries. */

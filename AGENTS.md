@@ -3014,6 +3014,37 @@ look at the target, whose height is capped at `max_head_look_at_height` over the
 goal naming no `loot_table` drops what the entity holds. `search_count` is not read: every block
 is checked in one tick, which is its default.
 
+## Particle emitters
+
+`client/render/AddonEmitters` runs an effect's emitter and `AddonParticleProvider` makes each particle.
+`ParticleClientGameTest` reads each rule back through `clientgametest/Born`.
+
+- A particle starts with a copy of its emitter's variables as they stand at its birth
+  (`AddonEmitters.birthScope`), so it reads what `creation_expression` and `per_update_expression`
+  set, `v.emitter_age` and the emitter randoms. Mojang says particle expressions can use these and not
+  whether a particle sees later changes, so the copy is decided here.
+- An emitter runs in loops. `emitter_lifetime_once` and an emitter with no lifetime have one loop,
+  `emitter_lifetime_expression` one loop for its whole life. `active_time`, `sleep_time` and an
+  instant rate's `num_particles` are evaluated once as each loop starts, the four emitter randoms
+  are rolled again for every loop after the first, `v.emitter_age` counts from the loop's start and
+  `v.emitter_lifetime` is the loop's `active_time`. The timeline fires on every loop.
+- A steady rate's `max_particles` caps the emitter's particles alive at once, evaluated as each loop
+  starts. The provider hands each particle it makes to `AddonEmitters.adopt`, which keeps it in the
+  emitter's `alive` list.
+- A collision's `enabled` is evaluated each tick before the particle moves, and its
+  `collision_radius` sizes the particle whether or not it collides at birth.
+- An animation's or a controller state's `pre_effect_script` runs in the effect's emitter as it
+  starts, after the emitter randoms and before `creation_expression`. An emitter an entity's
+  animation started answers that entity's queries, which is what Mojang's own scripts read
+  (`query.surface_particle_color`).
+- An effect an animation starts at a locator stands where the drawn model puts that locator at each
+  tick, so it rises and turns with the bone. With `bind_to_actor` false it is left in the world where
+  the locator was as it started and outlives the entity. An `emitter_bound` event's effect follows the
+  entity, not the locator. The emitter's own orientation does not follow the bone, because
+  `emitter_local_space` is not acted on.
+- A collision event's `min_speed` is at least two blocks a second, its default, as Mojang documents.
+  `events` may be one event or a list.
+
 ## Conventions
 
 **No add-on content is committed.** No textures, sounds, models or text from any pack. Real packs

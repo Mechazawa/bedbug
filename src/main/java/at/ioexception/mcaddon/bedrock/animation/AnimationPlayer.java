@@ -109,13 +109,18 @@ public final class AnimationPlayer {
             }
 
             @Override
-            public void particle(String effect, String locator) {
+            public void particle(String effect, String locator, List<MolangExpression> preEffectScript,
+                boolean bound) {
             }
         };
 
         void sound(String effect);
 
-        void particle(String effect, String locator);
+        /**
+         * The script runs in the effect's own emitter as it starts, before its creation expression. A
+         * bound effect follows the entity, and an unbound one stays where it started.
+         */
+        void particle(String effect, String locator, List<MolangExpression> preEffectScript, boolean bound);
     }
 
     public void setEffects(EffectSink effects) {
@@ -304,17 +309,16 @@ public final class AnimationPlayer {
             if (due(entry, position, clip.lastFiredTime)) effects.sound(entry.effect());
         }
         for (BedrockAnimation.EffectEntry entry : clip.animation.particleEffects()) {
-            if (due(entry, position, clip.lastFiredTime)) effects.particle(entry.effect(), entry.locator());
+            if (due(entry, position, clip.lastFiredTime)) {
+                effects.particle(entry.effect(), entry.locator(), entry.preEffectScript(), entry.bound());
+            }
         }
         clip.lastFiredTime = position;
     }
 
-    /** Whether an effect's moment falls in the span just played, running its script if it does. */
-    private boolean due(BedrockAnimation.EffectEntry entry, float position, float lastFired) {
-        if (entry.effect() == null || entry.time() > position || entry.time() <= lastFired) return false;
-
-        for (MolangExpression statement : entry.preEffectScript()) statement.evaluate(environment);
-        return true;
+    /** Whether an effect's moment falls in the span just played. */
+    private static boolean due(BedrockAnimation.EffectEntry entry, float position, float lastFired) {
+        return entry.effect() != null && entry.time() <= position && entry.time() > lastFired;
     }
 
     private void applyBones(Running clip) {
