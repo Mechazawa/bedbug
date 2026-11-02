@@ -33,7 +33,8 @@ import java.util.List;
  * The target is the nearest entity the pack's list accepts inside `target_range`. The spot is the
  * standing place within `search_range` and `search_height` of the target whose distance across the
  * ground is nearest `offering_distance`. A spot further off than `minimum_teleport_distance` is
- * reached by teleporting, once per run; the rest is walked. On arrival the attempt event is raised
+ * reached by teleporting, once per run; the rest is walked. With a `search_count` the spot is the
+ * first standing place among that many random draws a tick instead of the best of all of them. On arrival the attempt event is raised
  * and the drop rolled, the item thrown along the look at the target.
  */
 public final class DropItemForGoal extends Goal {
@@ -49,6 +50,7 @@ public final class DropItemForGoal extends Goal {
     private final Vec3 targetRange;
     private final int searchRange;
     private final int searchHeight;
+    private final int searchCount;
     private final double offeringDistance;
     private final double teleportDistance;
     private final Vec3 teleportOffset;
@@ -68,6 +70,10 @@ public final class DropItemForGoal extends Goal {
     private boolean finished;
     private long readyAt;
     private long startedAt;
+    private int searchedAt;
+
+    /** The ticks a search catches up on at most, so a goal held off for long does not look all at once. */
+    private static final int MOST_TICKS_SAMPLED = 2;
 
     public DropItemForGoal(AddonEntity mob, JsonObject component) {
         this.mob = mob;
@@ -75,6 +81,7 @@ public final class DropItemForGoal extends Goal {
         this.targetRange = vector(component, "target_range", new Vec3(1, 1, 1));
         this.searchRange = (int) Goals.number(component, "search_range", 0);
         this.searchHeight = (int) Goals.number(component, "search_height", 1);
+        this.searchCount = Math.max(0, (int) Goals.number(component, "search_count", 0));
         this.offeringDistance = Goals.number(component, "offering_distance", 1);
         this.teleportDistance = Goals.number(component, "minimum_teleport_distance", 2);
         this.teleportOffset = vector(component, "teleport_offset", new Vec3(0, 1, 0));
@@ -216,6 +223,8 @@ public final class DropItemForGoal extends Goal {
     /** The standing place round the target nearest the offering distance from it, closer to the entity on a tie. */
     private BlockPos spotBeside(LivingEntity taker) {
         BlockPos centre = taker.blockPosition();
+        if (searchCount > 0) return sampledSpot(centre);
+
         List<BlockPos> spots = new ArrayList<>();
         for (BlockPos at : BlockPos.betweenClosed(centre.offset(-searchRange, -searchHeight, -searchRange),
             centre.offset(searchRange, searchHeight, searchRange))) {
@@ -226,6 +235,22 @@ public final class DropItemForGoal extends Goal {
                     at.getZ() + 0.5 - taker.getZ()) - offeringDistance))
                 .thenComparingDouble(at -> at.distToCenterSqr(mob.position())))
             .orElse(null);
+    }
+
+    /**
+     * `search_count` randomly drawn places for every tick since the last look, the first standing
+     * place taken. With a count of 0 every place is looked at in one tick and the best one wins.
+     */
+    private BlockPos sampledSpot(BlockPos centre) {
+        int ticks = Math.max(1, Math.min(mob.tickCount - searchedAt, MOST_TICKS_SAMPLED));
+        searchedAt = mob.tickCount;
+        for (int i = 0; i < searchCount * ticks; i++) {
+            BlockPos at = centre.offset(mob.getRandom().nextIntBetweenInclusive(-searchRange, searchRange),
+                mob.getRandom().nextIntBetweenInclusive(-searchHeight, searchHeight),
+                mob.getRandom().nextIntBetweenInclusive(-searchRange, searchRange));
+            if (standable(mob.level(), at)) return at;
+        }
+        return null;
     }
 
     private static boolean standable(Level level, BlockPos at) {

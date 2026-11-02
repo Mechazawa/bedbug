@@ -357,6 +357,39 @@ public final class ItemGoalGameTests {
         });
     }
 
+    /**
+     * With a `search_count` of one the offerer draws one place a tick. The only ground within reach
+     * is the block the offerer stands on, so the gift waits for a draw to land on it, where a search of every
+     * place at once would find it in the first tick.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 600)
+    public void anOffererWithASearchCountDrawsOnePlaceATick(GameTestHelper helper) {
+        BlockPos.betweenClosed(new BlockPos(0, -1, 0), new BlockPos(8, -1, 8))
+            .forEach(at -> helper.setBlock(at, Blocks.AIR));
+        helper.setBlock(new BlockPos(2, -1, 4), Blocks.STONE);
+        pig(helper, new BlockPos(4, 0, 4)).setNoGravity(true);
+        AddonEntity offerer = offerer(helper, "tp:offerer_make_sampling", new BlockPos(2, 0, 4));
+        if (offerer == null) {
+            helper.succeed();
+            return;
+        }
+        offerer.getRandom().setSeed(SAMPLING_SEED);
+
+        long begun = helper.getLevel().getGameTime();
+        long[] gaveAt = {-1};
+        helper.onEachTick(() -> {
+            if (gaveAt[0] < 0 && !feathers(helper).isEmpty()) gaveAt[0] = helper.getLevel().getGameTime() - begun;
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(gaveAt[0] >= 0, OFFERER + " has left no gift.");
+            helper.assertTrue(gaveAt[0] > MOST_FIRST_LOOK, OFFERER + " found the one place to stand at tick "
+                + gaveAt[0] + ", which is more than one draw a tick.");
+        });
+    }
+
+    private static final long SAMPLING_SEED = 1;
+    private static final int MOST_FIRST_LOOK = 10;
+
     private static AddonEntity porter(GameTestHelper helper, String event, BlockPos where) {
         return withGroup(helper, PORTER, event, where);
     }
