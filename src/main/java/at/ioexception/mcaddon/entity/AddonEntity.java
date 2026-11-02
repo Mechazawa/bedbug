@@ -914,7 +914,7 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * What one field of `minecraft:experience_reward` pays out, which Bedrock states as Molang.
+     * What killing this entity is worth, which `minecraft:experience_reward` states as Molang.
      *
      * Eighty-six of the eighty-seven `on_death` rewards in Mojang's own behaviour pack ask whether a
      * player struck the last blow, and many also ask about the entity's equipment, age or variant,
@@ -923,9 +923,18 @@ public class AddonEntity extends PathfinderMob
      * in the group that makes the entity grown as often as on the entity, a baby being worth
      * nothing, which is why the live set is what answers.
      */
-    private int experience(String field, boolean lastHitByPlayer) {
+    private int experienceReward(boolean killedByPlayer) {
         com.google.gson.JsonObject reward = liveComponent("minecraft:experience_reward");
-        com.google.gson.JsonElement written = reward == null ? null : reward.get(field);
+        return experience(reward == null ? null : reward.get("on_death"), killedByPlayer);
+    }
+
+    /** What breeding pays out, read from the groups that are on as well as from the top level. */
+    public int experienceWhenBred() {
+        com.google.gson.JsonObject reward = liveComponent("minecraft:experience_reward");
+        return experience(reward == null ? null : reward.get("on_bred"), true);
+    }
+
+    private int experience(com.google.gson.JsonElement written, boolean lastHitByPlayer) {
         if (written == null) return 0;
 
         java.util.Map<String, Object> properties = new java.util.HashMap<>(
@@ -5376,7 +5385,7 @@ public class AddonEntity extends PathfinderMob
     public void die(net.minecraft.world.damagesource.DamageSource source) {
         // What the kill is worth is settled before the death itself, because dropping the
         // experience is part of what dying does and it reads this number on the way past.
-        if (definition != null) xpReward = experience("on_death", source.getEntity() instanceof Player);
+        if (definition != null) xpReward = experienceReward(source.getEntity() instanceof Player);
 
         super.die(source);
         if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel level)) {
@@ -6146,11 +6155,6 @@ public class AddonEntity extends PathfinderMob
             return Platform.IGNORED;
         }
         return super.getPistonPushReaction();
-    }
-
-    /** What breeding pays out, read from the groups that are on as well as from the top level. */
-    public int experienceWhenBred() {
-        return experience("on_bred", true);
     }
 
     /** The game tick before which `minecraft:interact` answers nobody, which an interaction's `cooldown` sets. */
