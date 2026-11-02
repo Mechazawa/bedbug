@@ -60,10 +60,16 @@ public final class AddonEmitters {
         private final Vec3 at;
         private final int depth;
 
+        /** Seconds since the emitter started, and since its current loop started. */
         private float age;
+        private float loopStart;
+
+        /** How long this loop makes particles and then rests, evaluated as the loop starts. */
+        private float awake;
+        private float asleep;
+
         private float owed;
         private int made;
-        private boolean sleeping;
 
         /** How far the emitter has moved since it started, which its travel events count in. */
         private float travelled;
@@ -80,6 +86,42 @@ public final class AddonEmitters {
             randomise(environment, "emitter_random_");
             ParticleDefinition.Emitter.Initialization start = definition.emitter().initialization();
             if (start != null) start.creation().evaluate(environment);
+            beginLoop(0f);
+        }
+
+        private float loopAge() {
+            return age - loopStart;
+        }
+
+        /**
+         * Starts a loop: its times are evaluated once here, its randoms are rolled again for every
+         * loop after the first, and an instant emitter owes its burst again.
+         */
+        private void beginLoop(float start) {
+            if (start > 0f) randomise(environment, "emitter_random_");
+            loopStart = start;
+            made = 0;
+            environment.setVariable("emitter_age", MolangValue.ZERO);
+
+            switch (definition.emitter().lifetime()) {
+                case null -> awake = 1f;
+                case EmitterLifetime.Once once -> awake = once.activeTime().asFloat(environment);
+                case EmitterLifetime.Looping looping -> {
+                    awake = Math.max(0.05f, looping.activeTime().asFloat(environment));
+                    asleep = Math.max(0f, looping.sleepTime().asFloat(environment));
+                }
+                case EmitterLifetime.Expression ignored -> awake = 0f;
+            }
+        }
+
+        /** Moves on to the next loop once a looping emitter has made particles and rested. */
+        private boolean looped() {
+            if (!(definition.emitter().lifetime() instanceof EmitterLifetime.Looping)
+                || loopAge() < awake + asleep) {
+                return false;
+            }
+            beginLoop(loopStart + awake + asleep);
+            return true;
         }
 
         private Vec3 where() {
@@ -164,13 +206,14 @@ public final class AddonEmitters {
 
     /** Whether the effect is still going after this tick. */
     private static boolean advance(Running effect) {
-        float was = effect.age;
+        float was = effect.loopAge();
         effect.age += 1f / 20f;
         if (effect.age > MAXIMUM_SECONDS) return false;
         if (effect.following != null && effect.following.isRemoved()) return false;
+        if (effect.looped()) was = 0f;
 
-        effect.environment.setVariable("emitter_age", MolangValue.of(effect.age));
-        effect.environment.setVariable("emitter_lifetime", MolangValue.of(lifetime(effect)));
+        effect.environment.setVariable("emitter_age", MolangValue.of(effect.loopAge()));
+        effect.environment.setVariable("emitter_lifetime", MolangValue.of(effect.awake));
         effect.environment.setVariable("entity_scale", MolangValue.of(scale(effect.following)));
         evaluateCurves(effect.definition, effect.environment);
 
@@ -183,26 +226,15 @@ public final class AddonEmitters {
         return !over(effect);
     }
 
-    /** The emitter's own length, which an expression emitter decides tick by tick and does not know. */
-    private static float lifetime(Running effect) {
-        EmitterLifetime lifetime = effect.definition.emitter().lifetime();
-        return switch (lifetime) {
-            case null -> 1f;
-            case EmitterLifetime.Once once -> once.activeTime().asFloat(effect.environment);
-            case EmitterLifetime.Looping looping -> looping.activeTime().asFloat(effect.environment);
-            case EmitterLifetime.Expression ignored -> 0f;
-        };
-    }
-
     /** How much bigger than usual the entity the effect hangs off is drawn. */
     private static float scale(Entity following) {
         return following instanceof LivingEntity living ? living.getScale() : 1f;
     }
 
-    /** Raises the timeline events the emitter passed over during this tick. */
+    /** Raises the timeline events the emitter passed over during this tick, on every loop. */
     private static void timeline(Running effect, float was) {
         for (ParticleEvent.Moment moment : effect.definition.emitter().events().timeline()) {
-            if (moment.at() > was && moment.at() <= effect.age) raise(effect, moment.events());
+            if (moment.at() > was && moment.at() <= effect.loopAge()) raise(effect, moment.events());
         }
     }
 
@@ -229,39 +261,24 @@ public final class AddonEmitters {
     /**
      * Whether the emitter is making particles at this moment.
      *
-     * A looping emitter alternates between making particles and sleeping, and an expression emitter
-     * is told directly when to start and stop.
+     * A looping emitter makes particles for the start of each loop and sleeps for the rest, and an
+     * expression emitter is told directly when to start and stop.
      */
     private static boolean active(Running effect) {
-        EmitterLifetime lifetime = effect.definition.emitter().lifetime();
-        return switch (lifetime) {
-            case null -> effect.age <= 1f;
-            case EmitterLifetime.Once once -> effect.age <= once.activeTime().asFloat(effect.environment);
-            case EmitterLifetime.Looping looping -> {
-                float awake = Math.max(0.05f, looping.activeTime().asFloat(effect.environment));
-                float asleep = Math.max(0f, looping.sleepTime().asFloat(effect.environment));
-                float round = awake + asleep;
-                boolean making = asleep <= 0f || effect.age % round < awake;
-
-                // A round starting again is a fresh burst for an emitter that makes them all at once.
-                if (making && effect.sleeping) effect.made = 0;
-                effect.sleeping = !making;
-                yield making;
-            }
-            case EmitterLifetime.Expression expression -> {
-                boolean on = expression.activation().evaluate(effect.environment).truthy();
-                yield on;
-            }
+        return switch (effect.definition.emitter().lifetime()) {
+            case null -> effect.loopAge() <= effect.awake;
+            case EmitterLifetime.Once ignored -> effect.loopAge() <= effect.awake;
+            case EmitterLifetime.Looping ignored -> effect.loopAge() < effect.awake;
+            case EmitterLifetime.Expression expression ->
+                expression.activation().evaluate(effect.environment).truthy();
         };
     }
 
     /** Whether the effect has finished for good, rather than merely pausing. */
     private static boolean over(Running effect) {
-        EmitterLifetime lifetime = effect.definition.emitter().lifetime();
-        return switch (lifetime) {
-            case null -> effect.age > 1f;
-            case EmitterLifetime.Once once ->
-                effect.age > once.activeTime().asFloat(effect.environment);
+        return switch (effect.definition.emitter().lifetime()) {
+            case null -> effect.age > effect.awake;
+            case EmitterLifetime.Once ignored -> effect.age > effect.awake;
             case EmitterLifetime.Looping ignored -> false;
             case EmitterLifetime.Expression expression ->
                 expression.expiration().evaluate(effect.environment).truthy();

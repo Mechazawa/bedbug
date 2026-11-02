@@ -3023,6 +3023,11 @@ is checked in one tick, which is its default.
   (`AddonEmitters.birthScope`), so it reads what `creation_expression` and `per_update_expression`
   set, `v.emitter_age` and the emitter randoms. Mojang says particle expressions can use these and not
   whether a particle sees later changes, so the copy is decided here.
+- An emitter runs in loops. `emitter_lifetime_once` and an emitter with no lifetime have one loop,
+  `emitter_lifetime_expression` one loop for its whole life. `active_time`, `sleep_time` and an
+  instant rate's `num_particles` are evaluated once as each loop starts, the four emitter randoms
+  are rolled again for every loop after the first, `v.emitter_age` counts from the loop's start and
+  `v.emitter_lifetime` is the loop's `active_time`. The timeline fires on every loop.
 
 ## Conventions
 

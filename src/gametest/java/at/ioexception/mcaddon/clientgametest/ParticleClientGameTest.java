@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.clientgametest;
 
+import at.ioexception.mcaddon.client.render.AddonEmitters;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -54,6 +55,7 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             trail(context, world);
             curves(context, world);
             scoped(context, world);
+            looped(context, world);
         }
     }
 
@@ -235,6 +237,37 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         Born.Particle sized = Born.of("tp:sized").get(0);
         float size = context.computeOnClient(client -> Born.drawn(sized.particle(), Worlds.camera(client)).size());
         Assert.near(size, 0.5f, 1e-4, "the size tp:sized's particle reads from the variable its emitter set");
+    }
+
+    /**
+     * `tp:looped` loops for a random 0.4 to 0.6 seconds at a time and never rests. Its particles are
+     * sized by `variable.emitter_age` and reddened by `variable.emitter_random_1` as they are born,
+     * so a particle of a later loop stays small and the loops do not all share one red.
+     *
+     * `tp:pulse` bursts two particles at the start of every quarter second loop, with no rest
+     * between loops.
+     */
+    private static void looped(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:looped ~ ~1 ~3");
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:pulse ~1 ~1 ~3");
+        Worlds.waitForClient(context, client -> Born.of("tp:looped").size() >= 20, PATIENCE,
+            () -> "tp:looped makes ten particles a second and made " + Born.of("tp:looped").size() + ".");
+        List<Born.Quad> quads = context.computeOnClient(client -> Born.of("tp:looped").stream()
+            .map(born -> Born.drawn(born.particle(), Worlds.camera(client))).toList());
+        for (Born.Quad quad : quads) {
+            float emitterAge = (quad.size() - 0.01f) / 0.1f;
+            Assert.that(emitterAge <= 0.65f, "tp:looped's particle was born at an emitter age of " + emitterAge
+                + ", past the longest loop of 0.6 seconds.");
+        }
+        long reds = quads.stream().map(quad -> quad.colour() >>> 16 & 0xFF).distinct().count();
+        Assert.that(reds >= 2, "tp:looped rolls its emitter randoms again every loop, and its particles"
+            + " over three loops carry " + reds + " red.");
+
+        int pulses = context.computeOnClient(client -> Born.of("tp:pulse").size());
+        Assert.that(pulses >= 6, "tp:pulse bursts two particles every quarter second loop, and made " + pulses
+            + " in two seconds.");
+        context.runOnClient(client -> AddonEmitters.clear());
     }
 
     /** Each of the four channels within one step of the colour asked for. */
