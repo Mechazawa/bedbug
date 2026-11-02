@@ -4,6 +4,7 @@ import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.registry.AddonEntities;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
@@ -43,7 +44,7 @@ public final class RenderControllerParser {
         List<Map<String, MolangExpression>> rules = new ArrayList<>();
         if (!json.has(field)) return List.copyOf(rules);
 
-        for (JsonElement rule : json.getAsJsonArray(field)) {
+        for (JsonElement rule : listed(json.get(field))) {
             Map<String, MolangExpression> parsed = new LinkedHashMap<>();
             for (Map.Entry<String, JsonElement> bone : rule.getAsJsonObject().entrySet()) {
                 parsed.put(bone.getKey(), MolangParser.parse(bone.getValue()));
@@ -58,7 +59,7 @@ public final class RenderControllerParser {
 
         List<MolangExpression> textures = new ArrayList<>();
         if (json.has("textures")) {
-            for (JsonElement texture : json.getAsJsonArray("textures")) {
+            for (JsonElement texture : listed(json.get("textures"))) {
                 textures.add(MolangParser.parse(texture));
             }
         }
@@ -118,7 +119,7 @@ public final class RenderControllerParser {
         for (Map.Entry<String, JsonElement> kind : json.getAsJsonObject("arrays").entrySet()) {
             for (Map.Entry<String, JsonElement> array : kind.getValue().getAsJsonObject().entrySet()) {
                 List<MolangValue> values = new ArrayList<>();
-                for (JsonElement value : array.getValue().getAsJsonArray()) {
+                for (JsonElement value : listed(array.getValue())) {
                     // Entries read as "Texture.name" or "Geometry.name"; only the name matters.
                     values.add(MolangValue.of(value.getAsString().replaceFirst("^[A-Za-z]+\\.", "")));
                 }
@@ -128,4 +129,16 @@ public final class RenderControllerParser {
         return Map.copyOf(arrays);
     }
 
+    /**
+     * A field Mojang writes as a list, read as one when a pack writes a single entry in its place.
+     *
+     * Animations.html writes `"textures": "Texture.default"` in its creeper and fireball examples.
+     */
+    private static JsonArray listed(JsonElement value) {
+        if (value.isJsonArray()) return value.getAsJsonArray();
+
+        JsonArray one = new JsonArray();
+        one.add(value);
+        return one;
+    }
 }

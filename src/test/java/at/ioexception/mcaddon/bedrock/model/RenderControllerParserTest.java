@@ -73,4 +73,19 @@ class RenderControllerParserTest {
         assertEquals(List.of("b", "a", "c"), controller.textures().stream()
             .map(texture -> texture.evaluate(environment).text()).toList());
     }
+
+    @Test
+    void aSingleEntryWrittenInPlaceOfAListIsAListOfOne() {
+        RenderController controller = read("""
+            { "arrays": { "textures": { "Array.skins": "Texture.only" } },
+              "textures": "Array.skins[0]",
+              "materials": { "*": "Material.default" },
+              "part_visibility": { "*": "1.0" } }""");
+        MolangEnvironment environment = new MolangEnvironment();
+        environment.setArrays(controller.arrays());
+
+        assertEquals("only", controller.textures().get(0).evaluate(environment).text());
+        assertEquals(List.of("*"), List.copyOf(controller.materials().get(0).keySet()));
+        assertEquals(List.of("*"), List.copyOf(controller.partVisibility().get(0).keySet()));
+    }
 }
