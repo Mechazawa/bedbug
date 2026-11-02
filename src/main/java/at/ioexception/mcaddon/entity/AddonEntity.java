@@ -914,27 +914,26 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * What killing this entity is worth, which Bedrock states as Molang.
+     * What one field of `minecraft:experience_reward` pays out, which Bedrock states as Molang.
      *
-     * Eighty-six of the eighty-seven `on_death` rewards in Mojang's own behaviour pack are an
-     * expression asking whether a player struck the last blow, so the field is parsed as one and a
-     * bare number is the case the parser also covers. The component itself sits in the group that
-     * makes the entity grown as often as on the entity, a baby being worth nothing, which is why
-     * the live set is what answers.
+     * Eighty-six of the eighty-seven `on_death` rewards in Mojang's own behaviour pack ask whether a
+     * player struck the last blow, and many also ask about the entity's equipment, age or variant,
+     * so the expression is answered with the entity's own queries and `query.last_hit_by_player`
+     * laid over them. The component sits in the group that makes the entity grown as often as on the
+     * entity, a baby being worth nothing, which is why the live set is what answers.
      */
-    private int experienceReward(boolean killedByPlayer) {
+    private int experience(String field, boolean lastHitByPlayer) {
         com.google.gson.JsonObject reward = liveComponent("minecraft:experience_reward");
-        com.google.gson.JsonElement onDeath = reward == null ? null : reward.get("on_death");
-        if (onDeath == null || !onDeath.isJsonPrimitive()) return 0;
+        com.google.gson.JsonElement written = reward == null ? null : reward.get(field);
+        if (written == null || !written.isJsonPrimitive()) return 0;
 
-        at.ioexception.mcaddon.bedrock.molang.MolangEnvironment environment =
-            new at.ioexception.mcaddon.bedrock.molang.MolangEnvironment();
-        if (ServerHooks.state() != null) environment.shareTemporaries(ServerHooks.state().temporaries());
-        environment.setQueries((query, arguments) -> query.equals("last_hit_by_player")
-            ? at.ioexception.mcaddon.bedrock.molang.MolangValue.of(killedByPlayer)
-            : at.ioexception.mcaddon.bedrock.molang.MolangValue.ZERO);
+        java.util.Map<String, Object> properties = new java.util.HashMap<>(
+            ServerHooks.state() == null ? java.util.Map.of() : ServerHooks.state().properties(getUUID()));
+        properties.put("last_hit_by_player", lastHitByPlayer);
+        at.ioexception.mcaddon.bedrock.molang.MolangEnvironment scope =
+            at.ioexception.mcaddon.bedrock.entity.EntityReference.questions(this, () -> properties);
         return Math.max(0, (int) at.ioexception.mcaddon.bedrock.molang.MolangParser
-            .parse(onDeath.getAsString()).asFloat(environment));
+            .parse(written.getAsString()).asFloat(scope));
     }
 
     /**
@@ -5379,7 +5378,7 @@ public class AddonEntity extends PathfinderMob
     public void die(net.minecraft.world.damagesource.DamageSource source) {
         // What the kill is worth is settled before the death itself, because dropping the
         // experience is part of what dying does and it reads this number on the way past.
-        if (definition != null) xpReward = experienceReward(source.getEntity() instanceof Player);
+        if (definition != null) xpReward = experience("on_death", source.getEntity() instanceof Player);
 
         super.die(source);
         if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel level)) {
@@ -6153,7 +6152,7 @@ public class AddonEntity extends PathfinderMob
 
     /** What breeding pays out, read from the groups that are on as well as from the top level. */
     public int experienceWhenBred() {
-        return ServerEntityDefinition.experienceWhenBred(liveComponent("minecraft:experience_reward"));
+        return experience("on_bred", true);
     }
 
     /** The game tick before which `minecraft:interact` answers nobody, which an interaction's `cooldown` sets. */

@@ -125,32 +125,6 @@ public record ServerEntityDefinition(
     }
 
     /**
-     * What a successful breeding pays out, which Bedrock states as Molang beside the death reward.
-     *
-     * The expression the field carries asks about the kill rather than the birth, so the queries
-     * answer as they would for one, and a bare number is the case the parser also covers.
-     */
-    public static int experienceWhenBred(JsonObject reward) {
-        return amount(reward == null ? null : reward.get("on_bred"), 0);
-    }
-
-    private static int amount(JsonElement written, int fallback) {
-        if (written == null || !written.isJsonPrimitive()) return fallback;
-        if (written.getAsJsonPrimitive().isNumber()) return written.getAsInt();
-
-        at.ioexception.mcaddon.bedrock.molang.MolangEnvironment environment =
-            new at.ioexception.mcaddon.bedrock.molang.MolangEnvironment();
-        if (at.ioexception.mcaddon.server.ServerHooks.state() != null) {
-            environment.shareTemporaries(at.ioexception.mcaddon.server.ServerHooks.state().temporaries());
-        }
-        environment.setQueries((name, arguments) ->
-            at.ioexception.mcaddon.bedrock.molang.MolangValue.of(
-                name.equals("last_hit_by_player") || name.equals("is_alive")));
-        return (int) at.ioexception.mcaddon.bedrock.molang.MolangParser
-            .parse(written.getAsString()).asFloat(environment);
-    }
-
-    /**
      * The event a trigger field names.
      *
      * A pack writes a trigger either as the event's bare name or as an object carrying it under

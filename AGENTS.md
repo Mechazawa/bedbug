@@ -3021,6 +3021,9 @@ is checked in one tick, which is its default.
 
 - `minecraft:heartbeat` `interval` is read from the live set and answered with the entity's own
   queries at each beat; the next beat is that many seconds later.
+- `minecraft:experience_reward` is answered with the entity's own queries and
+  `query.last_hit_by_player` laid over them. `on_bred` answers that query true, as a breeding is a
+  player's doing; Mojang publishes nothing on it.
 
 ## Conventions
 

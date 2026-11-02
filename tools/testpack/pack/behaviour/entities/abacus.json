@@ -22,6 +22,14 @@
         "minecraft:heartbeat": {
           "interval": "2.0 - math.clamp(query.property('tp:count') / 2, 0, 1.5)"
         }
+      },
+      "tp:abacus_rewarding": {
+        "minecraft:variant": {
+          "value": 3
+        },
+        "minecraft:experience_reward": {
+          "on_death": "query.last_hit_by_player ? query.variant + 1 : 0"
+        }
       }
     },
     "components": {
@@ -58,6 +66,13 @@
       "tp:abacus_count": {
         "set_property": {
           "tp:count": 2
+        }
+      },
+      "tp:abacus_make_rewarding": {
+        "add": {
+          "component_groups": [
+            "tp:abacus_rewarding"
+          ]
         }
       }
     }
