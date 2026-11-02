@@ -3024,6 +3024,11 @@ is checked in one tick, which is its default.
 - `minecraft:experience_reward` is answered with the entity's own queries and
   `query.last_hit_by_player` laid over them. `on_bred` answers that query true, as a breeding is a
   player's doing; Mojang publishes nothing on it.
+- A property value a pack writes (`default`, an event's `set_property`) goes through
+  `ServerEntityDefinition.Property.value`: a string is Molang unless it is one of an enum's values,
+  as the Bedrock wiki says. The answer takes the type (an `int` drops its fraction) and is clamped
+  to the range. An enum answer it does not hold, or no value at all, is its first value; Mojang
+  publishes nothing on either. A default is answered once, as the entity is first seen.
 
 ## Conventions
 

@@ -57,6 +57,32 @@ public final class AbacusGameTests {
         assertKillPays(helper, "tp:abacus_make_summing", 5);
     }
 
+    /**
+     * A property default written as Molang is answered as the entity first spawns, and a default
+     * naming one of an enum's values stays that value.
+     */
+    @GameTest()
+    public void aPropertyDefaultWrittenAsMolangIsAnsweredAtFirstSpawn(GameTestHelper helper) {
+        AddonEntity abacus = BehaviourGameTests.spawn(helper, ABACUS);
+        if (abacus == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.startSequence()
+            .thenExecuteAfter(1, () -> {
+                assertProperty(helper, abacus, "tp:unmet", false);
+                assertProperty(helper, abacus, "tp:sum", 3.0);
+                assertProperty(helper, abacus, "tp:shade", "bright");
+            })
+            .thenSucceed();
+    }
+
+    private static void assertProperty(GameTestHelper helper, AddonEntity abacus, String name, Object expected) {
+        Object held = ServerHooks.state().property(abacus.getUUID(), name);
+        helper.assertTrue(expected.equals(held), name + " holds " + held + " where " + expected + " was due.");
+    }
+
     private static void assertKillPays(GameTestHelper helper, String event, int expected) {
         AddonEntity abacus = BehaviourGameTests.spawn(helper, ABACUS);
         if (abacus == null) {

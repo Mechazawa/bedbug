@@ -14,6 +14,26 @@
             10
           ],
           "default": 0
+        },
+        "tp:unmet": {
+          "type": "bool",
+          "default": "q.had_component_group('tp:never')"
+        },
+        "tp:sum": {
+          "type": "int",
+          "range": [
+            0,
+            10
+          ],
+          "default": "1 + 2"
+        },
+        "tp:shade": {
+          "type": "enum",
+          "values": [
+            "dim",
+            "bright"
+          ],
+          "default": "bright"
         }
       }
     },

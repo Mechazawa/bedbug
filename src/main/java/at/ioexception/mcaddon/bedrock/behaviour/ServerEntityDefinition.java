@@ -1,10 +1,14 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
+import at.ioexception.mcaddon.bedrock.molang.MolangParser;
+import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -43,7 +47,45 @@ public record ServerEntityDefinition(
 ) {
     /** A data-driven entity property, which is how a behaviour pack tells a resource pack what to draw. */
     public record Property(String name, String type, double min, double max, List<String> values,
-        Object initial, boolean clientSync) {
+        JsonElement declaredDefault, boolean clientSync) {
+        /** The value the entity starts with, a Molang default answered in the entity's scope. */
+        public Object initial(MolangEnvironment scope) {
+            return value(declaredDefault, scope);
+        }
+
+        /**
+         * What a value a pack writes for this property comes to, answered in the entity's scope.
+         *
+         * A string is Molang unless the property is an enum and the string is one of its values, as
+         * the Bedrock wiki's entity properties page says. The answer takes the property's type and
+         * stays inside its range. An answer an enum does not hold, and a value the pack left out,
+         * is the enum's first value.
+         */
+        public Object value(JsonElement written, MolangEnvironment scope) {
+            if (written == null || !written.isJsonPrimitive()) return typed(MolangValue.ZERO);
+
+            JsonPrimitive primitive = written.getAsJsonPrimitive();
+            if (primitive.isBoolean()) return typed(MolangValue.of(primitive.getAsBoolean()));
+            if (primitive.isNumber()) return typed(MolangValue.of(primitive.getAsDouble()));
+            if (type.equals("enum") && values.contains(primitive.getAsString())) return primitive.getAsString();
+            return typed(MolangParser.parse(primitive.getAsString())
+                .evaluate(scope == null ? new MolangEnvironment() : scope));
+        }
+
+        private Object typed(MolangValue answer) {
+            return switch (type) {
+                case "bool" -> answer.truthy();
+                case "enum" -> answer.isText() && values.contains(answer.text()) ? answer.text()
+                    : values.isEmpty() ? "" : values.get(0);
+                case "int" -> inRange((double) (long) answer.asFloat());
+                default -> inRange(answer.asFloat());
+            };
+        }
+
+        private double inRange(double value) {
+            return min < max ? Math.clamp(value, min, max) : value;
+        }
+
         /**
          * Why a script may not give this property `value`, or null where it may.
          *
@@ -278,22 +320,9 @@ public record ServerEntityDefinition(
             }
 
             properties.put(entry.getKey(), new Property(entry.getKey(), type, min, max, values,
-                initial(property.get("default"), type), bool(property, "client_sync", false)));
+                property.get("default"), bool(property, "client_sync", false)));
         }
         return properties;
-    }
-
-    private static Object initial(JsonElement value, String type) {
-        if (value == null || !value.isJsonPrimitive()) {
-            return switch (type) {
-                case "bool" -> Boolean.FALSE;
-                case "enum" -> "";
-                default -> 0.0d;
-            };
-        }
-        if (value.getAsJsonPrimitive().isBoolean()) return value.getAsBoolean();
-        if (value.getAsJsonPrimitive().isNumber()) return value.getAsDouble();
-        return value.getAsString();
     }
 
     private static boolean bool(JsonObject json, String key, boolean fallback) {
