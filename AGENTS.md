@@ -2889,6 +2889,10 @@ publishes nothing on, decided here:
   it can stand on that the sky cannot see; Java's walk out of the sun asks for fire and for a monster's
   liking of the dark, which an add-on entity has none of. It and `move_through_village`'s
   `only_at_night` tell day from night by the clock, as the shelter goals do.
+- `flee_sun` is the same walk with no cooldown (`FindCoverGoal`). Mojang says only that it runs
+  from direct sunlight to shade, and every vanilla entity declaring it also burns in daylight, so
+  nothing says whether it waits for the fire. It starts unburnt, as the wiki's skeleton seeks
+  shelter by day.
 
 **The game test world is dark.** `isBrightOutside` answered false there at a clock of 25020, so a test
 about the day runs `time set day` and a goal asks the clock.

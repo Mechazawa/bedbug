@@ -10,12 +10,13 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * `minecraft:behavior.find_cover`, a walk out of the daylight into shade, followed by the
- * `cooldown_time` Bedrock waits, in seconds, before the entity looks for cover again.
+ * `minecraft:behavior.find_cover` and `minecraft:behavior.flee_sun`, a walk out of the daylight
+ * into shade. `find_cover` then waits its `cooldown_time`, in seconds, before it looks again.
  *
  * Java's own walk out of the sun starts only for a burning mob and picks a spot by how much a
- * monster likes the dark there. Bedrock's fox seeks shade unburnt, so this starts for any entity
- * under the open sky by day and takes any spot it can stand on that the sky cannot see.
+ * monster likes the dark there, which is nothing for an add-on entity. Bedrock's fox seeks shade
+ * unburnt, so this starts for any entity under the open sky by day and takes any spot it can stand
+ * on that the sky cannot see.
  */
 public final class FindCoverGoal extends FleeSunGoal {
     /** How many spots one look tries, and how far across and up it looks, as Java's walk does. */
