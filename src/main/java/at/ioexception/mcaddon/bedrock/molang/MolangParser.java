@@ -94,6 +94,7 @@ public final class MolangParser {
     private MolangExpression parseProgram() {
         List<MolangExpression> statements = new ArrayList<>();
         boolean returns = false;
+        boolean closed = false;
 
         while (true) {
             skipSpace();
@@ -110,14 +111,22 @@ public final class MolangParser {
 
             statements.add(parseExpression());
             skipSpace();
-            if (peek() == ';') at += 1;
-            else break;
+            if (peek() != ';') break;
+            at += 1;
+            closed = true;
         }
 
         skipSpace();
         if (at < source.length() || statements.isEmpty()) throw new Malformed();
+        // A statement closed by `;` makes a complex expression, which answers 0 without a `return`.
         MolangExpression whole = statements.get(0);
-        if (statements.size() > 1) {
+        if (closed && !returns && statements.size() == 1) {
+            MolangExpression only = whole;
+            whole = environment -> {
+                only.evaluate(environment);
+                return MolangValue.ZERO;
+            };
+        } else if (statements.size() > 1) {
             List<MolangExpression> program = List.copyOf(statements);
             int last = program.size() - 1;
             boolean valueIsLast = returns;

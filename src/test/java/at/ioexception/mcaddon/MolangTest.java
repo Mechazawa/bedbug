@@ -87,6 +87,16 @@ class MolangTest {
      * Testing truthiness instead would turn every `v.x ?? 5` on a zeroed variable into a 5, which is
      * the difference between a hidden bone and a visible one.
      */
+    /** A `;` makes a complex expression, which answers 0 unless it returns a value. */
+    @Test
+    void answersZeroForAStatementClosedWithoutAReturn() {
+        assertEquals(0, evaluate("1;"), 1e-6);
+        assertEquals(0, evaluate("v.x = 3;"), 1e-6);
+        assertEquals(3, evaluate("v.x"), 1e-6);
+        assertEquals(2, evaluate("return 2;"), 1e-6);
+        assertEquals(1, evaluate("1"), 1e-6);
+    }
+
     @Test
     void nullCoalesceOnlyFallsThroughOnUnset() {
         assertEquals(5, evaluate("v.never_set ?? 5"), 1e-6);
