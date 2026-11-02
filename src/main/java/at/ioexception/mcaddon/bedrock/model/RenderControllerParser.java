@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /** Reads one render controller out of a pack's `render_controllers` JSON. */
@@ -104,7 +105,12 @@ public final class RenderControllerParser {
         return molang(animation.getAsJsonArray(field).get(axis));
     }
 
-    /** Named lists a controller indexes into, such as one texture per villager profession. */
+    /**
+     * Named lists a controller indexes into, such as one texture per villager profession.
+     *
+     * Molang names are case insensitive and Mojang writes both `Array.skins` and `array.skins`, so
+     * each list is kept under its name in lower case.
+     */
     private static Map<String, List<MolangValue>> readArrays(JsonObject json) {
         if (!json.has("arrays")) return Map.of();
 
@@ -116,7 +122,7 @@ public final class RenderControllerParser {
                     // Entries read as "Texture.name" or "Geometry.name"; only the name matters.
                     values.add(MolangValue.of(value.getAsString().replaceFirst("^[A-Za-z]+\\.", "")));
                 }
-                arrays.put(array.getKey().replaceFirst("^Array\\.", ""), List.copyOf(values));
+                arrays.put(array.getKey().toLowerCase(Locale.ROOT).replaceFirst("^array\\.", ""), List.copyOf(values));
             }
         }
         return Map.copyOf(arrays);

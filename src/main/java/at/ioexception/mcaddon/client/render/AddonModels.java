@@ -40,7 +40,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -197,7 +196,8 @@ public final class AddonModels {
             MolangValue value = expression.evaluate(environment);
             texturePaths.add(value.isText() ? definition.textures().get(value.text()) : null);
         }
-        String texturePath = texturePaths.stream().filter(Objects::nonNull).findFirst().orElse(null);
+        // Each layer keeps its place: a first layer that names nothing is not replaced by the second.
+        String texturePath = texturePaths.isEmpty() ? null : texturePaths.get(0);
         if (texturePath == null) return List.of();
 
         List<PartVisibility.Rule> visibility = new ArrayList<>();
