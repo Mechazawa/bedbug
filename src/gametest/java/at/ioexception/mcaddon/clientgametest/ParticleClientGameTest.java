@@ -60,6 +60,7 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             capped(context, world);
             settling(context, world);
             flare(context, world);
+            thud(context, world);
         }
     }
 
@@ -346,6 +347,25 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             "tp:wake_loose is not bound to the flare and followed it when it moved.");
         world.getServer().runCommand("kill @e[type=tp:flare]");
         context.runOnClient(client -> AddonEmitters.clear());
+    }
+
+    /**
+     * `tp:thud_soft` lands at about a block a second and `tp:thud_hard` at about ten. Both raise an event
+     * starting `tp:thud_mark` on landing, with no `min_speed`, which is two blocks a second.
+     */
+    private static void thud(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:thud_soft ~ ~ ~3");
+        Worlds.waitForClient(context, client -> !Born.of("tp:thud_soft").isEmpty(), PATIENCE,
+            () -> "tp:thud_soft emits one particle at once and none was made.");
+        context.waitTicks(20);
+        int soft = context.computeOnClient(client -> Born.of("tp:thud_mark").size());
+        Assert.that(soft == 0, "tp:thud_soft lands slower than two blocks a second and still raised its"
+            + " collision event " + soft + " times.");
+
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:thud_hard ~ ~ ~3");
+        Worlds.waitForClient(context, client -> !Born.of("tp:thud_mark").isEmpty(), PATIENCE,
+            () -> "tp:thud_hard lands at about ten blocks a second and never raised its collision event.");
     }
 
     /** How far apart in height the particles were born. */

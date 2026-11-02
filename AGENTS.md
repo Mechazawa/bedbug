@@ -3042,6 +3042,8 @@ is checked in one tick, which is its default.
   the locator was as it started and outlives the entity. An `emitter_bound` event's effect follows the
   entity, not the locator. The emitter's own orientation does not follow the bone, because
   `emitter_local_space` is not acted on.
+- A collision event's `min_speed` is at least two blocks a second, its default, as Mojang documents.
+  `events` may be one event or a list.
 
 ## Conventions
 

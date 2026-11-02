@@ -182,17 +182,21 @@ public record ParticleDefinition(String identifier, String material, String text
                 impacts(json.get("events")));
         }
 
+        /**
+         * The collision events, written as a list or as one event. Mojang documents two blocks a second
+         * as both the default and the least `min_speed` there is.
+         */
         private static List<Impact> impacts(JsonElement value) {
-            if (value == null || !value.isJsonArray()) return List.of();
+            if (value == null) return List.of();
 
             List<Impact> impacts = new ArrayList<>();
-            value.getAsJsonArray().forEach(node -> {
+            (value.isJsonArray() ? value.getAsJsonArray().asList() : List.of(value)).forEach(node -> {
                 if (!node.isJsonObject()) return;
 
                 JsonObject json = node.getAsJsonObject();
                 String event = Json.text(json, "event", null);
                 if (event != null) {
-                    impacts.add(new Impact(event, ParticleJson.number(json, "min_speed", 0f)));
+                    impacts.add(new Impact(event, Math.max(2f, ParticleJson.number(json, "min_speed", 2f))));
                 }
             });
             return List.copyOf(impacts);

@@ -253,6 +253,21 @@ class ParticleDefinitionTest {
     }
 
     @Test
+    void readsACollisionEventsMinimumSpeedOfAtLeastTwo() throws IOException {
+        List<ParticleDefinition.Particle.Impact> listed = effect("""
+            {"minecraft:particle_motion_collision": {"events": [
+              {"event": "plain"}, {"event": "slow", "min_speed": 0.5}, {"event": "fast", "min_speed": 5}
+            ]}}
+            """).particle().collision().events();
+        assertEquals(List.of(2f, 2f, 5f), listed.stream().map(ParticleDefinition.Particle.Impact::minimumSpeed).toList());
+
+        List<ParticleDefinition.Particle.Impact> single = effect("""
+            {"minecraft:particle_motion_collision": {"events": {"event": "landed"}}}
+            """).particle().collision().events();
+        assertEquals(List.of(new ParticleDefinition.Particle.Impact("landed", 2f)), single);
+    }
+
+    @Test
     void readsParametricMotionAndLifetime() throws IOException {
         ParticleDefinition.Particle particle = effect("""
             {
