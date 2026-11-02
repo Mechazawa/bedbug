@@ -51,6 +51,12 @@ public final class AbacusGameTests {
         assertKillPays(helper, "tp:abacus_make_rewarding", 4);
     }
 
+    /** An experience reward written as an array pays the sum of its expressions. */
+    @GameTest()
+    public void anExperienceRewardArrayPaysTheSumOfItsExpressions(GameTestHelper helper) {
+        assertKillPays(helper, "tp:abacus_make_summing", 5);
+    }
+
     private static void assertKillPays(GameTestHelper helper, String event, int expected) {
         AddonEntity abacus = BehaviourGameTests.spawn(helper, ABACUS);
         if (abacus == null) {

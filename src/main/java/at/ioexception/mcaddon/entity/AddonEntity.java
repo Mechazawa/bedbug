@@ -919,21 +919,27 @@ public class AddonEntity extends PathfinderMob
      * Eighty-six of the eighty-seven `on_death` rewards in Mojang's own behaviour pack ask whether a
      * player struck the last blow, and many also ask about the entity's equipment, age or variant,
      * so the expression is answered with the entity's own queries and `query.last_hit_by_player`
-     * laid over them. The component sits in the group that makes the entity grown as often as on the
-     * entity, a baby being worth nothing, which is why the live set is what answers.
+     * laid over them. An array is the sum of what each expression in it comes to. The component sits
+     * in the group that makes the entity grown as often as on the entity, a baby being worth
+     * nothing, which is why the live set is what answers.
      */
     private int experience(String field, boolean lastHitByPlayer) {
         com.google.gson.JsonObject reward = liveComponent("minecraft:experience_reward");
         com.google.gson.JsonElement written = reward == null ? null : reward.get(field);
-        if (written == null || !written.isJsonPrimitive()) return 0;
+        if (written == null) return 0;
 
         java.util.Map<String, Object> properties = new java.util.HashMap<>(
             ServerHooks.state() == null ? java.util.Map.of() : ServerHooks.state().properties(getUUID()));
         properties.put("last_hit_by_player", lastHitByPlayer);
         at.ioexception.mcaddon.bedrock.molang.MolangEnvironment scope =
             at.ioexception.mcaddon.bedrock.entity.EntityReference.questions(this, () -> properties);
-        return Math.max(0, (int) at.ioexception.mcaddon.bedrock.molang.MolangParser
-            .parse(written.getAsString()).asFloat(scope));
+        double total = (written.isJsonArray() ? written.getAsJsonArray().asList() : java.util.List.of(written))
+            .stream()
+            .filter(com.google.gson.JsonElement::isJsonPrimitive)
+            .mapToDouble(term -> at.ioexception.mcaddon.bedrock.molang.MolangParser
+                .parse(term.getAsString()).asFloat(scope))
+            .sum();
+        return Math.max(0, (int) total);
     }
 
     /**

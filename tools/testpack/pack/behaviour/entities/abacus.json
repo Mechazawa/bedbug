@@ -30,6 +30,14 @@
         "minecraft:experience_reward": {
           "on_death": "query.last_hit_by_player ? query.variant + 1 : 0"
         }
+      },
+      "tp:abacus_summing": {
+        "minecraft:experience_reward": {
+          "on_death": [
+            "2",
+            "3"
+          ]
+        }
       }
     },
     "components": {
@@ -72,6 +80,13 @@
         "add": {
           "component_groups": [
             "tp:abacus_rewarding"
+          ]
+        }
+      },
+      "tp:abacus_make_summing": {
+        "add": {
+          "component_groups": [
+            "tp:abacus_summing"
           ]
         }
       }
