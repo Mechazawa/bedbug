@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.bedrock.animation;
 
+import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -7,7 +8,9 @@ import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 
 /** Reads one animation controller out of a pack's `animation_controllers` JSON. */
 public final class AnimationControllerParser {
@@ -73,6 +76,7 @@ public final class AnimationControllerParser {
         }
 
         return new AnimationController.State(
+            readVariables(json.get("variables")),
             List.copyOf(animations),
             List.copyOf(transitions),
             readStatements(json, "on_entry"),
@@ -81,6 +85,36 @@ public final class AnimationControllerParser {
             List.copyOf(particles),
             readBlendTransition(json.get("blend_transition")),
             json.has("blend_via_shortest_path") && json.get("blend_via_shortest_path").getAsBoolean());
+    }
+
+    /** A state's `variables`, each named with or without its `variable.` or `v.` prefix. */
+    private static List<AnimationController.Variable> readVariables(JsonElement json) {
+        if (json == null || !json.isJsonObject()) return List.of();
+
+        List<AnimationController.Variable> variables = new ArrayList<>();
+        for (Map.Entry<String, JsonElement> declared : json.getAsJsonObject().entrySet()) {
+            if (!declared.getValue().isJsonObject()) continue;
+            JsonObject body = declared.getValue().getAsJsonObject();
+
+            String name = declared.getKey().toLowerCase(Locale.ROOT).replaceFirst("^(variable|v)\\.", "");
+            TreeMap<Float, Float> curve = new TreeMap<>();
+            if (body.has("remap_curve") && body.get("remap_curve").isJsonObject()) {
+                for (Map.Entry<String, JsonElement> point : body.getAsJsonObject("remap_curve").entrySet()) {
+                    curve.put(Float.parseFloat(point.getKey()), point.getValue().getAsFloat());
+                }
+            }
+            float[] inputs = new float[curve.size()];
+            float[] outputs = new float[curve.size()];
+            int i = 0;
+            for (Map.Entry<Float, Float> point : curve.entrySet()) {
+                inputs[i] = point.getKey();
+                outputs[i++] = point.getValue();
+            }
+            variables.add(new AnimationController.Variable(name,
+                body.has("input") ? MolangParser.parse(primitive(body.get("input"))) : MolangExpression.ZERO,
+                inputs, outputs));
+        }
+        return List.copyOf(variables);
     }
 
     /**

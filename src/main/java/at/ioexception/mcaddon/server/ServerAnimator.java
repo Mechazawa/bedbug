@@ -133,6 +133,7 @@ public final class ServerAnimator {
             break;
         }
         player.scopeFinishedTo(null);
+        for (AnimationController.Variable variable : state.variables()) variable.apply(environment);
 
         for (AnimationController.Entry entry : state.animations()) {
             if (entry.weight() != null && !entry.weight().evaluate(environment).truthy()) continue;
