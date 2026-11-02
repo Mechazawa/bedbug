@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -133,6 +134,23 @@ class AnimationPlayerTest {
                 "bones": {"head": {"rotation": [10, 0, 0]}}}
             }}
             """);
+    }
+
+    /** A clip that does not read costs only itself, not the clips after it in the same file. */
+    @Test
+    void keepsTheClipsAfterOneThatDoesNotRead() throws IOException {
+        AnimationPlayer player = player("""
+            {"animations": {
+              "animation.squid": {"loop": true, "bones": {"body": {"rotation": [{"y": "180 - this"}, 0, 0]}}},
+              "animation.spin": {"loop": true, "bones": {"head": {"rotation": [0, 90, 0]}}}
+            }}
+            """);
+        player.play("animation.spin", null, 0f);
+        player.play("animation.squid", null, 0f);
+        player.tick(0.05f);
+
+        assertEquals(new Vector3f(0, 90, 0), rotation(player));
+        assertNull(player.poseOf("body"));
     }
 
     private static Vector3f rotation(AnimationPlayer player) {

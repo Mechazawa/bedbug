@@ -1908,6 +1908,11 @@ decide what it acts on and a reported field is still a dropped one.
   `display`, Bedrock's `shelf` becoming Java's `on_shelf` from 26. The `embedded` context, the two
   pivots and `fit_to_frame` are reported in `BlockGeometry.display`, because Java has no context for
   an embedded visual, turns and scales a model about its middle, and never fits an item to its frame.
+- **A rotation element written as an object naming one axis** (`[{"y": "180 - this"}, ...]`).
+  Mojang's schema allows the shape and publishes nothing on what it means; the squid writes `y`,
+  `x` and `y` in turn, which may be three turns applied in order. The clip is reported as
+  `animation rotation written per axis` and left out. `BedrockAssets.readSection` reads each entry
+  of a file on its own, so the clips after it still load.
 - **`parent_setup`** is reported for a wearer Java draws with a model of its own, which has no
   variables to write into. **`binding`** on such a wearer finds the part `JavaModelParts` answers
   to the bone, with `rightItem` and `leftItem` seven pixels down each arm as Mojang's humanoid

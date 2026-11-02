@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.bedrock.animation;
 
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -248,8 +249,18 @@ public final class AnimationParser {
         return new Vector3Expression(all, all, all);
     }
 
-    /** Keyframe components come through as either a number or a Molang string. */
+    /**
+     * Keyframe components come through as either a number or a Molang string.
+     *
+     * A rotation may also write an element as an object naming one axis, as Mojang's squid does.
+     * Mojang publishes the shape and nothing on what it means. The squid names `y`, `x` and `y` in
+     * turn, which may be three turns applied in order. Such a clip is reported and left out.
+     */
     private static Object primitive(JsonElement json) {
+        if (json.isJsonObject()) {
+            AddonEntities.unsupported("animation rotation written per axis");
+            throw new IllegalArgumentException("a rotation element written per axis");
+        }
         if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isNumber()) return json.getAsDouble();
         return json.getAsString();
     }

@@ -271,9 +271,14 @@ public final class BedrockAssets {
             ? root.getAsJsonObject(section) : null;
         if (body == null) return;
 
+        // One entry that does not read costs only itself, not the entries after it in the file.
         for (Map.Entry<String, JsonElement> entry : body.entrySet()) {
             if (!entry.getValue().isJsonObject()) continue;
-            into.put(entry.getKey(), parser.apply(entry.getKey(), entry.getValue().getAsJsonObject()));
+            try {
+                into.put(entry.getKey(), parser.apply(entry.getKey(), entry.getValue().getAsJsonObject()));
+            } catch (RuntimeException error) {
+                McAddon.LOGGER.warn("Could not read {}: {}", entry.getKey(), error.toString());
+            }
         }
     }
 
