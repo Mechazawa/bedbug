@@ -25,6 +25,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ComposterBlock;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.SculkSensorBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -285,6 +286,64 @@ public final class KeeperGoalGameTests {
             .thenWaitUntil(() -> helper.assertTrue(Boolean.TRUE.equals(keeper.value("tp:arrived")),
                 KEEPER + " never came back to work after its goal cooldown."))
             .thenSucceed();
+    }
+
+    /**
+     * A worker stating no `speed_multiplier` walks to its station at Mojang's default of 0.5. The
+     * keeper has no speed of its own, so it stands still while the move control keeps the speed the
+     * goal asked for.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void aWorkerWalksAtTheDefaultSpeedMultiplier(GameTestHelper helper) {
+        walkingToWork(helper, "working", Blocks.LECTERN);
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void aCompostingWorkerWalksAtTheDefaultSpeedMultiplier(GameTestHelper helper) {
+        walkingToWork(helper, "composting", Blocks.COMPOSTER);
+    }
+
+    private static void walkingToWork(GameTestHelper helper, String goal, Block station) {
+        helper.setBlock(STAND.east(3), station);
+        AddonEntity keeper = keeper(helper, "tp:keeper_make_" + goal + "_default_speed");
+        if (keeper == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            helper.assertTrue(working(keeper), KEEPER + " has not started its walk to work.");
+            helper.assertTrue(Math.abs(keeper.getMoveControl().getSpeedModifier() - DEFAULT_WORK_SPEED) < 1.0E-6,
+                KEEPER + " walks to work at " + keeper.getMoveControl().getSpeedModifier()
+                    + " instead of " + DEFAULT_WORK_SPEED + ".");
+        });
+    }
+
+    private static final double DEFAULT_WORK_SPEED = 0.5;
+
+    /** `block_interaction_max` caps how often a composting shift fills the composter. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 300)
+    public void aCompostingWorkerFillsTheComposterNoMoreOftenThanItMayInteract(GameTestHelper helper) {
+        helper.setBlock(STAND.east(), Blocks.COMPOSTER);
+        AddonEntity keeper = keeper(helper, "tp:keeper_make_composting_twice");
+        if (keeper == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(composterLevel(helper) >= 2,
+                KEEPER + " has not filled the composter twice."))
+            .thenExecuteAfter(STILL_FILLING, () -> helper.assertTrue(composterLevel(helper) == 2,
+                KEEPER + " filled the composter " + composterLevel(helper) + " times and may interact twice."))
+            .thenSucceed();
+    }
+
+    /** Past one more second of the shift, where an uncapped worker would fill the composter again. */
+    private static final int STILL_FILLING = 30;
+
+    private static int composterLevel(GameTestHelper helper) {
+        return helper.getBlockState(STAND.east()).getValue(ComposterBlock.LEVEL);
     }
 
     /**

@@ -62,14 +62,14 @@ public final class WorkGoal extends Goal {
     private WorkGoal(AddonEntity mob, JsonObject component, boolean composts) {
         this.mob = mob;
         this.composts = composts;
-        this.speed = Goals.number(component, "speed_multiplier", 1);
+        this.speed = Goals.number(component, "speed_multiplier", 0.5);
         this.activeTicks = (int) Goals.number(component, "active_time", 0);
         this.worksInRain = Goals.flag(component, "can_work_in_rain", false);
         this.rainTolerance = (int) Goals.number(component, "work_in_rain_tolerance", -1);
         this.cooldown = (int) Goals.number(component, "goal_cooldown", 0);
         this.onArrival = Goals.event(component, "on_arrival");
         this.onUseBlock = Goals.event(component, "on_use_block");
-        this.usesPerVisit = (int) Goals.number(component, "use_block_max", 1);
+        this.usesPerVisit = (int) Goals.number(component, "block_interaction_max", 1);
         this.soundDelayMin = composts ? 0 : (int) Goals.number(component, "sound_delay_min", 0);
         this.soundDelayMax = composts ? 0 : (int) Goals.number(component, "sound_delay_max", 0);
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));

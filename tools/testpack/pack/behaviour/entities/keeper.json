@@ -215,6 +215,28 @@
           "throw_sound": "item_thrown"
         }
       },
+      "tp:keeper_working_default_speed": {
+        "minecraft:behavior.work": {
+          "priority": 0,
+          "active_time": 200,
+          "can_work_in_rain": true
+        }
+      },
+      "tp:keeper_composting_default_speed": {
+        "minecraft:behavior.work_composter": {
+          "priority": 0,
+          "active_time": 200,
+          "can_work_in_rain": true
+        }
+      },
+      "tp:keeper_composting_twice": {
+        "minecraft:behavior.work_composter": {
+          "priority": 0,
+          "active_time": 200,
+          "can_work_in_rain": true,
+          "block_interaction_max": 2
+        }
+      },
       "tp:keeper_working_aloud": {
         "minecraft:behavior.work": {
           "priority": 0,
@@ -357,6 +379,27 @@
         "add": {
           "component_groups": [
             "tp:keeper_delivering"
+          ]
+        }
+      },
+      "tp:keeper_make_working_default_speed": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_working_default_speed"
+          ]
+        }
+      },
+      "tp:keeper_make_composting_default_speed": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_composting_default_speed"
+          ]
+        }
+      },
+      "tp:keeper_make_composting_twice": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_composting_twice"
           ]
         }
       },
