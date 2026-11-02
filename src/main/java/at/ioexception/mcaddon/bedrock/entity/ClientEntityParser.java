@@ -74,7 +74,7 @@ public final class ClientEntityParser {
     private static MolangExpression expression(JsonObject json, String... fields) {
         for (String field : fields) {
             JsonElement value = json.get(field);
-            if (value != null && !value.isJsonNull()) return MolangParser.parse(primitive(value));
+            if (value != null && !value.isJsonNull()) return MolangParser.parse(value);
         }
         return null;
     }
@@ -106,7 +106,7 @@ public final class ClientEntityParser {
 
         Map<String, MolangExpression> values = new LinkedHashMap<>();
         for (Map.Entry<String, JsonElement> entry : json.getAsJsonObject().entrySet()) {
-            values.put(entry.getKey(), MolangParser.parse(primitive(entry.getValue())));
+            values.put(entry.getKey(), MolangParser.parse(entry.getValue()));
         }
         return Collections.unmodifiableMap(values);
     }
@@ -152,7 +152,7 @@ public final class ClientEntityParser {
             if (element.isJsonObject()) {
                 for (Map.Entry<String, JsonElement> blended : element.getAsJsonObject().entrySet()) {
                     entries.add(new ClientEntityDefinition.Gated(
-                        blended.getKey(), MolangParser.parse(primitive(blended.getValue()))));
+                        blended.getKey(), MolangParser.parse(blended.getValue())));
                 }
             } else {
                 entries.add(new ClientEntityDefinition.Gated(element.getAsString(), null));
@@ -166,17 +166,11 @@ public final class ClientEntityParser {
 
         JsonElement body = json.get(field);
         // One statement may be written on its own rather than in a list, which `parent_setup` is.
-        if (!body.isJsonArray()) return List.of(MolangParser.parse(body.getAsString()));
+        if (!body.isJsonArray()) return List.of(MolangParser.parse(body));
 
         List<MolangExpression> parsed = new ArrayList<>();
-        for (JsonElement entry : body.getAsJsonArray()) parsed.add(MolangParser.parse(entry.getAsString()));
+        for (JsonElement entry : body.getAsJsonArray()) parsed.add(MolangParser.parse(entry));
         return List.copyOf(parsed);
-    }
-
-    private static Object primitive(JsonElement json) {
-        if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isNumber()) return json.getAsDouble();
-        if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isBoolean()) return json.getAsBoolean() ? 1d : 0d;
-        return json.getAsString();
     }
 
 }

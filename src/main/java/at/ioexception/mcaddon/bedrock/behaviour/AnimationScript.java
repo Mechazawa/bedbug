@@ -42,7 +42,7 @@ public record AnimationScript(Map<String, String> animations, List<Gated> animat
                 animate.add(new Gated(entry.getAsString(), null));
             } else if (entry.isJsonObject()) {
                 for (Map.Entry<String, JsonElement> gated : entry.getAsJsonObject().entrySet()) {
-                    animate.add(new Gated(gated.getKey(), MolangParser.parse(gated.getValue().getAsString())));
+                    animate.add(new Gated(gated.getKey(), MolangParser.parse(gated.getValue())));
                 }
             }
         }

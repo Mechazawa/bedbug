@@ -1,6 +1,5 @@
 package at.ioexception.mcaddon.bedrock.animation;
 
-import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -37,7 +36,7 @@ public final class AnimationControllerParser {
                 if (entry.isJsonObject()) {
                     for (Map.Entry<String, JsonElement> blended : entry.getAsJsonObject().entrySet()) {
                         animations.add(new AnimationController.Entry(
-                            blended.getKey(), MolangParser.parse(primitive(blended.getValue()))));
+                            blended.getKey(), MolangParser.parse(blended.getValue())));
                     }
                 } else {
                     animations.add(new AnimationController.Entry(entry.getAsString(), null));
@@ -50,7 +49,7 @@ public final class AnimationControllerParser {
             for (JsonElement entry : json.getAsJsonArray("transitions")) {
                 Map.Entry<String, JsonElement> single = entry.getAsJsonObject().entrySet().iterator().next();
                 transitions.add(new AnimationController.Transition(
-                    single.getKey(), MolangParser.parse(primitive(single.getValue()))));
+                    single.getKey(), MolangParser.parse(single.getValue())));
             }
         }
 
@@ -111,7 +110,7 @@ public final class AnimationControllerParser {
                 outputs[i++] = point.getValue();
             }
             variables.add(new AnimationController.Variable(name,
-                body.has("input") ? MolangParser.parse(primitive(body.get("input"))) : MolangExpression.ZERO,
+                MolangParser.parse(body.get("input")),
                 inputs, outputs));
         }
         return List.copyOf(variables);
@@ -144,12 +143,6 @@ public final class AnimationControllerParser {
             statements.add(AnimationAction.of(entry.getAsString()));
         }
         return List.copyOf(statements);
-    }
-
-    private static Object primitive(JsonElement json) {
-        if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isNumber()) return json.getAsDouble();
-        if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isBoolean()) return json.getAsBoolean() ? 1d : 0d;
-        return json.getAsString();
     }
 
 }

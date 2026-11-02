@@ -1,8 +1,11 @@
 package at.ioexception.mcaddon;
 
+import at.ioexception.mcaddon.bedrock.animation.AnimationParser;
+import at.ioexception.mcaddon.bedrock.animation.BedrockAnimation;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
+import at.ioexception.mcaddon.util.Json;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -95,6 +98,31 @@ class MolangTest {
         assertEquals(3, evaluate("v.x"), 1e-6);
         assertEquals(2, evaluate("return 2;"), 1e-6);
         assertEquals(1, evaluate("1"), 1e-6);
+    }
+
+    /** Every form a pack may write an expression in JSON, the object form among them. */
+    @Test
+    void readsEachJsonFormOfAnExpression() {
+        assertEquals(2.5, MolangParser.parse(Json.parse("2.5")).asFloat(environment), 1e-6);
+        assertEquals(1, MolangParser.parse(Json.parse("true")).asFloat(environment), 1e-6);
+        assertEquals(0, MolangParser.parse(Json.parse("false")).asFloat(environment), 1e-6);
+        assertEquals(7, MolangParser.parse(Json.parse("\"1 + 2 * 3\"")).asFloat(environment), 1e-6);
+        assertEquals(7, MolangParser.parse(Json.parse("""
+            {"expression": "1 + 2 * 3", "version": 1}
+            """)).asFloat(environment), 1e-6);
+    }
+
+    /** An animation's blend weight written in the object form is read as its expression. */
+    @Test
+    void readsAnAnimationFieldWrittenInTheObjectForm() {
+        BedrockAnimation animation = AnimationParser.readAnimation("animation.test", Json.parse("""
+            {"blend_weight": {"expression": "0.25", "version": 1},
+             "bones": {"head": {"rotation": [{"expression": "30", "version": 1}, 0, 0]}}}
+            """).getAsJsonObject());
+
+        assertEquals(0.25, animation.blendWeight().asFloat(environment), 1e-6);
+        assertEquals(30, animation.bones().get("head").rotation().keyframes().get(0).pre().x().asFloat(environment),
+            1e-6);
     }
 
     @Test

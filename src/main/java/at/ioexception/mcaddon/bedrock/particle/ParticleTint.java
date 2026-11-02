@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.bedrock.particle;
 
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
+import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -93,10 +94,10 @@ public sealed interface ParticleTint {
     private static Solid solid(JsonArray channels) {
         if (channels.size() < 3) return null;
 
-        return new Solid(ParticleJson.expression(channels.get(0)),
-            ParticleJson.expression(channels.get(1)),
-            ParticleJson.expression(channels.get(2)),
-            channels.size() > 3 ? ParticleJson.expression(channels.get(3))
+        return new Solid(MolangParser.parse(channels.get(0)),
+            MolangParser.parse(channels.get(1)),
+            MolangParser.parse(channels.get(2)),
+            channels.size() > 3 ? MolangParser.parse(channels.get(3))
                 : MolangExpression.constant(1));
     }
 

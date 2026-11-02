@@ -1,5 +1,8 @@
 package at.ioexception.mcaddon.bedrock.molang;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonPrimitive;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -84,11 +87,24 @@ public final class MolangParser {
         }
     }
 
-    /** Bedrock also allows a bare number where an expression is expected. */
-    public static MolangExpression parse(Object value) {
-        if (value instanceof Number number) return MolangExpression.constant(number.doubleValue());
-        if (value instanceof String text) return parse(text);
-        return MolangExpression.ZERO;
+    /**
+     * An expression as a pack writes it in JSON: a number, a boolean, a Molang string, or the object
+     * form `{"expression": "...", "version": n}` Mojang's schemas allow wherever an expression may
+     * stand. Anything else answers 0.
+     */
+    public static MolangExpression parse(JsonElement json) {
+        if (json == null || json.isJsonNull()) return MolangExpression.ZERO;
+        if (json.isJsonObject()) {
+            JsonElement expression = json.getAsJsonObject().get("expression");
+            return expression != null && expression.isJsonPrimitive()
+                ? parse(expression.getAsString()) : MolangExpression.ZERO;
+        }
+        if (!json.isJsonPrimitive()) return MolangExpression.ZERO;
+
+        JsonPrimitive value = json.getAsJsonPrimitive();
+        if (value.isNumber()) return MolangExpression.constant(value.getAsDouble());
+        if (value.isBoolean()) return MolangExpression.constant(value.getAsBoolean() ? 1 : 0);
+        return parse(value.getAsString());
     }
 
     private MolangExpression parseProgram() {
