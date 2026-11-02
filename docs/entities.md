@@ -115,6 +115,27 @@ the entity's tick.
 - **Names**: a name tag works only where `minecraft:nameable` allows. The name fires the event in
   `name_actions`.
 - **Inventory**: holds no more of an item than its shareables allow.
+- **Spells**: a spell lasts `cast_duration`. A step later than that never casts. `send_event` goes to
+  the target. A summon step places `num_entities_spawned` entities one `delay_per_summon` apart, on a
+  circle or a line of length `size`. `summon_cap` counts the type within `summon_cap_radius`. A radius
+  of 0 counts 128 blocks. `entity_lifespan` ends a summoned entity.
+- **Anger** (`anger_level`): the first `on_increase_sounds` entry whose condition holds plays. Below
+  the angry threshold the entity drops its target, unless `remove_targets_below_angry_threshold` is
+  false.
+- **Sounds**: a sound that a goal or component names is a moment of the entity's `sounds.json`. A
+  sonic boom with no `charge_sound` or `attack_sound` is silent. `eat_mob_sound` plays when the mob
+  is swallowed. `aggro_sound` plays at the start of a defence and about every three seconds after.
+- **Sniff and dig**: a sniff adds anger for each player inside the suspicion radii when it ends. A
+  vibration or a new suspicious place delays a dig for `idle_time`, when the pack counts it as a
+  disturbance.
+- **Drying out**: `drying_out_timer` counts out of water and rain. A splash water bottle near the
+  entity takes `water_bottle_refill_time` off the count. Joining water again fires
+  `recover_after_dried_out_event`.
+- **Daylight**: `burns_in_daylight` is stopped by an item in `protection_slot` (default the head).
+- **Doors**: `annotation.break_door` takes `break_time` (default 12 seconds) and `min_difficulty`
+  (default `hard`).
+- **Game events**: `game_event_movement_tracking` reads `emit_move`, `emit_swim` and `emit_flap`.
+- **Rail sensors**: `tick_command_block_on_activate` and `_on_deactivate` have no effect.
 
 ## Combat
 
@@ -192,6 +213,67 @@ the entity's tick.
   or a raid is on.
 - **Trader**: a trader without `minecraft:behavior.trade_with_player` stands still while its shop is
   open.
+- **Sleep**: an entity sleeps only in a bed. It walks to the nearest free bed within 48 blocks, and
+  gives up after 30 seconds of walking. After a failed try it waits `timeout_cooldown` (default 8).
+  `can_sleep_while_riding` lets a rider sleep.
+- **Drink milk**: waits `cooldown_seconds` (default 5) after each drink.
+- **Mingle**: finds the nearest `mingle_partner_type` within 16 blocks. It walks to `mingle_distance`,
+  faces the partner for `duration` and waits `cooldown_time`.
+- **Sit on reload**: `continue_sitting_on_reload` sits the entity again when the world loads.
+- **Avoid block**: `target_selection_method` is `nearest` or `random`.
+- **Move to water, land or liquid**: `search_count` checks that many random blocks each tick. A count
+  of 0 scans the whole box for the nearest. `move_to_liquid` starts only on the ground, and its
+  `material_type` is `any`, `water` or `lava`.
+- **Move to block**: stops inside `goal_radius`. `random` picks evenly among the matches. Filters
+  ask about the block with the subject `block`.
+- **Move to random block**: picks a block within `block_distance` and walks it in legs of 10 blocks.
+- **Go home**: walks to the place `minecraft:home` saved. It plans again within
+  `calculate_new_path_radius` and fires `on_failed` when the new path ends where the last one did.
+- **Move to village**: walks to a bed, bell or job site within 32 blocks of the nearest.
+- **Move towards target**: starts when the target is within `within_radius`.
+- **Move around target**: stays in the band behind the target.
+- **Follow mob**: without `filters` it ignores players, fish, dolphins and its own kind. It picks
+  `preferred_actor_type` first, and keeps to the home range under `use_home_position_restriction`.
+- **Find cover and flee sun**: walks to any spot the sky cannot see, by day, burning or not. Flee sun
+  has no cooldown and starts even when the entity is not burning.
+- **Float wander**: picks a spot in the `xz_dist` and `y_dist` box, 64 tries. `navigate_around_surface`
+  prefers a spot near a block. Without `allow_navigating_through_liquids` the line to the spot crosses
+  no liquid.
+- **Float tempt**: steers at a point between the entity and the player's eyes.
+- **Random fly**: with `can_land_on_trees` it lands on a log or leaves. `avoid_damage_blocks` passes
+  over fire, damaging blocks and lava.
+- **Random breach**: leaps at a chance of one in `interval`, toward water up to `xz_dist` away.
+- **Swim with entity**: closes in past `catch_up_threshold` and holds still inside `stop_distance`.
+  With no `entity_types` it follows players.
+- **Jump to block**: counts a walk in path nodes and tries at most 16 walks. `cooldown_range` counts
+  from every try.
+- **Glide**: `movement.glide` uses `start_speed` and `speed_when_turning`.
+- **Circle around anchor**: anchors over its target at `height_above_target_range`.
+- **Slime direction**: `slime_random_direction` turns after `min_change_direction_time` plus up to
+  `add_random_time_range`, by up to `turn_range` degrees.
+- **Search and dig**: finds a spot whose ground is a target block, walks there, then digs. The item
+  drops `spawn_item_after_seconds` into the dig and `on_item_found` fires only when the table gave
+  an item. The cooldown starts when the goal ends.
+- **Raid garden**: eats one crop per visit, after `initial_eat_delay`. After `max_to_eat` crops it
+  waits `full_delay`.
+- **Inspect bookshelf**: looks at `search_count` places each tick.
+- **Place block**: with `randomly_placeable_blocks` it places a weighted draw among the entries
+  whose filter passes. Otherwise it places the carried block.
+- **Lay egg**: digs every five ticks while laying. `allow_laying_from_below` lets it count as
+  arrived within the goal radius of the nest.
+- **Work and work composter**: `active_time` and `goal_cooldown` count in ticks. Rain counts where
+  it falls on the station. A worker that may not work in rain waits it out. The composter visit
+  empties a ready composter first, then adds wheat and beetroot seeds the entity holds beyond
+  `min_item_count`. Each visit counts, also with nothing to do. A worker makes the work sound of the
+  Java villager that has the station as its job site.
+- **Transport items**: moves items between containers, up to `max_stack_size` a stack. It learns what
+  a container holds only on arrival. After `max_visited_containers` visits it rests for
+  `idle_cooldown`. It starts only on the ground.
+- **Drop item for**: drops what `loot_table` rolls, or what the entity holds. It stands near
+  `offering_distance` from the target and teleports when the spot is past
+  `minimum_teleport_distance`. It fires `on_drop_attempt` on arrival. `time_of_day_range` uses
+  Bedrock's clock, where noon is 0.
+- **Throw sound**: on the giving goals it plays the `charge` moment unless the pack names one.
 
 ## Damage causes
 
@@ -232,5 +314,8 @@ A pack's `entities/player.json` can state `minecraft:player.hunger`, `player.sat
 - How often an entity is sent over the network is Java's choice.
 - `has_damage` with `fatal` works only inside a damage sensor. There it compares the damage before
   armour with the health left.
+- `target_dig_position_offset` on `random_search_and_dig`. The entity digs the spot itself.
+- `search_count` on `drop_item_for`. It checks every block in one tick.
+- `interaction_time` on `transport_items` is not waited out.
 - `minecraft:camera` (Education Edition) and `minecraft:interact_button` (touch controls).
 - `tools/census/fields.py` lists every other unread field with its reason.
