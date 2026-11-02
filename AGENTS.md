@@ -737,7 +737,7 @@ These are the checks it runs, and what each one catches:
   controller state, a one second crossing out of a state declaring `blend_via_shortest_path` from
   350 degrees to 10, and a state that plays a clip once and moves on once its clips have all
   finished. It enables attachables, hides armour and hides what it holds while its mark variant is
-  one, so the visor is drawn in its hand and never on its head.
+  one, so the visor is never drawn on its head, and in its hand it is drawn as an item.
 
   `tp:tailor` draws the same two textures in three passes, the way a villager wears its profession
   over the clothes of its biome: through `tp_tailored`, the one material in the pack's own
@@ -1920,6 +1920,15 @@ same 24), and Java's model origin is already 24 pixels up. `AttachableLayer` is 
 `LivingEntityRenderer`'s constructor returns, before any subclass adds its layers, so it runs
 first and clears the head item, armour and hand items of each slot it draws from the render state
 the later layers read.
+
+**An item worn in an armour slot draws no attachable while it is in a hand.** `Attachables.on`
+passes over a hand slot whose item `getEquipmentSlotForItem` puts in an armour slot, so Java draws
+it as an item. Nothing Mojang publishes states this rule. It is decided from what Bedrock does with
+attachables that name no slot: Mojang's helmet attachables, and the custom helmet in the Bedrock
+wiki's custom armour guide, carry no `item` condition and no slot test, and Bedrock draws a held
+diamond helmet flat. A Villager News hat binds its root to `head` by name and is not drawn on the
+head while held. An item no armour slot takes, such as the trident, the spyglass or `tp:baton`,
+draws its attachable in the hand. `AttachableClientGameTest` holds `tp:topper` and `tp:visor`.
 
 Seven fields are read outside the renderer itself, which is where to look for them:
 
