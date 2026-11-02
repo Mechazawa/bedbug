@@ -2915,6 +2915,14 @@ about the day runs `time set day` and a goal asks the clock.
   alongside the goal's own wait between station searches. The rain tests run in the mod's own
   `mcaddon:gametest/clear_sky` test environment, which puts them in a batch of their own, so the
   rain they set reaches no other test.
+- `minecraft:behavior.work_composter` visits the composter every `use_block_min` to `use_block_max`
+  ticks (100 and 200), counted from arrival, up to `block_interaction_max` visits. Mojang publishes no
+  rule for a visit, so it follows Java's `WorkAtComposter`: a ready composter is emptied first
+  (`can_empty_composter`), then, below level 7 (`can_fill_composter`), wheat and beetroot seeds from the
+  entity's `minecraft:inventory` go in, per kind only what is held beyond `min_item_count`, at most
+  `items_per_use_max` a visit. Mojang's description says "excess seeds", which is why only those two
+  items count. A visit with nothing to do still counts and raises `on_use_block`. An entity with no
+  inventory fills nothing. `speed_multiplier` defaults to 0.5 for both work goals.
 - A worker makes the work sound of Java's villager whose profession takes the station as its job
   site, every `sound_delay_min` to `sound_delay_max` ticks while it stands at the station. Mojang's
   villager files name no work sound, so this sound is decided here, and a `sound_delay_max` of

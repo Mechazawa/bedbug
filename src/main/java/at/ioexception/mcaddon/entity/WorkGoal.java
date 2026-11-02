@@ -11,12 +11,19 @@ import net.minecraft.tags.PoiTypeTags;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
 import net.minecraft.world.entity.ai.village.poi.PoiType;
+import net.minecraft.world.Container;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ComposterBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Goes to a workstation and spends a while at it.
@@ -39,6 +46,9 @@ public final class WorkGoal extends Goal {
     /** How long the walk to the station may take before the entity gives up on it. */
     private static final int TRAVEL_LIMIT = 400;
 
+    /** The items Java's farmer composts, which are what Bedrock's description calls excess seeds. */
+    private static final Set<Item> COMPOSTABLE_SEEDS = Set.of(Items.WHEAT_SEEDS, Items.BEETROOT_SEEDS);
+
     private final AddonEntity mob;
     private final boolean composts;
     private final double speed;
@@ -47,6 +57,12 @@ public final class WorkGoal extends Goal {
     private final String onArrival;
     private final String onUseBlock;
     private final int usesPerVisit;
+    private final int useDelayMin;
+    private final int useDelayMax;
+    private final boolean canFill;
+    private final boolean canEmpty;
+    private final int itemsPerUse;
+    private final int minItemCount;
     private final int rainTolerance;
     private final int cooldown;
     private final int soundDelayMin;
@@ -56,6 +72,7 @@ public final class WorkGoal extends Goal {
     private int nextSoundAt;
     private int worked;
     private int used;
+    private int nextUseAt;
     private int untilSearch;
     private int travelled;
 
@@ -70,6 +87,12 @@ public final class WorkGoal extends Goal {
         this.onArrival = Goals.event(component, "on_arrival");
         this.onUseBlock = Goals.event(component, "on_use_block");
         this.usesPerVisit = (int) Goals.number(component, "block_interaction_max", 1);
+        this.useDelayMin = (int) Goals.number(component, "use_block_min", 100);
+        this.useDelayMax = (int) Goals.number(component, "use_block_max", 200);
+        this.canFill = Goals.flag(component, "can_fill_composter", true);
+        this.canEmpty = Goals.flag(component, "can_empty_composter", true);
+        this.itemsPerUse = (int) Goals.number(component, "items_per_use_max", 20);
+        this.minItemCount = (int) Goals.number(component, "min_item_count", 10);
         this.soundDelayMin = composts ? 0 : (int) Goals.number(component, "sound_delay_min", 0);
         this.soundDelayMax = composts ? 0 : (int) Goals.number(component, "sound_delay_max", 0);
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
@@ -144,6 +167,7 @@ public final class WorkGoal extends Goal {
         if (worked == 0) {
             fire(onArrival);
             nextSoundAt = soundDelay();
+            nextUseAt = useDelay();
         }
         worked++;
         if (composts) compost();
@@ -153,25 +177,61 @@ public final class WorkGoal extends Goal {
         }
     }
 
-    /** One handful into the composter per second of the shift, up to what the pack allows. */
+    /**
+     * One visit to the composter every `use_block_min` to `use_block_max` ticks, up to
+     * `block_interaction_max` of them. A full composter is emptied first, then seeds are filled in
+     * the way Java's farmer does: per kind, only what is held beyond `min_item_count`, and at most
+     * `items_per_use_max` items a visit.
+     */
     private void compost() {
-        if (used >= usesPerVisit || worked % Goals.TICKS_PER_SECOND != 0) return;
+        if (used >= usesPerVisit || worked < nextUseAt) return;
         if (!(mob.level() instanceof ServerLevel level)) return;
 
         BlockState state = level.getBlockState(station);
         if (!(state.getBlock() instanceof ComposterBlock)) return;
 
         used++;
-        int filled = state.getValue(ComposterBlock.LEVEL);
-        if (filled < ComposterBlock.MAX_LEVEL) {
-            level.setBlockAndUpdate(station, state.setValue(ComposterBlock.LEVEL, filled + 1));
+        nextUseAt = worked + useDelay();
+        if (canEmpty && state.getValue(ComposterBlock.LEVEL) == ComposterBlock.READY) {
+            state = ComposterBlock.extractProduce(mob, state, level, station);
         }
+        if (canFill && state.getValue(ComposterBlock.LEVEL) < ComposterBlock.MAX_LEVEL) fillFromInventory(level, state);
         fire(onUseBlock);
+    }
+
+    private void fillFromInventory(ServerLevel level, BlockState state) {
+        Container inventory = mob.inventory();
+        if (inventory == null) return;
+
+        int budget = itemsPerUse;
+        Map<Item, Integer> held = new HashMap<>();
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            ItemStack stack = inventory.getItem(slot);
+            if (COMPOSTABLE_SEEDS.contains(stack.getItem())) {
+                held.merge(stack.getItem(), stack.getCount(), Integer::sum);
+            }
+        }
+        for (int slot = inventory.getContainerSize() - 1; slot >= 0 && budget > 0; slot--) {
+            ItemStack stack = inventory.getItem(slot);
+            if (!COMPOSTABLE_SEEDS.contains(stack.getItem())) continue;
+
+            int spare = held.get(stack.getItem()) - minItemCount;
+            int count = Math.min(Math.min(stack.getCount(), spare), budget);
+            held.merge(stack.getItem(), -Math.max(0, count), Integer::sum);
+            for (int i = 0; i < count; i++) {
+                state = ComposterBlock.insertItem(mob, state, level, stack, station);
+                budget--;
+            }
+        }
     }
 
     /** Whether rain falls on the station, which is what keeps a worker that may not work in rain away. */
     private boolean rainedOn() {
         return mob.level().isRainingAt(station.above());
+    }
+
+    private int useDelay() {
+        return Goals.between(mob.getRandom(), useDelayMin, Math.max(useDelayMin, useDelayMax));
     }
 
     private int soundDelay() {

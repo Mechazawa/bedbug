@@ -37,6 +37,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 
 /**
  * The goals that carry and place blocks, lay eggs, work at a station and hand items over, each read
@@ -321,30 +322,107 @@ public final class KeeperGoalGameTests {
 
     private static final double DEFAULT_WORK_SPEED = 0.5;
 
-    /** `block_interaction_max` caps how often a composting shift fills the composter. */
+    /** `block_interaction_max` caps how many visits a composting shift makes to the composter. */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 300)
-    public void aCompostingWorkerFillsTheComposterNoMoreOftenThanItMayInteract(GameTestHelper helper) {
-        helper.setBlock(STAND.east(), Blocks.COMPOSTER);
-        AddonEntity keeper = keeper(helper, "tp:keeper_make_composting_twice");
+    public void aCompostingWorkerVisitsTheComposterNoMoreOftenThanItMayInteract(GameTestHelper helper) {
+        visitingComposter(helper, "twice", SEEDS, 0, 100, (keeper, level) ->
+            helper.assertTrue(seedsOf(keeper) == SEEDS - 2 * PER_USE,
+                KEEPER + " composted " + (SEEDS - seedsOf(keeper)) + " seeds in two visits of " + PER_USE + "."));
+    }
+
+    /** `items_per_use_max` caps the seeds one visit puts in. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 300)
+    public void aCompostingWorkerFillsNoMoreItemsAVisitThanItMay(GameTestHelper helper) {
+        visitingComposter(helper, "budget", SEEDS, 0, 100, (keeper, level) ->
+            helper.assertTrue(seedsOf(keeper) == SEEDS - PER_USE,
+                KEEPER + " composted " + (SEEDS - seedsOf(keeper)) + " seeds in a visit of " + PER_USE + "."));
+    }
+
+    /** `min_item_count` keeps that many of a kind out of the composter. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 300)
+    public void aCompostingWorkerKeepsItsMinimumItemCount(GameTestHelper helper) {
+        visitingComposter(helper, "reserve", 12, 0, 100, (keeper, level) ->
+            helper.assertTrue(seedsOf(keeper) == 10,
+                KEEPER + " holds " + seedsOf(keeper) + " seeds of 12 and keeps 10."));
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 300)
+    public void aCompostingWorkerWithoutCanFillComposterFillsNothing(GameTestHelper helper) {
+        visitingComposter(helper, "nofill", SEEDS, 0, 100, (keeper, level) ->
+            helper.assertTrue(seedsOf(keeper) == SEEDS, KEEPER + " composted seeds with can_fill_composter off."));
+    }
+
+    /** A full composter is emptied by default, and left full when `can_empty_composter` is off. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 300)
+    public void aCompostingWorkerEmptiesAFullComposter(GameTestHelper helper) {
+        visitingComposter(helper, "emptying", 0, FULL, 100, (keeper, level) ->
+            helper.assertTrue(level == 0, KEEPER + " left the full composter at level " + level + "."));
+    }
+
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 300)
+    public void aCompostingWorkerWithoutCanEmptyComposterLeavesItFull(GameTestHelper helper) {
+        visitingComposter(helper, "noemptying", SEEDS, FULL, 100, (keeper, level) -> {
+            helper.assertTrue(level == FULL, KEEPER + " emptied the composter with can_empty_composter off.");
+            helper.assertTrue(seedsOf(keeper) == SEEDS, KEEPER + " filled a full composter.");
+        });
+    }
+
+    /** With `use_block_min` and `use_block_max` at their 100 and 200 the first visit is not at once. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 400)
+    public void aCompostingWorkerWaitsItsUseIntervalBeforeTheFirstVisit(GameTestHelper helper) {
+        BlockPos composter = STAND.east();
+        helper.setBlock(composter, Blocks.COMPOSTER);
+        AddonEntity keeper = keeper(helper, "tp:keeper_make_composting_slow");
         if (keeper == null) {
             helper.succeed();
             return;
         }
 
+        keeper.inventory().setItem(0, new ItemStack(Items.WHEAT_SEEDS, SEEDS));
         helper.startSequence()
-            .thenWaitUntil(() -> helper.assertTrue(composterLevel(helper) >= 2,
-                KEEPER + " has not filled the composter twice."))
-            .thenExecuteAfter(STILL_FILLING, () -> helper.assertTrue(composterLevel(helper) == 2,
-                KEEPER + " filled the composter " + composterLevel(helper) + " times and may interact twice."))
+            .thenWaitUntil(() -> helper.assertTrue(Boolean.TRUE.equals(keeper.value("tp:arrived")),
+                KEEPER + " never reached its station."))
+            .thenExecuteAfter(SHORT_OF_INTERVAL, () -> helper.assertTrue(seedsOf(keeper) == SEEDS,
+                KEEPER + " composted before its use interval was up."))
+            .thenWaitUntil(() -> helper.assertTrue(seedsOf(keeper) < SEEDS,
+                KEEPER + " never composted within its use interval."))
             .thenSucceed();
     }
 
-    /** Past one more second of the shift, where an uncapped worker would fill the composter again. */
-    private static final int STILL_FILLING = 30;
+    private static final int SEEDS = 30;
+    private static final int PER_USE = 3;
+    private static final int FULL = 8;
 
-    private static int composterLevel(GameTestHelper helper) {
-        return helper.getBlockState(STAND.east()).getValue(ComposterBlock.LEVEL);
+    /** Under the 100 ticks of the shortest default interval. */
+    private static final int SHORT_OF_INTERVAL = 60;
+
+    /**
+     * Sets the composter to a level, gives the keeper seeds, waits for it to arrive and a hundred
+     * ticks of its 20 tick visits, and hands the seeds left and the composter's level to the check.
+     */
+    private static void visitingComposter(GameTestHelper helper, String goal, int seeds, int level, int after,
+                                          BiConsumer<AddonEntity, Integer> check) {
+        BlockPos composter = STAND.east();
+        helper.setBlock(composter, Blocks.COMPOSTER.defaultBlockState().setValue(ComposterBlock.LEVEL, level));
+        AddonEntity keeper = keeper(helper, "tp:keeper_make_composting_" + goal);
+        if (keeper == null) {
+            helper.succeed();
+            return;
+        }
+
+        if (seeds > 0) keeper.inventory().setItem(0, new ItemStack(Items.WHEAT_SEEDS, seeds));
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(Boolean.TRUE.equals(keeper.value("tp:arrived")),
+                KEEPER + " never reached its station."))
+            .thenExecuteAfter(after, () -> check.accept(keeper,
+                helper.getBlockState(composter).getValue(ComposterBlock.LEVEL)))
+            .thenSucceed();
     }
+
+    private static int seedsOf(AddonEntity keeper) {
+        return keeper.inventory().getItem(0).getCount();
+    }
+
 
     /**
      * `sound_delay_min` and `sound_delay_max` space the sounds a worker makes at its station, which

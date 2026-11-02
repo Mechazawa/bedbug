@@ -230,11 +230,126 @@
         }
       },
       "tp:keeper_composting_twice": {
+        "minecraft:inventory": {
+          "inventory_size": 5
+        },
         "minecraft:behavior.work_composter": {
           "priority": 0,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          },
           "active_time": 200,
           "can_work_in_rain": true,
-          "block_interaction_max": 2
+          "block_interaction_max": 2,
+          "use_block_min": 20,
+          "use_block_max": 20,
+          "items_per_use_max": 3,
+          "min_item_count": 0
+        }
+      },
+      "tp:keeper_composting_budget": {
+        "minecraft:inventory": {
+          "inventory_size": 5
+        },
+        "minecraft:behavior.work_composter": {
+          "priority": 0,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          },
+          "active_time": 200,
+          "can_work_in_rain": true,
+          "use_block_min": 20,
+          "use_block_max": 20,
+          "items_per_use_max": 3,
+          "min_item_count": 0
+        }
+      },
+      "tp:keeper_composting_reserve": {
+        "minecraft:inventory": {
+          "inventory_size": 5
+        },
+        "minecraft:behavior.work_composter": {
+          "priority": 0,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          },
+          "active_time": 200,
+          "can_work_in_rain": true,
+          "use_block_min": 20,
+          "use_block_max": 20,
+          "min_item_count": 10
+        }
+      },
+      "tp:keeper_composting_nofill": {
+        "minecraft:inventory": {
+          "inventory_size": 5
+        },
+        "minecraft:behavior.work_composter": {
+          "priority": 0,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          },
+          "active_time": 200,
+          "can_work_in_rain": true,
+          "use_block_min": 20,
+          "use_block_max": 20,
+          "can_fill_composter": false,
+          "min_item_count": 0
+        }
+      },
+      "tp:keeper_composting_emptying": {
+        "minecraft:inventory": {
+          "inventory_size": 5
+        },
+        "minecraft:behavior.work_composter": {
+          "priority": 0,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          },
+          "active_time": 200,
+          "can_work_in_rain": true,
+          "use_block_min": 20,
+          "use_block_max": 20,
+          "can_fill_composter": false
+        }
+      },
+      "tp:keeper_composting_noemptying": {
+        "minecraft:inventory": {
+          "inventory_size": 5
+        },
+        "minecraft:behavior.work_composter": {
+          "priority": 0,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          },
+          "active_time": 200,
+          "can_work_in_rain": true,
+          "use_block_min": 20,
+          "use_block_max": 20,
+          "can_empty_composter": false,
+          "min_item_count": 0
+        }
+      },
+      "tp:keeper_composting_slow": {
+        "minecraft:inventory": {
+          "inventory_size": 5
+        },
+        "minecraft:behavior.work_composter": {
+          "priority": 0,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          },
+          "active_time": 400,
+          "can_work_in_rain": true,
+          "items_per_use_max": 3,
+          "min_item_count": 0
         }
       },
       "tp:keeper_working_aloud": {
@@ -400,6 +515,48 @@
         "add": {
           "component_groups": [
             "tp:keeper_composting_twice"
+          ]
+        }
+      },
+      "tp:keeper_make_composting_budget": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_composting_budget"
+          ]
+        }
+      },
+      "tp:keeper_make_composting_reserve": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_composting_reserve"
+          ]
+        }
+      },
+      "tp:keeper_make_composting_nofill": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_composting_nofill"
+          ]
+        }
+      },
+      "tp:keeper_make_composting_emptying": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_composting_emptying"
+          ]
+        }
+      },
+      "tp:keeper_make_composting_noemptying": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_composting_noemptying"
+          ]
+        }
+      },
+      "tp:keeper_make_composting_slow": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_composting_slow"
           ]
         }
       },
