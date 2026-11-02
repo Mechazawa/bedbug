@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Supplier;
 
 /**
  * The effects currently running, each still deciding when to make its next particle.
@@ -58,7 +59,9 @@ public final class AddonEmitters {
 
         /** Null for an effect standing still, which is how a one-off burst is left behind. */
         private final Entity following;
-        private final Vec3 at;
+
+        /** Where the emitter stands at this moment, which moves with the entity or locator it is bound to. */
+        private final Supplier<Vec3> anchor;
         private final int depth;
 
         /** Seconds since the emitter started, and since its current loop started. */
@@ -81,11 +84,12 @@ public final class AddonEmitters {
         private Vec3 was;
 
         private Running(ParticleDefinition definition, SimpleParticleType type, Entity following,
-            Vec3 at, int depth, MolangEnvironment.Queries queries, List<MolangExpression> preEffectScript) {
+            Supplier<Vec3> anchor, int depth, MolangEnvironment.Queries queries,
+            List<MolangExpression> preEffectScript) {
             this.definition = definition;
             this.type = type;
             this.following = following;
-            this.at = at;
+            this.anchor = anchor;
             this.depth = depth;
 
             if (queries != null) environment.setQueries(queries);
@@ -135,31 +139,37 @@ public final class AddonEmitters {
         }
 
         private Vec3 where() {
-            return following == null ? at : following.position().add(at);
+            return anchor.get();
         }
     }
 
     /** Starts an effect at a point, or following an entity when one is given. */
     public static void start(String identifier, Entity following, Vec3 at) {
-        start(identifier, following, at, 0, null, List.of());
+        start(identifier, following, placed(following, at), 0, null, List.of());
+    }
+
+    /** A point that stays put, or that keeps its offset from the entity it follows. */
+    private static Supplier<Vec3> placed(Entity following, Vec3 at) {
+        return following == null ? () -> at : () -> following.position().add(at);
     }
 
     /**
-     * Starts an effect an entity's animation asked for: its emitter answers the entity's queries,
-     * and the animation's `pre_effect_script` runs in the emitter as it starts.
+     * Starts an effect an entity's animation asked for: its emitter stands wherever `anchor` says at
+     * each moment, answers the entity's queries, and runs the animation's `pre_effect_script` as it
+     * starts. An effect not bound to the entity is given no entity to follow.
      */
-    public static void start(String identifier, Entity following, Vec3 at, MolangEnvironment.Queries queries,
-        List<MolangExpression> preEffectScript) {
-        start(identifier, following, at, 0, queries, preEffectScript);
+    public static void start(String identifier, Entity following, Supplier<Vec3> anchor,
+        MolangEnvironment.Queries queries, List<MolangExpression> preEffectScript) {
+        start(identifier, following, anchor, 0, queries, preEffectScript);
     }
 
-    private static void start(String identifier, Entity following, Vec3 at, int depth,
+    private static void start(String identifier, Entity following, Supplier<Vec3> anchor, int depth,
         MolangEnvironment.Queries queries, List<MolangExpression> preEffectScript) {
         SimpleParticleType type = AddonParticles.typeOf(identifier);
         ParticleDefinition definition = AddonParticles.definitionOf(identifier);
         if (type == null || definition == null || depth > MAXIMUM_DEPTH) return;
 
-        Running effect = new Running(definition, type, following, at, depth, queries, preEffectScript);
+        Running effect = new Running(definition, type, following, anchor, depth, queries, preEffectScript);
         RUNNING.add(effect);
         raise(effect, definition.emitter().events().creation());
     }
@@ -414,7 +424,7 @@ public final class AddonEmitters {
         boolean bound = "emitter_bound".equals(visual.type());
         Entity carrier = bound ? following : null;
         Vec3 where = bound && following != null ? at.subtract(following.position()) : at;
-        start(visual.effect(), carrier, where, depth + 1, null, List.of());
+        start(visual.effect(), carrier, placed(carrier, where), depth + 1, null, List.of());
     }
 
     /** Plays one of the pack's own sound events, under the namespace the effect itself carries. */

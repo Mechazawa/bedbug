@@ -14,7 +14,9 @@
         "young": "geometry.tp.sprite"
       },
       "particle_effects": {
-        "puff": "tp:puff"
+        "puff": "tp:puff",
+        "wake": "tp:wake",
+        "loose": "tp:wake_loose"
       },
       "animations": {
         "rise": "animation.tp.flare.rise"

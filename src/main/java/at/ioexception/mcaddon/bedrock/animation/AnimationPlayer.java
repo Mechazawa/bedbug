@@ -109,14 +109,18 @@ public final class AnimationPlayer {
             }
 
             @Override
-            public void particle(String effect, String locator, List<MolangExpression> preEffectScript) {
+            public void particle(String effect, String locator, List<MolangExpression> preEffectScript,
+                boolean bound) {
             }
         };
 
         void sound(String effect);
 
-        /** The script runs in the effect's own emitter as it starts, before its creation expression. */
-        void particle(String effect, String locator, List<MolangExpression> preEffectScript);
+        /**
+         * The script runs in the effect's own emitter as it starts, before its creation expression. A
+         * bound effect follows the entity, and an unbound one stays where it started.
+         */
+        void particle(String effect, String locator, List<MolangExpression> preEffectScript, boolean bound);
     }
 
     public void setEffects(EffectSink effects) {
@@ -306,7 +310,7 @@ public final class AnimationPlayer {
         }
         for (BedrockAnimation.EffectEntry entry : clip.animation.particleEffects()) {
             if (due(entry, position, clip.lastFiredTime)) {
-                effects.particle(entry.effect(), entry.locator(), entry.preEffectScript());
+                effects.particle(entry.effect(), entry.locator(), entry.preEffectScript(), entry.bound());
             }
         }
         clip.lastFiredTime = position;

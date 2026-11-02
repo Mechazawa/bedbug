@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.client.render.AddonEmitters;
+import at.ioexception.mcaddon.entity.AddonEntity;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -302,8 +303,11 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
     }
 
     /**
-     * `tp:flare`'s clip starts `tp:puff` with a `pre_effect_script` setting `variable.burst` to three,
-     * which the effect's instant rate reads, so the script runs in the emitter.
+     * `tp:flare`'s clip starts three effects. `tp:puff` has a `pre_effect_script` setting
+     * `variable.burst` to three, which the effect's instant rate reads, so the script runs in the
+     * emitter. `tp:wake` and `tp:wake_loose` both start at the `tip` locator while the clip lifts the
+     * body two blocks over a second: the wake is bound and rises with the locator and follows the
+     * flare when it is moved, and the loose one is not bound and stays where it started.
      */
     private static void flare(ClientGameTestContext context, TestSingleplayerContext world) {
         context.runOnClient(client -> Born.clear());
@@ -315,7 +319,40 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         int puffs = context.computeOnClient(client -> Born.of("tp:puff").size());
         Assert.that(puffs == 3, "tp:puff bursts the three particles its pre_effect_script asked for once, and made "
             + puffs + ".");
+
+        Worlds.waitForClient(context, client -> Born.of("tp:wake").size() >= 12, PATIENCE,
+            () -> "tp:wake makes ten particles a second and made " + Born.of("tp:wake").size() + ".");
+        double rise = context.computeOnClient(client -> spread(Born.of("tp:wake")));
+        Assert.that(rise > 1.5, "tp:wake follows its locator as the clip lifts it two blocks, and its particles"
+            + " were born " + rise + " blocks apart in height.");
+
+        AddonEntity flare = Entities.waitForClient(context, "tp:flare");
+        double from = context.computeOnClient(client -> flare.getX());
+        world.getServer().runCommand("execute as @e[type=tp:flare] at @s run tp @s ~6 ~ ~");
+        Worlds.waitForClient(context, client -> flare.getX() > from + 5.9, PATIENCE,
+            () -> "tp:flare was moved six blocks and the client never saw it arrive.");
+        context.waitTicks(3);
+        int wakes = context.computeOnClient(client -> Born.of("tp:wake").size());
+        int looses = context.computeOnClient(client -> Born.of("tp:wake_loose").size());
+        context.waitTicks(6);
+        double to = context.computeOnClient(client -> flare.getX());
+        List<Born.Particle> moved = context.computeOnClient(client ->
+            Born.of("tp:wake").subList(wakes, Born.of("tp:wake").size()));
+        List<Born.Particle> stayed = context.computeOnClient(client ->
+            Born.of("tp:wake_loose").subList(looses, Born.of("tp:wake_loose").size()));
+        Assert.that(!moved.isEmpty() && moved.stream().allMatch(born -> Math.abs(born.at().x - to) < 1),
+            "tp:wake is bound to the flare and was born away from it after it moved.");
+        Assert.that(!stayed.isEmpty() && stayed.stream().allMatch(born -> Math.abs(born.at().x - from) < 1),
+            "tp:wake_loose is not bound to the flare and followed it when it moved.");
         world.getServer().runCommand("kill @e[type=tp:flare]");
+        context.runOnClient(client -> AddonEmitters.clear());
+    }
+
+    /** How far apart in height the particles were born. */
+    private static double spread(List<Born.Particle> particles) {
+        double lowest = particles.stream().mapToDouble(born -> born.at().y).min().orElse(0);
+        double highest = particles.stream().mapToDouble(born -> born.at().y).max().orElse(0);
+        return highest - lowest;
     }
 
     /** Each of the four channels within one step of the colour asked for. */

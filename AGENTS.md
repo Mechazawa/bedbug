@@ -3037,6 +3037,11 @@ is checked in one tick, which is its default.
   starts, after the emitter randoms and before `creation_expression`. An emitter an entity's
   animation started answers that entity's queries, which is what Mojang's own scripts read
   (`query.surface_particle_color`).
+- An effect an animation starts at a locator stands where the drawn model puts that locator at each
+  tick, so it rises and turns with the bone. With `bind_to_actor` false it is left in the world where
+  the locator was as it started and outlives the entity. An `emitter_bound` event's effect follows the
+  entity, not the locator. The emitter's own orientation does not follow the bone, because
+  `emitter_local_space` is not acted on.
 
 ## Conventions
 

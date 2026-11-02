@@ -9,8 +9,33 @@
           {
             "effect": "puff",
             "pre_effect_script": "variable.burst = 3;"
+          },
+          {
+            "effect": "wake",
+            "locator": "tip"
+          },
+          {
+            "effect": "loose",
+            "locator": "tip",
+            "bind_to_actor": false
           }
         ]
+      },
+      "bones": {
+        "body": {
+          "position": {
+            "0.0": [
+              0,
+              0,
+              0
+            ],
+            "1.0": [
+              0,
+              32,
+              0
+            ]
+          }
+        }
       }
     }
   }

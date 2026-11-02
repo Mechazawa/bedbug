@@ -66,7 +66,8 @@ public final class AnimationControllerParser {
                 particles.add(new AnimationController.Effect(effect.get("effect").getAsString(),
                     effect.has("locator") ? effect.get("locator").getAsString() : null,
                     effect.has("pre_effect_script")
-                        ? AnimationParser.readExpressions(effect.get("pre_effect_script")) : List.of()));
+                        ? AnimationParser.readExpressions(effect.get("pre_effect_script")) : List.of(),
+                    AnimationParser.boundToActor(effect)));
             }
         }
 

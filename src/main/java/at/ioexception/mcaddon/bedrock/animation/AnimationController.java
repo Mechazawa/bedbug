@@ -23,8 +23,11 @@ public record AnimationController(
     public record Transition(String target, MolangExpression condition) {
     }
 
-    /** A particle effect a state starts as it is entered, and the script run as its emitter starts. */
-    public record Effect(String effect, String locator, List<MolangExpression> preEffectScript) {
+    /**
+     * A particle effect a state starts as it is entered, the script run as its emitter starts, and
+     * whether it follows the entity.
+     */
+    public record Effect(String effect, String locator, List<MolangExpression> preEffectScript, boolean bound) {
     }
 
     public record State(

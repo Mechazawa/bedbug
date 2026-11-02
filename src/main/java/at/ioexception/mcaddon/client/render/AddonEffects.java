@@ -15,6 +15,7 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
 import java.util.List;
@@ -39,8 +40,9 @@ public final class AddonEffects {
             }
 
             @Override
-            public void particle(String particleId, String locator, List<MolangExpression> preEffectScript) {
-                spawn(entity, animator, models, particleId, locator, preEffectScript);
+            public void particle(String particleId, String locator, List<MolangExpression> preEffectScript,
+                boolean bound) {
+                spawn(entity, animator, models, particleId, locator, preEffectScript, bound);
             }
         };
     }
@@ -66,19 +68,22 @@ public final class AddonEffects {
     /**
      * Shows a particle effect at the locator it is anchored to, or at the entity when it names none.
      *
+     * A bound effect follows the locator as the entity moves and animates. One the pack unbinds is
+     * left in the world where the locator was as it started.
+     *
      * A pack's own particle definitions have no Java counterpart, so what can be shown is the vanilla
      * effect a Bedrock id names. Anything else is counted and reported by `/mcaddon entities` rather
      * than silently doing nothing.
      */
     private static void spawn(Entity entity, EntityAnimator animator, AddonModels models, String particleId,
-        String locator, List<MolangExpression> preEffectScript) {
+        String locator, List<MolangExpression> preEffectScript, boolean bound) {
         if (particleId == null || entity.level() == null) return;
 
-        Vector3f at = anchor(entity, animator, models, locator);
+        Vec3 at = anchor(entity, animator, models, locator);
         if (AddonParticles.definitionOf(particleId) != null) {
-            AddonEmitters.start(particleId, entity,
-                new net.minecraft.world.phys.Vec3(at.x() - entity.getX(), at.y() - entity.getY(),
-                    at.z() - entity.getZ()), animator.environment()::query, preEffectScript);
+            AddonEmitters.start(particleId, bound ? entity : null,
+                bound ? () -> anchor(entity, animator, models, locator) : () -> at,
+                animator.environment()::query, preEffectScript);
             return;
         }
 
@@ -87,7 +92,7 @@ public final class AddonEffects {
             AddonEntities.unsupported("particle " + particleId);
             return;
         }
-        entity.level().addParticle(options, at.x(), at.y(), at.z(), 0, 0, 0);
+        entity.level().addParticle(options, at.x, at.y, at.z, 0, 0, 0);
     }
 
     /**
@@ -98,8 +103,8 @@ public final class AddonEffects {
      * then through the space the renderer draws the model in, which turns it with the body and
      * scales it with the entity, so the point lands where the drawn model shows it.
      */
-    private static Vector3f anchor(Entity entity, EntityAnimator animator, AddonModels models, String locator) {
-        Vector3f feet = new Vector3f((float) entity.getX(), (float) entity.getY(), (float) entity.getZ());
+    private static Vec3 anchor(Entity entity, EntityAnimator animator, AddonModels models, String locator) {
+        Vec3 feet = entity.position();
         List<AddonModels.Pass> passes = locator == null ? List.of() : models.resolve(animator);
         Vector3f placed = passes.isEmpty() ? null
             : BedrockModelRenderer.locatorOf(passes.get(0).geometry(), animator, locator);
@@ -109,6 +114,7 @@ public final class AddonEffects {
         AddonEntityRenderer.applyModelSpace(modelSpace,
             entity instanceof LivingEntity living ? living.yBodyRot : entity.getYRot(),
             entity instanceof AddonEntity addon ? AddonEntityRenderer.drawnScale(addon, animator) : animator.scale());
-        return feet.add(modelSpace.last().pose().transformPosition(placed));
+        Vector3f moved = modelSpace.last().pose().transformPosition(placed);
+        return feet.add(moved.x(), moved.y(), moved.z());
     }
 }
