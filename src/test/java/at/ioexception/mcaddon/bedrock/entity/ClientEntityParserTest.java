@@ -39,6 +39,14 @@ class ClientEntityParserTest {
             List.copyOf(definition.animationControllers().values()));
     }
 
+    /** Mojang's armadillo writes the offscreen flag as the Molang string "1.0". */
+    @Test
+    void readsAnOffscreenFlagWrittenAsMolang() {
+        assertTrue(read("{\"scripts\": {\"should_update_effects_offscreen\": \"1.0\"}}").runsOffscreen());
+        assertTrue(read("{\"scripts\": {\"should_update_bones_and_effects_offscreen\": true}}").runsOffscreen());
+        assertFalse(read("{\"scripts\": {\"should_update_effects_offscreen\": \"0.0\"}}").runsOffscreen());
+    }
+
     /** A pack drawing several geometries names the one its bone queries are answered from. */
     @Test
     void answersBoneQueriesFromTheGeometryThePackNames() {

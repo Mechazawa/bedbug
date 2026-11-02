@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.bedrock.entity;
 
+import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
@@ -38,10 +39,8 @@ public final class ClientEntityParser {
             json.has("held_item_ignores_lighting")
                 && json.get("held_item_ignores_lighting").getAsBoolean(),
             expression(json, "held_item_scale"),
-            scripts.has("should_update_effects_offscreen")
-                && scripts.get("should_update_effects_offscreen").getAsBoolean(),
-            scripts.has("should_update_bones_and_effects_offscreen")
-                && scripts.get("should_update_bones_and_effects_offscreen").getAsBoolean(),
+            truthy(scripts, "should_update_effects_offscreen"),
+            truthy(scripts, "should_update_bones_and_effects_offscreen"),
             strings(json, "geometry"),
             json.has("queryable_geometry") ? json.get("queryable_geometry").getAsString() : null,
             strings(json, "textures"),
@@ -63,6 +62,14 @@ public final class ClientEntityParser {
             expression(scripts, "scaleY", "scaley"),
             expression(scripts, "scaleZ", "scalez"),
             SpawnEggAppearance.tryFrom(name, json));
+    }
+
+    /**
+     * A flag Mojang writes as Molang, such as the `"1.0"` its armadillo and breeze give the
+     * offscreen fields, asked once as the definition is read.
+     */
+    private static boolean truthy(JsonObject json, String field) {
+        return json.has(field) && MolangParser.parse(json.get(field)).evaluate(new MolangEnvironment()).truthy();
     }
 
     /**
