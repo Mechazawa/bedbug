@@ -27,7 +27,8 @@ import java.util.stream.Collectors;
  * A spot is a place to stand whose ground is one of the target blocks and which the entity can path
  * to, drawn up to `find_valid_position_retries` times within `search_range_xz` blocks either way
  * and `search_range_y` up or down, the reach Java's own sniffer searches with. The dig fails when
- * its ground stops being a target block or something else takes the goal over.
+ * the ground `target_dig_position_offset` ahead of the entity (2.25 blocks by default) is not a target
+ * block or something else takes the goal over.
  */
 public final class SearchAndDigGoal extends Goal {
     /** The default list the schema names, in Bedrock's spelling. */
@@ -46,6 +47,7 @@ public final class SearchAndDigGoal extends Goal {
     private final Goals.Span digging;
     private final int itemAfter;
     private final double itemOffset;
+    private final double digOffset;
     private final String itemTable;
     private final String onSearching;
     private final String onSearchFailed;
@@ -78,6 +80,7 @@ public final class SearchAndDigGoal extends Goal {
         this.digging = Goals.span(component, "digging_duration_range", 8, 10);
         this.itemAfter = Goals.ticks(component, "spawn_item_after_seconds", 0);
         this.itemOffset = Goals.number(component, "spawn_item_pos_offset", 0);
+        this.digOffset = Goals.number(component, "target_dig_position_offset", 2.25);
         this.itemTable = Goals.text(component, "item_table");
         this.onSearching = Goals.event(component, "on_searching_start");
         this.onSearchFailed = Goals.event(component, "on_fail_during_searching");
@@ -117,6 +120,12 @@ public final class SearchAndDigGoal extends Goal {
             && mob.level().getBlockState(standing).getCollisionShape(mob.level(), standing).isEmpty();
     }
 
+    /** The dig takes the ground `target_dig_position_offset` ahead of the entity's feet. */
+    private boolean diggableAhead() {
+        Vec3 ahead = mob.position().add(Vec3.directionFromRotation(0, mob.getYRot()).scale(digOffset));
+        return diggable.contains(mob.level().getBlockState(BlockPos.containing(ahead).below()).getBlock());
+    }
+
     @Override
     public boolean canContinueToUse() {
         return !ended;
@@ -138,7 +147,7 @@ public final class SearchAndDigGoal extends Goal {
 
     @Override
     public void tick() {
-        if (!diggable(spot)) {
+        if (dug < 0 ? !diggable(spot) : !diggableAhead()) {
             end(dug < 0 ? onSearchFailed : onDigFailed);
             return;
         }
