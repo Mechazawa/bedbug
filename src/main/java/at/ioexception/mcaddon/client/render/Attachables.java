@@ -113,6 +113,10 @@ public final class Attachables {
             ItemStack held = entity.getItemBySlot(slot);
             if (held.isEmpty()) continue;
 
+            // An item worn in an armour slot is drawn as an item while it is in a hand. Mojang's
+            // helmet attachables state no slot condition and Bedrock still draws a held helmet flat.
+            if (slot.getType() == EquipmentSlot.Type.HAND && entity.getEquipmentSlotForItem(held).isArmor()) continue;
+
             String item = AddonItems.identifierOf(held.getItem());
             Chosen chosen = choose(entity, item, slotName(slot), partialTick);
             if (chosen == null) continue;
