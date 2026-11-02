@@ -173,6 +173,16 @@ class ClientEntityParserTest {
         assertFalse(definition.heldItemsHidden().evaluate(new MolangEnvironment()).truthy());
     }
 
+    @Test
+    void keepsEveryEntryOfAnAnimateObjectWithSeveralKeys() {
+        ClientEntityDefinition definition = read("""
+            {"scripts": {"animate": [{"walk": "!query.is_baby", "baby_walk": "query.is_baby"}]}}
+            """);
+
+        assertEquals(List.of("walk", "baby_walk"),
+            definition.animate().stream().map(ClientEntityDefinition.Gated::name).toList());
+    }
+
     private static ClientEntityDefinition read(String body) {
         return ClientEntityParser.read("test:thing", Json.parse(body).getAsJsonObject());
     }

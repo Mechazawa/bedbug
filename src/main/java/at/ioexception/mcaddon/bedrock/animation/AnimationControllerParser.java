@@ -32,9 +32,10 @@ public final class AnimationControllerParser {
         if (json.has("animations")) {
             for (JsonElement entry : json.getAsJsonArray("animations")) {
                 if (entry.isJsonObject()) {
-                    Map.Entry<String, JsonElement> single = entry.getAsJsonObject().entrySet().iterator().next();
-                    animations.add(new AnimationController.Entry(
-                        single.getKey(), MolangParser.parse(primitive(single.getValue()))));
+                    for (Map.Entry<String, JsonElement> blended : entry.getAsJsonObject().entrySet()) {
+                        animations.add(new AnimationController.Entry(
+                            blended.getKey(), MolangParser.parse(primitive(blended.getValue()))));
+                    }
                 } else {
                     animations.add(new AnimationController.Entry(entry.getAsString(), null));
                 }

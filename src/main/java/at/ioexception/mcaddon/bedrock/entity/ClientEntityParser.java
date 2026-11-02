@@ -150,9 +150,10 @@ public final class ClientEntityParser {
 
         for (JsonElement element : array) {
             if (element.isJsonObject()) {
-                Map.Entry<String, JsonElement> single = element.getAsJsonObject().entrySet().iterator().next();
-                entries.add(new ClientEntityDefinition.Gated(
-                    single.getKey(), MolangParser.parse(primitive(single.getValue()))));
+                for (Map.Entry<String, JsonElement> blended : element.getAsJsonObject().entrySet()) {
+                    entries.add(new ClientEntityDefinition.Gated(
+                        blended.getKey(), MolangParser.parse(primitive(blended.getValue()))));
+                }
             } else {
                 entries.add(new ClientEntityDefinition.Gated(element.getAsString(), null));
             }
