@@ -34,6 +34,10 @@
             "bright"
           ],
           "default": "bright"
+        },
+        "tp:flag": {
+          "type": "bool",
+          "default": false
         }
       }
     },
@@ -93,7 +97,7 @@
       },
       "tp:abacus_count": {
         "set_property": {
-          "tp:count": 2
+          "tp:count": "q.property('tp:count') + 1"
         }
       },
       "tp:abacus_make_rewarding": {
@@ -108,6 +112,11 @@
           "component_groups": [
             "tp:abacus_summing"
           ]
+        }
+      },
+      "tp:abacus_toggle": {
+        "set_property": {
+          "tp:flag": "!q.property('tp:flag')"
         }
       }
     }

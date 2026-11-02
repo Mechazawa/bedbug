@@ -36,7 +36,10 @@ public final class AbacusGameTests {
         helper.startSequence()
             .thenExecuteAfter(2, () -> helper.assertTrue(abacus.answer("q.heartbeat_interval").asFloat() == 2,
                 "The first beat was " + abacus.answer("q.heartbeat_interval").asFloat() + " seconds."))
-            .thenExecute(() -> raise(abacus, "tp:abacus_count"))
+            .thenExecute(() -> {
+                raise(abacus, "tp:abacus_count");
+                raise(abacus, "tp:abacus_count");
+            })
             .thenExecuteAfter(45, () -> helper.assertTrue(abacus.answer("q.heartbeat_interval").asFloat() == 1,
                 "A beat at a count of two was " + abacus.answer("q.heartbeat_interval").asFloat() + " seconds."))
             .thenSucceed();
@@ -74,6 +77,31 @@ public final class AbacusGameTests {
                 assertProperty(helper, abacus, "tp:unmet", false);
                 assertProperty(helper, abacus, "tp:sum", 3.0);
                 assertProperty(helper, abacus, "tp:shade", "bright");
+            })
+            .thenSucceed();
+    }
+
+    /**
+     * A `set_property` value written as Molang is answered as the event runs, reading the value it
+     * replaces: counting twice reaches two, and a toggle turns a flag on and off again.
+     */
+    @GameTest()
+    public void aSetPropertyValueWrittenAsMolangReadsTheValueItReplaces(GameTestHelper helper) {
+        AddonEntity abacus = BehaviourGameTests.spawn(helper, ABACUS);
+        if (abacus == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.startSequence()
+            .thenExecuteAfter(1, () -> {
+                raise(abacus, "tp:abacus_count");
+                raise(abacus, "tp:abacus_count");
+                assertProperty(helper, abacus, "tp:count", 2.0);
+                raise(abacus, "tp:abacus_toggle");
+                assertProperty(helper, abacus, "tp:flag", true);
+                raise(abacus, "tp:abacus_toggle");
+                assertProperty(helper, abacus, "tp:flag", false);
             })
             .thenSucceed();
     }
