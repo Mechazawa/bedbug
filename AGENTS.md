@@ -3014,6 +3014,16 @@ look at the target, whose height is capped at `max_head_look_at_height` over the
 goal naming no `loot_table` drops what the entity holds. `search_count` is not read: every block
 is checked in one tick, which is its default.
 
+## Particle emitters
+
+`client/render/AddonEmitters` runs an effect's emitter and `AddonParticleProvider` makes each particle.
+`ParticleClientGameTest` reads each rule back through `clientgametest/Born`.
+
+- A particle starts with a copy of its emitter's variables as they stand at its birth
+  (`AddonEmitters.birthScope`), so it reads what `creation_expression` and `per_update_expression`
+  set, `v.emitter_age` and the emitter randoms. Mojang says particle expressions can use these and not
+  whether a particle sees later changes, so the copy is decided here.
+
 ## Conventions
 
 **No add-on content is committed.** No textures, sounds, models or text from any pack. Real packs

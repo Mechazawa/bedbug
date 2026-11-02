@@ -45,7 +45,7 @@ public record AddonParticleProvider(String identifier, SpriteSet sprites)
         ParticleDefinition definition = AddonParticles.definitionOf(identifier);
         if (definition == null) return null;
 
-        MolangEnvironment environment = new MolangEnvironment();
+        MolangEnvironment environment = AddonEmitters.birthScope();
         AddonEmitters.randomise(environment, "particle_random_");
         AddonEmitters.evaluateCurves(definition, environment);
 

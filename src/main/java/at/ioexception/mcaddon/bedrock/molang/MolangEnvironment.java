@@ -95,6 +95,16 @@ public class MolangEnvironment {
         };
     }
 
+    /** A new environment holding this one's variables and contexts as they are now, answering its queries. */
+    public MolangEnvironment copy() {
+        MolangEnvironment copy = new MolangEnvironment();
+        copy.variables.putAll(variables);
+        copy.contexts.putAll(contexts);
+        copy.arrays = arrays;
+        copy.queries = this::query;
+        return copy;
+    }
+
     public boolean hasTemporary(String name) {
         return temporaries.containsKey(name);
     }

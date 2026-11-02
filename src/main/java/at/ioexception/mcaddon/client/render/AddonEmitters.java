@@ -43,6 +43,9 @@ public final class AddonEmitters {
 
     private static final List<Running> RUNNING = new ArrayList<>();
 
+    /** The emitter making a particle at this moment, whose variables the particle is born with. */
+    private static Running emitting;
+
     private AddonEmitters() {
     }
 
@@ -141,6 +144,15 @@ public final class AddonEmitters {
             environment.setVariable(prefix + i,
                 MolangValue.of(ThreadLocalRandom.current().nextFloat()));
         }
+    }
+
+    /**
+     * The variables a particle starts with: the emitter's as they stand at its birth, so it reads
+     * what the emitter's own expressions set and `v.emitter_age` as of that moment. A particle made
+     * by no emitter of this mod starts with none.
+     */
+    public static MolangEnvironment birthScope() {
+        return emitting == null ? new MolangEnvironment() : emitting.environment.copy();
     }
 
     /** Writes each curve's answer to the Molang variable it is named after. */
@@ -283,8 +295,13 @@ public final class AddonEmitters {
         if (wanted <= 0) return;
 
         Vec3 where = effect.where();
-        for (int i = 0; i < Math.min(wanted, 256); i++) {
-            Minecraft.getInstance().level.addParticle(effect.type, where.x, where.y, where.z, 0, 0, 0);
+        emitting = effect;
+        try {
+            for (int i = 0; i < Math.min(wanted, 256); i++) {
+                Minecraft.getInstance().level.addParticle(effect.type, where.x, where.y, where.z, 0, 0, 0);
+            }
+        } finally {
+            emitting = null;
         }
         effect.made += wanted;
     }

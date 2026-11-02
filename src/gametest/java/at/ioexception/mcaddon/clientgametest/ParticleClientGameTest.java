@@ -53,6 +53,7 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             javas(context, world);
             trail(context, world);
             curves(context, world);
+            scoped(context, world);
         }
     }
 
@@ -220,6 +221,20 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         Worlds.waitForClient(context, client -> Born.of("tp:burst").size() >= 2 * BURST_COUNT, PATIENCE,
             () -> "tp:ember_trail starts tp:burst as it is created and again two seconds in, from its own"
                 + " timeline, and " + Born.of("tp:burst").size() + " burst particles were made.");
+    }
+
+    /**
+     * `tp:sized` sets `variable.size` to a half in its emitter's `creation_expression` and sizes its
+     * billboard by it, so its particle reads the emitter's variables.
+     */
+    private static void scoped(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:sized ~ ~1 ~3");
+        Worlds.waitForClient(context, client -> !Born.of("tp:sized").isEmpty(), PATIENCE,
+            () -> "tp:sized emits one particle at once and none was made.");
+        Born.Particle sized = Born.of("tp:sized").get(0);
+        float size = context.computeOnClient(client -> Born.drawn(sized.particle(), Worlds.camera(client)).size());
+        Assert.near(size, 0.5f, 1e-4, "the size tp:sized's particle reads from the variable its emitter set");
     }
 
     /** Each of the four channels within one step of the colour asked for. */
