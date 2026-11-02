@@ -259,7 +259,8 @@ class ParticleDefinitionTest {
               {"event": "plain"}, {"event": "slow", "min_speed": 0.5}, {"event": "fast", "min_speed": 5}
             ]}}
             """).particle().collision().events();
-        assertEquals(List.of(2f, 2f, 5f), listed.stream().map(ParticleDefinition.Particle.Impact::minimumSpeed).toList());
+        assertEquals(List.of(2f, 2f, 5f),
+            listed.stream().map(ParticleDefinition.Particle.Impact::minimumSpeed).toList());
 
         List<ParticleDefinition.Particle.Impact> single = effect("""
             {"minecraft:particle_motion_collision": {"events": {"event": "landed"}}}
