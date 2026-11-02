@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
 import at.ioexception.mcaddon.pack.SemVer;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -57,10 +58,10 @@ public final class ClientEntityParser {
             statements(scripts, "pre_animation"),
             statements(scripts, "parent_setup"),
             published(scripts.get("variables")),
-            expression(scripts, "scale"),
-            expression(scripts, "scaleX", "scalex"),
-            expression(scripts, "scaleY", "scaley"),
-            expression(scripts, "scaleZ", "scalez"),
+            scale(scripts, "scale"),
+            scale(scripts, "scaleX", "scalex"),
+            scale(scripts, "scaleY", "scaley"),
+            scale(scripts, "scaleZ", "scalez"),
             SpawnEggAppearance.tryFrom(name, json));
     }
 
@@ -82,6 +83,25 @@ public final class ClientEntityParser {
         for (String field : fields) {
             JsonElement value = json.get(field);
             if (value != null && !value.isJsonNull()) return MolangParser.parse(value);
+        }
+        return null;
+    }
+
+    /**
+     * A scale field, left out and reported where it does not parse.
+     *
+     * Mojang's wither writes the name of a clip there and Bedrock draws it at its own size, so a
+     * scale that does not parse counts as none rather than as 0.
+     */
+    private static MolangExpression scale(JsonObject json, String... fields) {
+        for (String field : fields) {
+            JsonElement value = json.get(field);
+            if (value == null || value.isJsonNull()) continue;
+            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) return MolangParser.parse(value);
+
+            MolangExpression parsed = MolangParser.tryParse(value.getAsString());
+            if (parsed == null) AddonEntities.unsupported("client entity scripts " + field + " that does not parse");
+            return parsed;
         }
         return null;
     }

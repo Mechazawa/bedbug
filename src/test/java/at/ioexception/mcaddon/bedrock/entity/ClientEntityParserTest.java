@@ -47,6 +47,17 @@ class ClientEntityParserTest {
         assertFalse(read("{\"scripts\": {\"should_update_effects_offscreen\": \"0.0\"}}").runsOffscreen());
     }
 
+    /** Mojang's wither writes a clip's name as its scale, which does not parse and counts as none. */
+    @Test
+    void aScaleThatDoesNotParseCountsAsNone() {
+        ClientEntityDefinition definition = read("""
+            {"scripts": {"scale": "animation.wither_boss.scale", "scaleY": "2.0"}}
+            """);
+
+        assertNull(definition.scale());
+        assertEquals(2f, definition.scaleY().asFloat(new MolangEnvironment()));
+    }
+
     /** A pack drawing several geometries names the one its bone queries are answered from. */
     @Test
     void answersBoneQueriesFromTheGeometryThePackNames() {
