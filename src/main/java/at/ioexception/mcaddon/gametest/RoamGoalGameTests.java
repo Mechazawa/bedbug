@@ -326,13 +326,14 @@ public final class RoamGoalGameTests {
         }
 
         Vec3 from = wandering.position();
-        Vec3 stays = content.position();
         double[] furthest = {0};
+        // The wandering roamer may bump the content one aside, so the content one is read by
+        // whether it planned a walk rather than by where it stands.
         helper.onEachTick(() -> {
             furthest[0] = Math.max(furthest[0], wandering.position().distanceTo(from));
             helper.assertTrue(furthest[0] <= WANDER_REACH,
                 ROAMER + " picks blocks five blocks off and wandered " + furthest[0] + " blocks.");
-            helper.assertTrue(content.position().distanceTo(stays) < STILL,
+            helper.assertTrue(content.getNavigation().isDone(),
                 ROAMER + " counts eight blocks as there and set off for a block five blocks off.");
         });
         helper.runAfterDelay(WALK_TICKS - 10, () -> {
