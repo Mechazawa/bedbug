@@ -3,7 +3,6 @@ package at.ioexception.mcaddon.bedrock.behaviour;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
-import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
@@ -163,15 +162,7 @@ public record BlockDefinition(String identifier, Map<String, String> faceTexture
         JsonObject merged = components.deepCopy();
         if (permutations.isEmpty()) return merged;
 
-        MolangEnvironment environment = new MolangEnvironment();
-        environment.setQueries((query, arguments) -> {
-            if (!query.equals("block_state") || arguments.isEmpty()) return MolangValue.ZERO;
-            JsonElement value = chosen.get(arguments.get(0).text());
-            if (value == null || !value.isJsonPrimitive()) return MolangValue.ZERO;
-            if (value.getAsJsonPrimitive().isBoolean()) return MolangValue.of(value.getAsBoolean());
-            if (value.getAsJsonPrimitive().isNumber()) return MolangValue.of(value.getAsDouble());
-            return MolangValue.of(value.getAsString());
-        });
+        MolangEnvironment environment = BlockStateQueries.of(chosen).environment();
 
         for (Permutation permutation : permutations) {
             if (!MolangParser.parse(permutation.condition()).evaluate(environment).truthy()) continue;

@@ -4,11 +4,11 @@ import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.BedrockAssets;
 import at.ioexception.mcaddon.bedrock.ClientBlockDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.BlockStateQueries;
 import at.ioexception.mcaddon.bedrock.model.BedrockGeometry;
 import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
-import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.bedrock.particle.ParticleDefinition;
 import at.ioexception.mcaddon.block.AddonBlock;
 import at.ioexception.mcaddon.block.BlockComponents;
@@ -1448,15 +1448,7 @@ public final class PackConverter {
         Map<String, String> textureKeys, Map<String, ClientBlockDefinition> appearance) {
         Map<String, String> faces = resolveFaces(declaredFaces(block, appearance), textureKeys);
 
-        MolangEnvironment environment = new MolangEnvironment();
-        environment.setQueries((query, arguments) -> {
-            if (!query.equals("block_state") || arguments.isEmpty()) return MolangValue.ZERO;
-            JsonElement value = states.get(arguments.get(0).text());
-            if (value == null || !value.isJsonPrimitive()) return MolangValue.ZERO;
-            if (value.getAsJsonPrimitive().isBoolean()) return MolangValue.of(value.getAsBoolean());
-            if (value.getAsJsonPrimitive().isNumber()) return MolangValue.of(value.getAsDouble());
-            return MolangValue.of(value.getAsString());
-        });
+        MolangEnvironment environment = BlockStateQueries.of(states).environment();
 
         for (BlockDefinition.Permutation permutation : block.permutations()) {
             if (!MolangParser.parse(permutation.condition()).evaluate(environment).truthy()) continue;
