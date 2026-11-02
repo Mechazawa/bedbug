@@ -695,47 +695,52 @@ public final class AddonItems {
     /**
      * Mining speed per block, from the speeds `minecraft:digger` lists.
      *
-     * Before 1.20.5 a tool's speed came from its material, which a data-driven item has none of.
+     * An entry may test the block's tags in Molang, and from 26 the rules are built on each data
+     * load, against the tags that load brings. Before 1.20.5 a tool's speed came from its material,
+     * which a data-driven item has none of.
      */
     private static Item.Properties digger(ItemDefinition definition, Item.Properties properties) {
         if (definition.destroySpeeds().isEmpty()) return properties;
 
         //? if >=26 {
-        return properties.component(net.minecraft.core.component.DataComponents.TOOL,
-            new net.minecraft.world.item.component.Tool(rules(definition), 1f,
-                definition.durability() > 0 ? 1 : 0,
-                definition.declaredTrue("minecraft:can_destroy_in_creative")));
+        return properties.delayedComponent(net.minecraft.core.component.DataComponents.TOOL, registries -> {
+            net.minecraft.core.HolderLookup.RegistryLookup<Block> blocks =
+                registries.lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK);
+            List<net.minecraft.world.item.component.Tool.Rule> rules = definition.destroySpeeds().stream()
+                .map(speed -> rule(blocks.listElements()
+                    .filter(block -> speed.block().names(block,
+                        tag -> blocks.get(tag).map(members -> members.contains(block)).orElse(false)))
+                    .<net.minecraft.core.Holder<Block>>map(block -> block)
+                    .toList(), speed.speed()))
+                .filter(java.util.Objects::nonNull)
+                .toList();
+            return new net.minecraft.world.item.component.Tool(rules, 1f, definition.durability() > 0 ? 1 : 0,
+                definition.declaredTrue("minecraft:can_destroy_in_creative"));
+        });
         //?} else if >=1.21 {
         /*return properties.component(net.minecraft.core.component.DataComponents.TOOL,
-            new net.minecraft.world.item.component.Tool(rules(definition), 1f,
-                definition.durability() > 0 ? 1 : 0));
+            new net.minecraft.world.item.component.Tool(definition.destroySpeeds().stream()
+                .map(speed -> rule(speed.block().blocks()
+                    .<net.minecraft.core.Holder<Block>>map(Block::builtInRegistryHolder)
+                    .toList(), speed.speed()))
+                .filter(java.util.Objects::nonNull)
+                .toList(), 1f, definition.durability() > 0 ? 1 : 0));
         *///?} else {
         /*return properties;
         *///?}
     }
 
     //? if >=1.21 {
-    /** The blocks a digger names, as the rules Java matches a block being broken against. */
-    private static List<net.minecraft.world.item.component.Tool.Rule> rules(ItemDefinition definition) {
-        return definition.destroySpeeds().stream()
-            .map(AddonItems::rule)
-            .filter(java.util.Objects::nonNull)
-            .toList();
-    }
-
     /**
-     * One speed entry as a rule, or null where the game has no block under that name.
-     *
-     * An entry whose block is a Molang tag query never reaches here, so every rule built names one
-     * block and marks it as one this item mines the drops of, which is what a Bedrock digger does.
+     * One speed entry as a rule, or null where no block answers it. Every rule marks its blocks as
+     * ones this item mines the drops of, which is what a Bedrock digger does.
      */
-    private static net.minecraft.world.item.component.Tool.Rule rule(ItemDefinition.DestroySpeed speed) {
-        Block block = blockNamed(speed.block());
-        if (block == null) return null;
+    private static net.minecraft.world.item.component.Tool.Rule rule(List<net.minecraft.core.Holder<Block>> blocks,
+        float speed) {
+        if (blocks.isEmpty()) return null;
 
-        return new net.minecraft.world.item.component.Tool.Rule(
-            net.minecraft.core.HolderSet.direct(block.builtInRegistryHolder()),
-            java.util.Optional.of(speed.speed()), java.util.Optional.of(true));
+        return new net.minecraft.world.item.component.Tool.Rule(net.minecraft.core.HolderSet.direct(blocks),
+            java.util.Optional.of(speed), java.util.Optional.of(true));
     }
     //?}
 
@@ -984,13 +989,9 @@ public final class AddonItems {
         String name = definition.text(component, field);
         if (name == null) return null;
 
-        Block block = blockNamed(name);
+        Block block = AddonBlocks.named(name);
         if (block == null) AddonEntities.unsupported(component);
         return block;
-    }
-
-    private static Block blockNamed(String name) {
-        return AddonBlocks.named(name);
     }
 
     private static Item itemNamed(String name) {

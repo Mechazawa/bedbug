@@ -1,6 +1,11 @@
 package at.ioexception.mcaddon.bedrock.behaviour;
 
 import at.ioexception.mcaddon.pack.BedrockPack;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -135,18 +140,35 @@ class ItemDefinitionTest {
         assertEquals(expected, item(components).durability());
     }
 
-    /** A speed entry whose block is a Molang tag query names no fixed block to answer with. */
+    /**
+     * A digger entry keeps its block descriptor in each shape: a bare name, a `name` object and a
+     * Molang test of the block's tags, which answers for each block by the tags it is in.
+     */
     @Test
-    void keepsOnlyTheDiggerEntriesThatNameABlock() throws IOException {
+    void readsEveryShapeOfDiggerBlock() throws IOException {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
         ItemDefinition item = item("""
             {"minecraft:digger": {"destroy_speeds": [
                 {"block": "minecraft:stone", "speed": 6},
-                {"block": {"tags": "q.any_tag('stone')"}, "speed": 4},
-                {"block": "minecraft:dirt"}]}}
+                {"block": {"tags": "q.any_tag('minecraft:logs')"}, "speed": 4},
+                {"block": {"name": "minecraft:dirt"}}]}}
             """);
 
-        assertEquals(List.of(new ItemDefinition.DestroySpeed("minecraft:stone", 6f),
-            new ItemDefinition.DestroySpeed("minecraft:dirt", 1f)), item.destroySpeeds());
+        List<ItemDefinition.DestroySpeed> speeds = item.destroySpeeds();
+        assertEquals(List.of(6f, 4f, 1f), speeds.stream().map(ItemDefinition.DestroySpeed::speed).toList());
+        assertTrue(digs(speeds.get(0), Blocks.STONE));
+        assertFalse(digs(speeds.get(0), Blocks.DIRT));
+        assertTrue(digs(speeds.get(1), Blocks.OAK_LOG));
+        assertFalse(digs(speeds.get(1), Blocks.STONE));
+        assertTrue(digs(speeds.get(2), Blocks.DIRT));
+        assertFalse(digs(speeds.get(2), Blocks.OAK_LOG));
+    }
+
+    /** Whether the entry names the block, with only the oak log in Java's log tag. */
+    private static boolean digs(ItemDefinition.DestroySpeed speed, Block block) {
+        return speed.block().names(block.builtInRegistryHolder(),
+            tag -> tag.equals(BlockTags.LOGS) && block == Blocks.OAK_LOG);
     }
 
     /** Each repair entry holds its own list of items, and a bare name stands for a list of one. */

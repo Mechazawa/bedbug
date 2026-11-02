@@ -62,6 +62,19 @@
             "3"
           ]
         }
+      },
+      "tp:abacus_picky": {
+        "minecraft:behavior.pickup_items": {
+          "priority": 0,
+          "max_dist": 6,
+          "goal_radius": 2,
+          "can_pickup_any_item": true,
+          "excluded_items": [
+            {
+              "tags": "q.any_tag('minecraft:is_sword')"
+            }
+          ]
+        }
       }
     },
     "components": {
@@ -117,6 +130,13 @@
       "tp:abacus_toggle": {
         "set_property": {
           "tp:flag": "!q.property('tp:flag')"
+        }
+      },
+      "tp:abacus_make_picky": {
+        "add": {
+          "component_groups": [
+            "tp:abacus_picky"
+          ]
         }
       }
     }

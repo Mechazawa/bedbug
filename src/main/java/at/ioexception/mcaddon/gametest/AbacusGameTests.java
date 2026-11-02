@@ -7,7 +7,10 @@ import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.ExperienceOrb;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /** The Molang a behaviour pack writes into an entity's components and events, read through `tp:abacus`. */
 public final class AbacusGameTests {
@@ -104,6 +107,40 @@ public final class AbacusGameTests {
                 assertProperty(helper, abacus, "tp:flag", false);
             })
             .thenSucceed();
+    }
+
+    /**
+     * An item descriptor testing tags in Molang excludes the items in those tags: a mob picking up
+     * anything but swords walks past the sword lying nearer and takes the apple.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 140)
+    public void anExcludedItemsTagTestLeavesASwordOnTheFloor(GameTestHelper helper) {
+        AddonEntity abacus = BehaviourGameTests.spawn(helper, ABACUS);
+        if (abacus == null) {
+            helper.succeed();
+            return;
+        }
+
+        raise(abacus, "tp:abacus_make_picky");
+        abacus.setNoAi(false);
+        ItemEntity[] sword = new ItemEntity[1];
+        helper.startSequence()
+            .thenExecuteAfter(20, () -> {
+                sword[0] = drop(helper, abacus, 1, new ItemStack(Items.IRON_SWORD));
+                drop(helper, abacus, 3, new ItemStack(Items.APPLE));
+            })
+            .thenWaitUntil(() -> helper.assertTrue(abacus.getMainHandItem().is(Items.APPLE),
+                ABACUS + " never took the apple and holds " + abacus.getMainHandItem() + "."))
+            .thenExecute(() -> helper.assertTrue(sword[0].isAlive(), ABACUS + " took the excluded sword."))
+            .thenSucceed();
+    }
+
+    private static ItemEntity drop(GameTestHelper helper, AddonEntity abacus, int away, ItemStack stack) {
+        ItemEntity dropped =
+            new ItemEntity(helper.getLevel(), abacus.getX() + away, abacus.getY(), abacus.getZ(), stack);
+        dropped.setNoPickUpDelay();
+        helper.getLevel().addFreshEntity(dropped);
+        return dropped;
     }
 
     private static void assertProperty(GameTestHelper helper, AddonEntity abacus, String name, Object expected) {

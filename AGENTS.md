@@ -3029,6 +3029,13 @@ is checked in one tick, which is its default.
   as the Bedrock wiki says. The answer takes the type (an `int` drops its fraction) and is clamped
   to the range. An enum answer it does not hold, or no value at all, is its first value; Mojang
   publishes nothing on either. A default is answered once, as the entity is first seen.
+- `bedrock.behaviour.Descriptor` is a block or item descriptor in each of Mojang's shapes: a bare
+  name, `name` (or an item's `item`) with a block's `states`, or `tags`, Molang that
+  `query.all_tags` and `query.any_tag` answer. A block's tags are Java's block tags under the name
+  the pack wrote; an item's go through `BedrockItemTags`. `Goals.blocks` stands a tag test for every
+  block passing it when the goal is built. A `minecraft:digger` rule is built on each data load
+  from 26, against the tags that load brings. A pack block's own `tag:` components are not tags
+  here, and `navigation.*` `blocks_to_avoid` is not read.
 
 ## Conventions
 

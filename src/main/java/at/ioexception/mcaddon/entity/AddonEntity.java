@@ -1472,19 +1472,11 @@ public class AddonEntity extends PathfinderMob
         return Math.max(0, cap - held);
     }
 
-    /** Whether an item list a component carries names this stack, in either spelling of an entry. */
+    /** Whether an item list a component carries names this stack, in any shape of item descriptor. */
     static boolean named(com.google.gson.JsonObject body, String field,
         net.minecraft.world.item.ItemStack stack) {
-        java.util.List<com.google.gson.JsonElement> listed =
-            at.ioexception.mcaddon.util.Json.list(body, field);
-        if (listed.isEmpty()) return false;
-
-        String id = AddonItems.identifierOf(stack.getItem());
-        return listed.stream()
-            .map(entry -> entry.isJsonObject()
-                ? at.ioexception.mcaddon.util.Json.text(entry.getAsJsonObject(), "item", null)
-                : entry.isJsonPrimitive() ? entry.getAsString() : null)
-            .anyMatch(name -> names(name, id));
+        return at.ioexception.mcaddon.bedrock.behaviour.Descriptor.listed(body, field).stream()
+            .anyMatch(descriptor -> descriptor.matches(stack));
     }
 
     /**
