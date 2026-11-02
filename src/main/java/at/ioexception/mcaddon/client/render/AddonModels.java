@@ -55,7 +55,8 @@ public final class AddonModels {
     /**
      * One pass: a baked model, the texture to draw it with, the bones it draws and its tint.
      *
-     * `visibility` hides a bone and everything hanging off it. `owned` names the bones whose own
+     * `visibility` hides a bone's own boxes and leaves its children to their own rules, which is how
+     * Mojang's creaking hides `*` and draws its `head` under the hidden `upperBody`. `owned` names the bones whose own
      * boxes this pass draws, because a controller giving one bone a material of its own draws that
      * bone in a pass of its own while its children may still belong to this one.
      *

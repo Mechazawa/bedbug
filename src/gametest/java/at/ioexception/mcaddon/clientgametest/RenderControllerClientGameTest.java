@@ -96,7 +96,25 @@ public final class RenderControllerClientGameTest implements FabricClientGameTes
             maskedMarkers(context, world);
             vanillaSignTexture(context, world);
             boneMaterials(context, world);
+            hiddenParent(context, world);
         }
+    }
+
+    /**
+     * A bone `part_visibility` hides keeps drawing the children a later rule shows.
+     *
+     * `tp:wick` draws the sprite geometry under `{"*": false}, {"spark": true}`, the way Mojang's
+     * creaking draws its head under a hidden `upperBody`. The spark hangs off the hidden body, so the
+     * pass has to carry the spark's box over the body's top and nothing of the body under it.
+     */
+    private static void hiddenParent(ClientGameTestContext context, TestSingleplayerContext world) {
+        world.getServer().runCommand("summon tp:wick ~ ~ ~-5 {NoAI:1b}");
+        AddonEntity wick = Entities.waitForClient(context, "tp:wick");
+        Submitted frame = Frames.waitFor(context, wick, drawn -> !drawn.geometry().isEmpty(),
+            "tp:wick shows its spark under a hidden body, and nothing was drawn for it.");
+        Submitted.Geometry spark = frame.geometry().get(0);
+        Assert.that(!spark.vertices().isEmpty() && everyVertex(spark, vertex -> vertex.y() >= BODY_TOP - TOLERANCE),
+            "tp:wick should draw its spark alone, over " + BODY_TOP + ", and reached " + spark.box() + ".");
     }
 
     /**
