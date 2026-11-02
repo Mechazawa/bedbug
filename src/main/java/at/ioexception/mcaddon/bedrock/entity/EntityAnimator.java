@@ -239,6 +239,7 @@ public final class EntityAnimator {
             break;
         }
         player.scopeFinishedTo(null);
+        for (AnimationController.Variable variable : state.variables()) variable.apply(environment);
 
         // A crossing is shaped by the state being left, whose blend_transition decides how long it
         // takes, so both sides of it take the short way round when that state asks for it.

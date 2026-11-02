@@ -1644,12 +1644,11 @@ public class AddonEntity extends PathfinderMob
             aboard.add(rider.getUUID());
             com.google.gson.JsonObject seat = seatOf(rider);
             com.google.gson.JsonElement turn = seat == null ? null : seat.get("rotate_rider_by");
-            if (turn == null || !turn.isJsonPrimitive()) continue;
+            if (turn == null || turn.isJsonNull()) continue;
 
             positionRider(rider);
             at.ioexception.mcaddon.bedrock.molang.MolangExpression expression = seatTurns.computeIfAbsent(turn,
-                written -> at.ioexception.mcaddon.bedrock.molang.MolangParser.parse(
-                    written.getAsJsonPrimitive().isNumber() ? (Object) written.getAsDouble() : written.getAsString()));
+                at.ioexception.mcaddon.bedrock.molang.MolangParser::parse);
             turns.put(rider.getId(), expression.asFloat(riderQuestions(rider)));
         }
         riderQuestions.keySet().retainAll(aboard);

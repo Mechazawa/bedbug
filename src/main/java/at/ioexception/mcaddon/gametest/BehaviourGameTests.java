@@ -1838,6 +1838,30 @@ public final class BehaviourGameTests {
         });
     }
 
+    /**
+     * `tp:herald`'s chime state plays a quarter second clip and leaves on
+     * `query.all_animations_finished`, beside a ten second loop its animate list runs. The query
+     * answers for the state's own clips, so the loop does not hold the state.
+     */
+    @GameTest()
+    public void aStateLeavesOnceItsOwnClipsHaveFinished(GameTestHelper helper) {
+        AddonEntity herald = spawn(helper, HERALD);
+        if (herald == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.runAfterDelay(RUNG_TICKS, () -> {
+            helper.assertTrue(Platform.tagsOf(herald).contains("tp_herald_rung"),
+                HERALD + " did not leave its chime state once its own clip had finished: "
+                    + Platform.tagsOf(herald));
+            helper.succeed();
+        });
+    }
+
+    /** Past the chime's quarter second, and far short of the hum's ten. */
+    private static final int RUNG_TICKS = 15;
+
     private static final String HERALD = "tp:herald";
     private static final String WISP = "tp:wisp";
 

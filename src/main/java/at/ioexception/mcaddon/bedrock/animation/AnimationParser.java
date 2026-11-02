@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.bedrock.animation;
 
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
+import at.ioexception.mcaddon.registry.AddonEntities;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -46,10 +47,10 @@ public final class AnimationParser {
             name,
             declared >= 0 ? declared : lastMoment(bones, timeline, sounds, particles),
             readLoop(json.get("loop")),
-            json.has("loop_delay") ? MolangParser.parse(primitive(json.get("loop_delay"))) : null,
-            json.has("start_delay") ? MolangParser.parse(primitive(json.get("start_delay"))) : null,
-            json.has("blend_weight") ? MolangParser.parse(primitive(json.get("blend_weight"))) : null,
-            json.has("anim_time_update") ? MolangParser.parse(primitive(json.get("anim_time_update"))) : null,
+            json.has("loop_delay") ? MolangParser.parse(json.get("loop_delay")) : null,
+            json.has("start_delay") ? MolangParser.parse(json.get("start_delay")) : null,
+            json.has("blend_weight") ? MolangParser.parse(json.get("blend_weight")) : null,
+            json.has("anim_time_update") ? MolangParser.parse(json.get("anim_time_update")) : null,
             json.has("override_previous_animation") && json.get("override_previous_animation").getAsBoolean(),
             Map.copyOf(bones),
             List.copyOf(timeline),
@@ -156,10 +157,10 @@ public final class AnimationParser {
         List<MolangExpression> statements = new ArrayList<>();
         if (json.isJsonArray()) {
             for (JsonElement statement : json.getAsJsonArray()) {
-                statements.add(MolangParser.parse(statement.getAsString()));
+                statements.add(MolangParser.parse(statement));
             }
         } else {
-            statements.add(MolangParser.parse(json.getAsString()));
+            statements.add(MolangParser.parse(json));
         }
         return List.copyOf(statements);
     }
@@ -190,7 +191,8 @@ public final class AnimationParser {
     private static AnimationChannel readChannel(JsonElement json, float limit) {
         if (json == null || json.isJsonNull()) return new AnimationChannel(List.of());
 
-        if (json.isJsonObject() && !isKeyframeValue(json.getAsJsonObject())) {
+        if (json.isJsonObject() && !isKeyframeValue(json.getAsJsonObject())
+            && !json.getAsJsonObject().has("expression")) {
             List<Keyframe> keyframes = new ArrayList<>();
             for (Map.Entry<String, JsonElement> frame : json.getAsJsonObject().entrySet()) {
                 float time = Float.parseFloat(frame.getKey());
@@ -235,23 +237,32 @@ public final class AnimationParser {
             JsonArray array = json.getAsJsonArray();
             // A single entry means the same value on all three axes, which Bedrock allows for scale.
             if (array.size() == 1) {
-                MolangExpression all = MolangParser.parse(primitive(array.get(0)));
+                MolangExpression all = component(array.get(0));
                 return new Vector3Expression(all, all, all);
             }
             return new Vector3Expression(
-                MolangParser.parse(primitive(array.get(0))),
-                MolangParser.parse(primitive(array.get(1))),
-                MolangParser.parse(primitive(array.get(2))));
+                component(array.get(0)),
+                component(array.get(1)),
+                component(array.get(2)));
         }
 
-        MolangExpression all = MolangParser.parse(primitive(json));
+        MolangExpression all = component(json);
         return new Vector3Expression(all, all, all);
     }
 
-    /** Keyframe components come through as either a number or a Molang string. */
-    private static Object primitive(JsonElement json) {
-        if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isNumber()) return json.getAsDouble();
-        return json.getAsString();
+    /**
+     * One keyframe component, written as any form of a Molang expression.
+     *
+     * A rotation may also write an element as an object naming one axis, as Mojang's squid does.
+     * Mojang publishes the shape and nothing on what it means. The squid names `y`, `x` and `y` in
+     * turn, which may be three turns applied in order. Such a clip is reported and left out.
+     */
+    private static MolangExpression component(JsonElement json) {
+        if (json.isJsonObject() && !json.getAsJsonObject().has("expression")) {
+            AddonEntities.unsupported("animation rotation written per axis");
+            throw new IllegalArgumentException("a rotation element written per axis");
+        }
+        return MolangParser.parse(json);
     }
 
 }
