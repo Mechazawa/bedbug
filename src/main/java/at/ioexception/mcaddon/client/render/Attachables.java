@@ -144,41 +144,49 @@ public final class Attachables {
     }
 
     /**
-     * The first attachable offered for the item whose own condition holds.
+     * The attachable drawn for the item: the first whose own condition holds, else the first naming
+     * the item with no condition.
      *
      * A condition is asked of the attachable's own scope, where `query.owner_identifier` names the
      * entity carrying it, which is how a pack dresses a player in one model and everything else in
-     * another. An attachable naming the item without a condition always applies.
+     * another. Mojang ships such pairs as `diamond_helmet.json` with no condition beside
+     * `diamond_helmet.player.json` asking for the player, so the one whose condition holds is the
+     * more particular answer whichever file was read first. Only the chosen one's clock moves.
      */
-    private static Chosen choose(LivingEntity entity, String item,
-        String itemSlot, float partialTick) {
-        for (AddonClientAssets.Binding binding : AddonClientAssets.attachablesFor(item)) {
-            EntityAnimator animator = animatorOf(entity, binding, item, itemSlot, partialTick);
-            if (animator == null) continue;
+    private static Chosen choose(LivingEntity entity, String item, String itemSlot, float partialTick) {
+        List<AddonClientAssets.Binding> offered = AddonClientAssets.attachablesFor(item);
+        AddonClientAssets.Binding picked = offered.stream()
+            .filter(binding -> holds(entity, binding, item, itemSlot, partialTick))
+            .findFirst()
+            .or(() -> offered.stream().filter(binding -> binding.definition().items().get(item) == null).findFirst())
+            .orElse(null);
+        if (picked == null) return null;
 
-            MolangExpression condition = binding.definition().items().get(item);
-            if (condition == null || condition.evaluate(animator.environment()).truthy()) {
-                return new Chosen(binding, animator);
-            }
-        }
-        return null;
+        EntityAnimator animator = Animators.of(entity, picked, keyOf(item, picked), itemSlot, partialTick,
+            entity.tickCount + partialTick);
+        animator.environment().setContext("owning_entity", MolangValue.of(new EntityReference(entity)));
+        return new Chosen(picked, animator);
+    }
+
+    private static boolean holds(LivingEntity entity, AddonClientAssets.Binding binding, String item,
+        String itemSlot, float partialTick) {
+        MolangExpression condition = binding.definition().items().get(item);
+        if (condition == null) return false;
+
+        EntityAnimator standing = Animators.standing(entity, binding, keyOf(item, binding), itemSlot, partialTick,
+            entity.tickCount + partialTick);
+        standing.environment().setContext("owning_entity", MolangValue.of(new EntityReference(entity)));
+        return condition.evaluate(standing.environment()).truthy();
     }
 
     /**
-     * The animator running one attachable on one entity, linked to whoever is carrying it.
+     * What an attachable's animator is kept under for one entity.
      *
-     * Keyed by the attachable's own identifier beside the item, because two packs may both dress
-     * the same item and each needs a clock and a set of variables of its own.
+     * The attachable's own identifier goes beside the item, because two packs may both dress the
+     * same item and each needs a clock and a set of variables of its own.
      */
-    private static EntityAnimator animatorOf(LivingEntity entity,
-        AddonClientAssets.Binding binding, String item, String itemSlot, float partialTick) {
-        EntityAnimator animator = Animators.of(entity, binding,
-            item + "#" + binding.definition().identifier(), itemSlot, partialTick,
-            entity.tickCount + partialTick);
-        if (animator == null) return null;
-
-        animator.environment().setContext("owning_entity", MolangValue.of(new EntityReference(entity)));
-        return animator;
+    private static String keyOf(String item, AddonClientAssets.Binding binding) {
+        return item + "#" + binding.definition().identifier();
     }
 
     /**

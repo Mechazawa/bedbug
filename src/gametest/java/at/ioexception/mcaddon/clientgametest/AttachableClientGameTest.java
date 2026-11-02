@@ -14,6 +14,7 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
 import java.util.Comparator;
+import java.util.List;
 
 /**
  * What an entity wears and holds is drawn where its own model says, and only where it allows it.
@@ -97,7 +98,40 @@ public final class AttachableClientGameTest implements FabricClientGameTest {
             boundBelowTheRoot(context, world);
             onAMob(context, world);
             onAHorse(context, world);
+            ownerPicksTheModel(context, world);
         }
+    }
+
+    /**
+     * Two attachables for a golden helmet: one naming no condition, read first, and one whose
+     * condition asks for a player. The player wears the second, three cubes, and the husk the
+     * first, one cube.
+     */
+    private static void ownerPicksTheModel(ClientGameTestContext context, TestSingleplayerContext world) {
+        world.getServer().runCommand("item replace entity @a weapon.mainhand with minecraft:air");
+        world.getServer().runCommand("item replace entity @a armor.head with minecraft:golden_helmet");
+        world.getServer().runCommand("item replace entity @e[type=minecraft:husk] weapon.mainhand with minecraft:air");
+        world.getServer().runCommand("item replace entity @e[type=minecraft:husk] armor.head"
+            + " with minecraft:golden_helmet");
+        LivingEntity husk = Entities.waitForClientLiving(context, "minecraft:husk");
+        Worlds.waitForClient(context, client -> carries(client.player, EquipmentSlot.HEAD, "minecraft:golden_helmet")
+                && client.player.getItemBySlot(EquipmentSlot.MAINHAND).isEmpty()
+                && carries(husk, EquipmentSlot.HEAD, "minecraft:golden_helmet")
+                && husk.getItemBySlot(EquipmentSlot.MAINHAND).isEmpty(), 100,
+            () -> "the golden helmets never reached the client's player and husk.");
+
+        Submitted player = posed(context, 0, 0);
+        Assert.that(player.geometry().size() == 1 && player.geometry().get(0).vertices().size() == 3 * CUBE_CORNERS,
+            () -> "the player should wear golden_helmet.player, three cubes, and was drawn with "
+                + corners(player) + " corners.");
+        Submitted mob = context.computeOnClient(client -> Submitted.living(husk));
+        Assert.that(mob.geometry().size() == 1 && mob.geometry().get(0).vertices().size() == CUBE_CORNERS,
+            () -> "the husk should wear the golden helmet with no condition, one cube, and was drawn with "
+                + corners(mob) + " corners.");
+    }
+
+    private static List<Integer> corners(Submitted frame) {
+        return frame.geometry().stream().map(piece -> piece.vertices().size()).toList();
     }
 
     /**

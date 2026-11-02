@@ -73,11 +73,29 @@ public final class Animators {
         String itemSlot, float partialTick, float ageInTicks) {
         if (binding == null) return null;
 
-        boolean attached = itemSlot != null;
-        Entry entry = ANIMATORS.computeIfAbsent(entity.getId() + "/" + key,
-            id -> Entry.of(entity, binding, attached, ageInTicks));
-        entry.advance(partialTick, ageInTicks, attached ? itemSlot : "");
+        Entry entry = entry(entity, binding, key, itemSlot, ageInTicks);
+        entry.advance(partialTick, ageInTicks, itemSlot == null ? "" : itemSlot);
         return entry.animator();
+    }
+
+    /**
+     * The same animator answering for this moment and slot, its clock left where it stood.
+     *
+     * This is what a condition choosing between several attachables for one item is asked of, so
+     * an attachable that is not drawn does not run its clips.
+     */
+    public static EntityAnimator standing(Entity entity, AddonClientAssets.Binding binding, String key,
+        String itemSlot, float partialTick, float ageInTicks) {
+        Entry entry = entry(entity, binding, key, itemSlot, ageInTicks);
+        entry.queries().setPartialTick(partialTick);
+        entry.queries().setItemSlot(itemSlot);
+        return entry.animator();
+    }
+
+    private static Entry entry(Entity entity, AddonClientAssets.Binding binding, String key, String itemSlot,
+        float ageInTicks) {
+        return ANIMATORS.computeIfAbsent(entity.getId() + "/" + key,
+            id -> Entry.of(entity, binding, itemSlot != null, ageInTicks));
     }
 
     /**
