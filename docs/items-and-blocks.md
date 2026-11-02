@@ -32,6 +32,7 @@ clicking, standing on and ticking reach the pack's callback. Both forms are read
 
 - States and permutations: each combination gets its own model. Permutation conditions are Molang.
 - A block with its own geometry keeps it, in the place Bedrock draws it.
+- The geometry's `bone_visibility` hides a bone in the states its Molang turns down.
 - A block's item has the block's name.
 - A block breaks into the texture `minecraft:destruction_particles` names, or else the texture of its
   `down` face, as in Bedrock.

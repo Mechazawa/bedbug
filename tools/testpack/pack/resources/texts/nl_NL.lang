@@ -16,6 +16,7 @@ item.tp:pebble.name=Testkiezel
 tile.tp:lamp.name=Testlamp
 tile.tp:totem.name=Testtotem
 tile.tp:pillar.name=Testpilaar
+tile.tp:crown.name=Testkroon
 entity.tp:sprite.name=Testgeest
 entity.tp:ember.name=Testsintel
 item.spawn_egg.entity.tp:sprite.name=Testgeest oproepen

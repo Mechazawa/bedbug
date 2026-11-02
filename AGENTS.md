@@ -828,6 +828,14 @@ These are the checks it runs, and what each one catches:
   `step` in its body, which the script registers and answers by tagging whoever used the item with
   that step.
 
+  **`bone_visibility` is applied per state model.** `BlockDefinition.drawsBone` evaluates each
+  bone's Molang (or boolean) against the state's values, and `BlockGeometry.elements` leaves out the
+  cubes of a bone that comes out false. Mojang does not say whether a hidden bone hides its children
+  or how names compare, so here a hidden bone hides its own cubes only and names compare without
+  regard to case, as `part_visibility` does on entities. The default model and the block's item take
+  each state's first value. `tp:crown` shows its cap only at `tp:uses` 2 and never its rim, and
+  `PackGameTests.aBlockGeometryDrawsABoneOnlyInTheStatesItsVisibilityNames` counts the cubes.
+
   **Bedrock's block geometry is centred on the block.** A full block's cube has the origin
   `[-8, 0, -8]`, where Java's block model runs from 0 to 16, so `BlockGeometry` moves every corner
   and pivot half a block on X and Z. The lamp's geometry is written in Bedrock's frame (its post at

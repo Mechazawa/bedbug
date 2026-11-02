@@ -544,6 +544,43 @@ public final class PackGameTests {
         helper.succeed();
     }
 
+    /**
+     * A block geometry's `bone_visibility` decides per state which bones reach the model.
+     *
+     * The crown's base is one cube, its cap two and its rim one. The cap is shown while `tp:uses` is
+     * 2 and the rim, named in other capitals than the bone, never.
+     */
+    @GameTest()
+    public void aBlockGeometryDrawsABoneOnlyInTheStatesItsVisibilityNames(GameTestHelper helper) {
+        ConvertedPack pack = ActiveAddons.active().converted().stream()
+            .filter(one -> Files.isRegularFile(crownModel(one, "crown")))
+            .findFirst().orElse(null);
+        if (pack == null) {
+            helper.succeed();
+            return;
+        }
+
+        for (int uses = 0; uses < 4; uses++) {
+            int elements;
+            try {
+                String model = Files.readString(crownModel(pack, "crown_" + uses));
+                elements = com.google.gson.JsonParser.parseString(model).getAsJsonObject().getAsJsonArray("elements").size();
+            } catch (IOException unreadable) {
+                helper.fail("The converted crown model could not be read: " + unreadable.getMessage());
+                return;
+            }
+            int expected = uses == 2 ? 3 : 1;
+            helper.assertTrue(elements == expected, "The crown with " + uses + " uses draws " + elements
+                + " cubes where its bone visibility leaves " + expected + ".");
+        }
+        helper.succeed();
+    }
+
+    private static Path crownModel(ConvertedPack pack, String name) {
+        return pack.root().resolve("assets").resolve("tp").resolve("models").resolve("block")
+            .resolve(name + ".json");
+    }
+
     /** The turn about the vertical axis the lamp's geometry gives its item in the inventory. */
     private static final float GUI_TURN = 45f;
 
