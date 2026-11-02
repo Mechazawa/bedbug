@@ -146,8 +146,8 @@ public class MolangEnvironment {
     public MolangValue element(String array, int index) {
         List<MolangValue> values = arrays.get(array.toLowerCase(Locale.ROOT));
         if (values == null || values.isEmpty()) return MolangValue.ZERO;
-        // Bedrock clamps an out of range index rather than failing to draw.
-        return values.get(Math.min(Math.max(index, 0), values.size() - 1));
+        // Molang.html: a negative index is clamped at zero and one past the end wraps by the size.
+        return values.get(Math.max(index, 0) % values.size());
     }
 
     public void clearTemporaries() {

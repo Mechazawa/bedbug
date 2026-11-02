@@ -61,4 +61,16 @@ class RenderControllerParserTest {
 
         assertEquals("dyed", controller.textures().get(0).evaluate(environment).text());
     }
+
+    @Test
+    void anIndexPastTheEndWrapsAndANegativeOneIsClamped() {
+        RenderController controller = read("""
+            { "arrays": { "textures": { "Array.skins": [ "Texture.a", "Texture.b", "Texture.c" ] } },
+              "textures": [ "Array.skins[4]", "Array.skins[-2]", "Array.skins[2.9]" ] }""");
+        MolangEnvironment environment = new MolangEnvironment();
+        environment.setArrays(controller.arrays());
+
+        assertEquals(List.of("b", "a", "c"), controller.textures().stream()
+            .map(texture -> texture.evaluate(environment).text()).toList());
+    }
 }
