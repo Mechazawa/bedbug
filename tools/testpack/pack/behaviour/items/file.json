@@ -1,0 +1,31 @@
+{
+  "format_version": "1.21.20",
+  "minecraft:item": {
+    "description": {
+      "identifier": "tp:file"
+    },
+    "components": {
+      "minecraft:icon": {
+        "textures": {
+          "default": "visor"
+        }
+      },
+      "minecraft:max_stack_size": 1,
+      "minecraft:durability": {
+        "max_durability": 100
+      },
+      "minecraft:repairable": {
+        "repair_items": [
+          {
+            "items": ["minecraft:flint"],
+            "repair_amount": "query.max_durability * 0.1"
+          },
+          {
+            "items": [{"name": "tp:file"}],
+            "repair_amount": "context.other->query.remaining_durability * 2"
+          }
+        ]
+      }
+    }
+  }
+}

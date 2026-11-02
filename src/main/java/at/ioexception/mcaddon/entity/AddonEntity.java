@@ -914,27 +914,41 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
-     * What killing this entity is worth, which Bedrock states as Molang.
+     * What killing this entity is worth, which `minecraft:experience_reward` states as Molang.
      *
-     * Eighty-six of the eighty-seven `on_death` rewards in Mojang's own behaviour pack are an
-     * expression asking whether a player struck the last blow, so the field is parsed as one and a
-     * bare number is the case the parser also covers. The component itself sits in the group that
-     * makes the entity grown as often as on the entity, a baby being worth nothing, which is why
-     * the live set is what answers.
+     * Eighty-six of the eighty-seven `on_death` rewards in Mojang's own behaviour pack ask whether a
+     * player struck the last blow, and many also ask about the entity's equipment, age or variant,
+     * so the expression is answered with the entity's own queries and `query.last_hit_by_player`
+     * laid over them. An array is the sum of what each expression in it comes to. The component sits
+     * in the group that makes the entity grown as often as on the entity, a baby being worth
+     * nothing, which is why the live set is what answers.
      */
     private int experienceReward(boolean killedByPlayer) {
         com.google.gson.JsonObject reward = liveComponent("minecraft:experience_reward");
-        com.google.gson.JsonElement onDeath = reward == null ? null : reward.get("on_death");
-        if (onDeath == null || !onDeath.isJsonPrimitive()) return 0;
+        return experience(reward == null ? null : reward.get("on_death"), killedByPlayer);
+    }
 
-        at.ioexception.mcaddon.bedrock.molang.MolangEnvironment environment =
-            new at.ioexception.mcaddon.bedrock.molang.MolangEnvironment();
-        if (ServerHooks.state() != null) environment.shareTemporaries(ServerHooks.state().temporaries());
-        environment.setQueries((query, arguments) -> query.equals("last_hit_by_player")
-            ? at.ioexception.mcaddon.bedrock.molang.MolangValue.of(killedByPlayer)
-            : at.ioexception.mcaddon.bedrock.molang.MolangValue.ZERO);
-        return Math.max(0, (int) at.ioexception.mcaddon.bedrock.molang.MolangParser
-            .parse(onDeath.getAsString()).asFloat(environment));
+    /** What breeding pays out, read from the groups that are on as well as from the top level. */
+    public int experienceWhenBred() {
+        com.google.gson.JsonObject reward = liveComponent("minecraft:experience_reward");
+        return experience(reward == null ? null : reward.get("on_bred"), true);
+    }
+
+    private int experience(com.google.gson.JsonElement written, boolean lastHitByPlayer) {
+        if (written == null) return 0;
+
+        java.util.Map<String, Object> properties = new java.util.HashMap<>(
+            ServerHooks.state() == null ? java.util.Map.of() : ServerHooks.state().properties(getUUID()));
+        properties.put("last_hit_by_player", lastHitByPlayer);
+        at.ioexception.mcaddon.bedrock.molang.MolangEnvironment scope =
+            at.ioexception.mcaddon.bedrock.entity.EntityReference.questions(this, () -> properties);
+        double total = (written.isJsonArray() ? written.getAsJsonArray().asList() : java.util.List.of(written))
+            .stream()
+            .filter(com.google.gson.JsonElement::isJsonPrimitive)
+            .mapToDouble(term -> at.ioexception.mcaddon.bedrock.molang.MolangParser
+                .parse(term.getAsString()).asFloat(scope))
+            .sum();
+        return Math.max(0, (int) total);
     }
 
     /**
@@ -1467,19 +1481,11 @@ public class AddonEntity extends PathfinderMob
         return Math.max(0, cap - held);
     }
 
-    /** Whether an item list a component carries names this stack, in either spelling of an entry. */
+    /** Whether an item list a component carries names this stack, in any shape of item descriptor. */
     static boolean named(com.google.gson.JsonObject body, String field,
         net.minecraft.world.item.ItemStack stack) {
-        java.util.List<com.google.gson.JsonElement> listed =
-            at.ioexception.mcaddon.util.Json.list(body, field);
-        if (listed.isEmpty()) return false;
-
-        String id = AddonItems.identifierOf(stack.getItem());
-        return listed.stream()
-            .map(entry -> entry.isJsonObject()
-                ? at.ioexception.mcaddon.util.Json.text(entry.getAsJsonObject(), "item", null)
-                : entry.isJsonPrimitive() ? entry.getAsString() : null)
-            .anyMatch(name -> names(name, id));
+        return at.ioexception.mcaddon.bedrock.behaviour.Descriptor.listed(body, field).stream()
+            .anyMatch(descriptor -> descriptor.matches(stack));
     }
 
     /**
@@ -3603,10 +3609,6 @@ public class AddonEntity extends PathfinderMob
         // declaring it is what makes the entity able to damage the mobs around it.
         if (declares("minecraft:area_attack")) setValue("can_damage_nearby_mobs", true);
 
-        if (declares("minecraft:heartbeat")) {
-            setValue("heartbeat_interval", number(definition, "minecraft:heartbeat", "interval", 1));
-        }
-
         // `minecraft:walk_animation_speed` scales how fast a pack's own walk animation runs, which
         // its controllers read back off the entity's speed, so the number goes with the speed.
         if (declares("minecraft:walk_animation_speed")) {
@@ -4243,21 +4245,28 @@ public class AddonEntity extends PathfinderMob
     /**
      * `minecraft:heartbeat` is a sound the entity makes on its own clock.
      *
-     * The interval is a Molang expression on the warden, because its heart quickens as it gets
-     * angrier. A pack that wrote a plain number gets that number; one that wrote an expression gets
-     * the two seconds Bedrock's own default is, because the expression is answered on the drawing
-     * side and there is no drawing here.
+     * The interval is Molang, because the warden's heart quickens as it gets angrier, so it is
+     * answered for the entity at each beat and the next beat is that far off. The interval is
+     * published as `query.heartbeat_interval` each time it is worked out.
      */
     private void beat() {
-        if (!declares("minecraft:heartbeat")) return;
+        com.google.gson.JsonObject heartbeat = liveComponent("minecraft:heartbeat");
+        if (heartbeat == null || tickCount < nextBeat) return;
 
-        int interval = (int) (number(definition, "minecraft:heartbeat", "interval", 1)
-            * Goals.TICKS_PER_SECOND);
-        if (interval <= 0 || tickCount % interval != 0) return;
+        com.google.gson.JsonElement written = heartbeat.get("interval");
+        double interval = written == null || !written.isJsonPrimitive()
+            ? 1 : answer(written.getAsString()).asFloat();
+        setValue("heartbeat_interval", interval);
+        nextBeat = tickCount + Math.max(1, (int) Math.round(interval * Goals.TICKS_PER_SECOND));
+        if (interval <= 0) return;
 
-        playSound(sound(liveText("minecraft:heartbeat", "sound_event"), SoundEvents.WARDEN_HEARTBEAT),
+        playSound(sound(at.ioexception.mcaddon.util.Json.text(heartbeat, "sound_event", null),
+            SoundEvents.WARDEN_HEARTBEAT),
             getSoundVolume(), getVoicePitch());
     }
+
+    /** The tick the next heartbeat falls on. */
+    private int nextBeat;
 
     /** `minecraft:ground_offset` is how far above the ground the entity is meant to sit. */
     private void hover() {
@@ -6146,11 +6155,6 @@ public class AddonEntity extends PathfinderMob
             return Platform.IGNORED;
         }
         return super.getPistonPushReaction();
-    }
-
-    /** What breeding pays out, read from the groups that are on as well as from the top level. */
-    public int experienceWhenBred() {
-        return ServerEntityDefinition.experienceWhenBred(liveComponent("minecraft:experience_reward"));
     }
 
     /** The game tick before which `minecraft:interact` answers nobody, which an interaction's `cooldown` sets. */

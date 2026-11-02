@@ -41,7 +41,7 @@ public final class EntityPropertySync {
 
         for (ServerEntityDefinition.Property property : addon.definition().properties().values()) {
             if (state.property(entity.getUUID(), property.name()) == null) {
-                state.setProperty(entity.getUUID(), property.name(), property.initial());
+                state.setProperty(entity.getUUID(), property.name(), property.initial(addon.scope()));
             }
         }
 

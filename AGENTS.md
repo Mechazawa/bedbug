@@ -2422,7 +2422,7 @@ stand within the distance, itself included, of the type named where one is. `get
 is the same without the entity asking, a name found in no Mojang material today. Both are listed in
 `EntityQueries.EXPERIMENTAL`, which `components.py` reads as answered on purpose. `q.get_ride`,
 `q.target` and `context.player` appear in no Mojang material and are not answered. `context.other`
-is the repair target of an item's `repair_amount`, which nothing here evaluates.
+is the item repairing another in an item's `repair_amount`, which `item.RepairAmounts` answers.
 `BehaviourGameTests.anEntityReadsThePropertiesOfTheEntitiesNearItThroughAnArrow` has `tp:herald` add
 up `tp:settled` over two wisps through `->` inside `for_each` and count them through
 `combine_entities`; `MolangTest` runs Mojang's struct examples against stub entities.
@@ -3044,6 +3044,36 @@ is checked in one tick, which is its default.
   `emitter_local_space` is not acted on.
 - A collision event's `min_speed` is at least two blocks a second, its default, as Mojang documents.
   `events` may be one event or a list.
+
+## Molang in entity components and events
+
+`tp:abacus` carries the Molang a behaviour pack writes into components and events, and
+`AbacusGameTests` reads each back.
+
+- `minecraft:heartbeat` `interval` is read from the live set and answered with the entity's own
+  queries at each beat; the next beat is that many seconds later.
+- `minecraft:experience_reward` is answered with the entity's own queries and
+  `query.last_hit_by_player` laid over them. `on_bred` answers that query true, as a breeding is a
+  player's doing; Mojang publishes nothing on it.
+- A property value a pack writes (`default`, an event's `set_property`) goes through
+  `ServerEntityDefinition.Property.value`: a string is Molang unless it is one of an enum's values,
+  as the Bedrock wiki says. The answer takes the type (an `int` drops its fraction) and is clamped
+  to the range. An enum answer it does not hold, or no value at all, is its first value; Mojang
+  publishes nothing on either. A default is answered once, as the entity is first seen.
+- `bedrock.behaviour.Descriptor` is a block or item descriptor in each of Mojang's shapes: a bare
+  name, `name` (or an item's `item`) with a block's `states`, or `tags`, Molang that
+  `query.all_tags` and `query.any_tag` answer. A block's tags are Java's block tags under the name
+  the pack wrote; an item's go through `BedrockItemTags`. `Goals.blocks` stands a tag test for every
+  block passing it when the goal is built. A `minecraft:digger` rule is built on each data load
+  from 26, against the tags that load brings. A pack block's own `tag:` components are not tags
+  here, and `navigation.*` `blocks_to_avoid` is not read.
+- `minecraft:repairable` `repair_amount` is answered by `item.RepairAmounts` for the item being
+  repaired (`query.max_durability`, `query.remaining_durability`), with `context.other` the item
+  repairing it. `AnvilRepairMixin` uses it for a material in place of Java's quarter, and
+  `AnvilRepairMixin` and `RepairItemRecipeMixin` for a second copy of the item in place of that
+  copy's own durability. Mojang publishes no rule for combining, so Java's bonus of 12 in a hundred
+  at the anvil and 5 in the grid stays on top, as both editions' wikis describe. `RepairGameTests`
+  reads `tp:file` back. Which items repair at all still comes from the entries' plain names.
 
 ## Conventions
 
