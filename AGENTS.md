@@ -3031,6 +3031,8 @@ is checked in one tick, which is its default.
 - A steady rate's `max_particles` caps the emitter's particles alive at once, evaluated as each loop
   starts. The provider hands each particle it makes to `AddonEmitters.adopt`, which keeps it in the
   emitter's `alive` list.
+- A collision's `enabled` is evaluated each tick before the particle moves, and its
+  `collision_radius` sizes the particle whether or not it collides at birth.
 
 ## Conventions
 

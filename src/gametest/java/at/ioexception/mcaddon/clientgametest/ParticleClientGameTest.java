@@ -57,6 +57,7 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             scoped(context, world);
             looped(context, world);
             capped(context, world);
+            settling(context, world);
         }
     }
 
@@ -282,6 +283,21 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             () -> "tp:capped keeps at most five particles alive at once, each living a tenth of a second,"
                 + " and stopped after " + Born.of("tp:capped").size() + ".");
         context.runOnClient(client -> AddonEmitters.clear());
+    }
+
+    /** `tp:settle`'s particle collides only once `variable.particle_age` is past a fifth of a second. */
+    private static void settling(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:settle ~ ~1 ~3");
+        Worlds.waitForClient(context, client -> !Born.of("tp:settle").isEmpty(), PATIENCE,
+            () -> "tp:settle emits one particle at once and none was made.");
+        Born.Particle settle = Born.of("tp:settle").get(0);
+        boolean early = context.computeOnClient(client -> settle.age() < 0.2f && !settle.collides());
+        Assert.that(early, "tp:settle's particle collided before its collision turned on at 0.2 seconds.");
+        Worlds.waitForClient(context, client -> settle.age() >= 0.3f, PATIENCE,
+            () -> "tp:settle's particle lives a second and never reached 0.3 of it.");
+        Assert.that(context.computeOnClient(client -> settle.collides()),
+            "tp:settle's collision is evaluated every frame and was still off at 0.3 seconds.");
     }
 
     /** Each of the four channels within one step of the colour asked for. */
