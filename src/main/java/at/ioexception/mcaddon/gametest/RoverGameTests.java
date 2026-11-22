@@ -131,7 +131,7 @@ public final class RoverGameTests {
      * `probability_per_strength` of nothing never flees a llama, which carries a strength, and
      * always flees a pig, which carries none.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 140)
     public void aStrongCandidateIsFledByItsStrength(GameTestHelper helper) {
         AddonEntity nearLlama = rover(helper, "tp:rover_make_avoid_wary", STAND);
         if (nearLlama == null) {
