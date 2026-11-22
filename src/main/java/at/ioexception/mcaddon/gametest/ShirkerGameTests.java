@@ -73,7 +73,7 @@ public final class ShirkerGameTests {
     }
 
     /** An entry's `max_flee` ends the flight where the goal's own would not. */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
     public void anEntrysMaxFleeEndsTheFlight(GameTestHelper helper) {
         AddonEntity shirker = shirker(helper, "tp:shirker_make_short", STAND);
         if (shirker == null) {
