@@ -9,6 +9,7 @@ import at.ioexception.mcaddon.bedrock.particle.Billboard;
 import at.ioexception.mcaddon.bedrock.particle.ParticleDefinition;
 import at.ioexception.mcaddon.bedrock.particle.ParticleEvent;
 import at.ioexception.mcaddon.bedrock.particle.ParticleTint;
+import at.ioexception.mcaddon.mixin.ParticleCollisionAccessor;
 import at.ioexception.mcaddon.registry.AddonBlocks;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.SingleQuadParticle;
@@ -120,6 +121,7 @@ public class AddonParticle extends SingleQuadParticle {
             hasPhysics = particle.collision().enabled().evaluate(environment).truthy();
         }
         if (particle.dynamic() != null) accelerate(particle.dynamic());
+        if (particle.collision() != null) ((ParticleCollisionAccessor) (Object) this).mcaddon$setStoppedByCollision(false);
         if (particle.parametric() != null) follow(particle.parametric());
         else move(xd, yd, zd);
 
@@ -159,7 +161,9 @@ public class AddonParticle extends SingleQuadParticle {
      * What a collision does once the particle has touched something.
      *
      * Bedrock either ends the particle on contact or slows it and bounces it, and Java's own move
-     * has already stopped it against the block by the time this runs.
+     * has already stopped it against the block by the time this runs. `collision_drag` takes that
+     * many blocks a second off the speed along the ground for every second in contact, and
+     * `coefficient_of_restitution` sends the particle back up at that share of the speed it landed at.
      */
     private boolean grounded() {
         ParticleDefinition.Particle.Collision collision = definition.particle().collision();
@@ -177,10 +181,14 @@ public class AddonParticle extends SingleQuadParticle {
             return true;
         }
 
-        float drag = collision.drag().asFloat(environment);
         float bounce = collision.restitution().asFloat(environment);
-        xd *= Math.max(0f, 1f - drag / 20f);
-        zd *= Math.max(0f, 1f - drag / 20f);
+        double along = Math.sqrt(xd * xd + zd * zd);
+        if (along > 0) {
+            double slowed = Math.max(0,
+                along - BedrockUnits.blocksPerTickSquared(collision.drag().asFloat(environment)));
+            xd *= slowed / along;
+            zd *= slowed / along;
+        }
         yd = Math.abs(yd) * bounce;
         return false;
     }

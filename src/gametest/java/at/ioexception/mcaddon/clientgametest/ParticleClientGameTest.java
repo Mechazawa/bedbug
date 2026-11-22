@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.client.render.AddonEmitters;
+import at.ioexception.mcaddon.clientgametest.mixin.ParticleMotionAccessor;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -61,6 +62,8 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             settling(context, world);
             flare(context, world);
             thud(context, world);
+            bounce(context, world);
+            skid(context, world);
         }
     }
 
@@ -366,6 +369,54 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         world.getServer().runCommand("bedrock execute as @p at @s run particle tp:thud_hard ~ ~ ~3");
         Worlds.waitForClient(context, client -> !Born.of("tp:thud_mark").isEmpty(), PATIENCE,
             () -> "tp:thud_hard lands at about ten blocks a second and never raised its collision event.");
+    }
+
+    /**
+     * `tp:bounce` falls a block onto the ground with a `coefficient_of_restitution` of 0.8, so it
+     * comes back up after every landing and lands again.
+     */
+    private static void bounce(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:bounce ~ ~ ~3");
+        Worlds.waitForClient(context, client -> !Born.of("tp:bounce").isEmpty(), PATIENCE,
+            () -> "tp:bounce emits one particle at once and none was made.");
+        Born.Particle bounce = context.computeOnClient(client -> Born.of("tp:bounce").get(0));
+
+        int rises = 0;
+        boolean falling = false;
+        double was = context.computeOnClient(client -> bounce.particle().getBoundingBox().minY);
+        for (int tick = 0; tick < 50; tick++) {
+            context.waitTick();
+            double now = context.computeOnClient(client -> bounce.particle().getBoundingBox().minY);
+            if (now < was) falling = true;
+            if (now > was && falling) {
+                rises++;
+                falling = false;
+            }
+            was = now;
+        }
+        Assert.that(rises >= 2, "tp:bounce bounces at 0.8 of its landing speed and came back up " + rises
+            + " times in two and a half seconds.");
+    }
+
+    /**
+     * `tp:skid` drops a fifth of a block moving two blocks a second along x, and its `collision_drag`
+     * of four takes four blocks a second off that speed for every second on the ground, so it slides
+     * half a block further and stops dead.
+     */
+    private static void skid(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:skid ~ ~ ~3");
+        Worlds.waitForClient(context, client -> !Born.of("tp:skid").isEmpty(), PATIENCE,
+            () -> "tp:skid emits one particle at once and none was made.");
+        Born.Particle skid = context.computeOnClient(client -> Born.of("tp:skid").get(0));
+        Worlds.waitForClient(context, client -> ((ParticleMotionAccessor) skid.particle()).mcaddon$xd() == 0,
+            40, () -> "tp:skid's collision_drag slows it by a fixed four blocks a second each second and it"
+                + " was still moving at " + ((ParticleMotionAccessor) skid.particle()).mcaddon$xd() * 20
+                + " blocks a second.");
+        double slid = context.computeOnClient(client -> skid.particle().getBoundingBox().getCenter().x - skid.at().x);
+        Assert.that(slid > 0.6, "tp:skid falls a third of a block along x and slides half a block more,"
+            + " and moved " + slid + " blocks.");
     }
 
     /** How far apart in height the particles were born. */

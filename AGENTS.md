@@ -3105,6 +3105,14 @@ first standing place; 0, the default, checks every place in one tick and picks t
   `emitter_local_space` is not acted on.
 - A collision event's `min_speed` is at least two blocks a second, its default, as Mojang documents.
   `events` may be one event or a list.
+- Java's `Particle.move` stops a particle for good once a block stops its fall exactly, which is
+  how a particle lying on the ground lands. A particle with a collision component clears that flag
+  (`ParticleCollisionAccessor`) before each move, so it slides and bounces on. Mojang says
+  `collision_drag` slows the particle "by this amount in blocks/sec when in contact", which is read
+  as a deceleration: every tick on the ground takes a twentieth of `collision_drag` blocks a second
+  off the speed along the ground, down to nothing, as Blockbench's Wintersky does.
+  `coefficient_of_restitution` sends a landing particle back up at that share of the speed it came
+  down at; a horizontal collision stops that axis, as Java's move does.
 
 ## Molang in entity components and events
 

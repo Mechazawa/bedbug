@@ -114,6 +114,7 @@
     "WorldListEntryMixin",
     "AttackMissMixin",
     "ModelBakeryMixin",
-    "BlockStateModelLoaderMixin"
+    "BlockStateModelLoaderMixin",
+    "ParticleCollisionAccessor"
   ]
 }
