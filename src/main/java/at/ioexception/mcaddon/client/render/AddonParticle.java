@@ -143,7 +143,7 @@ public class AddonParticle extends SingleQuadParticle {
 
     private void raise(List<String> events) {
         if (events.isEmpty()) return;
-        AddonEmitters.fire(definition, events, environment, new Vec3(x, y, z), null);
+        AddonEmitters.fire(definition, events, environment, new Vec3(x, y, z));
     }
 
     /**

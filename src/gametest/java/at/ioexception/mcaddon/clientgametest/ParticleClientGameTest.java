@@ -311,7 +311,9 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
      * `variable.burst` to three, which the effect's instant rate reads, so the script runs in the
      * emitter. `tp:wake` and `tp:wake_loose` both start at the `tip` locator while the clip lifts the
      * body two blocks over a second: the wake is bound and rises with the locator and follows the
-     * flare when it is moved, and the loose one is not bound and stays where it started.
+     * flare when it is moved, and the loose one is not bound and stays where it started. The wake
+     * starts `tp:wake_child` as it is created through an `emitter_bound` event, which binds the child to
+     * the same locator.
      */
     private static void flare(ClientGameTestContext context, TestSingleplayerContext world) {
         context.runOnClient(client -> Born.clear());
@@ -329,6 +331,10 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         double rise = context.computeOnClient(client -> spread(Born.of("tp:wake")));
         Assert.that(rise > 1.5, "tp:wake follows its locator as the clip lifts it two blocks, and its particles"
             + " were born " + rise + " blocks apart in height.");
+        double childRise = context.computeOnClient(client -> spread(Born.of("tp:wake_child")));
+        Assert.that(childRise > 1.5, "tp:wake_child is started by tp:wake as emitter_bound, so it follows the"
+            + " same locator as the clip lifts it two blocks, and its particles were born " + childRise
+            + " blocks apart in height.");
 
         AddonEntity flare = Entities.waitForClient(context, "tp:flare");
         double from = context.computeOnClient(client -> flare.getX());
