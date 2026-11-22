@@ -3285,3 +3285,16 @@ value or a named state picks a member of. A Bedrock id may be a Java block in a 
 the way back starts from a `BlockState`: a lit furnace reports itself as `minecraft:lit_furnace`. A
 command line is translated through `BedrockBlockNames.Resolved.command`, which writes only the
 properties the pack named, because a test for a block asks about those and no others.
+
+## Census reasons: goals
+
+`tp:rover` carries one group per field and `RoverGameTests` reads each back.
+
+- `minecraft:behavior.mount_pathing` is `MountPathingGoal`, on the mount. Java moves a mob-ridden
+  mount only through a goal of the rider's that walks (`Mob.getNavigation` hands the rider the
+  mount's navigator), and `Mob.updateControlFlags` switches the mount's own moving goals off, so a
+  rider with a target and no walking goal of its own left the mount standing. The goal holds the
+  controls `control_flags` names (none by default), walks to the controlling rider's target at the
+  mount's `speed_multiplier`, sets that speed every tick ahead of the rider's goals, and stops inside
+  `target_dist`. Mojang publishes nothing on `track_target` false beyond the one line, so such a
+  walk goes to where the target stood as it began and ends there.

@@ -209,11 +209,6 @@ REASONS = {
     },
 
     # Goals. Java's goal of the same name takes fewer parameters than Bedrock states.
-    "minecraft:behavior.mount_pathing": {
-        "*": "A mob riding another steers it in Java: the rider plans with the mount's navigator and the "
-             "mount's own movement goals are switched off while it is ridden, so the chase and the "
-             "distance kept belong to the rider's attack goal.",
-    },
     "minecraft:behavior.share_items": {"*": "Java's stroll goal has no arrival radius of its own."},
     "minecraft:behavior.sleep": {
         "sleep_collider_width": SLEEPING_BOX,

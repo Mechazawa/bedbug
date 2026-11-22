@@ -3237,10 +3237,8 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, new StrollTowardsVillageGoal(this, goal));
             case "minecraft:behavior.follow_owner" ->
                 goals.add(priority, new FollowOwnerGoal(this, goal));
-            // Java steers a mount from its rider: a mob riding another plans with the mount's
-            // navigator and switches the mount's own movement goals off, so the chase a rider's
-            // attack goal runs is the mount's, at the reach that goal keeps.
-            case "minecraft:behavior.mount_pathing" -> { }
+            case "minecraft:behavior.mount_pathing" ->
+                goals.add(priority, new MountPathingGoal(this, goal, speed));
 
             case "minecraft:behavior.pickup_items" ->
                 goals.add(priority, new PickupItemsGoal(this, goal));

@@ -1,0 +1,84 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:rover",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {}
+    },
+    "component_groups": {
+      "tp:rover_seat": {
+        "minecraft:rideable": {
+          "seat_count": 1,
+          "family_types": ["tp_rover"],
+          "seats": [
+            {
+              "position": [0, 1.0, 0]
+            }
+          ]
+        }
+      },
+      "tp:rover_pathing": {
+        "minecraft:behavior.mount_pathing": {
+          "priority": 2,
+          "speed_multiplier": 1.5,
+          "target_dist": 0,
+          "track_target": true
+        }
+      },
+      "tp:rover_pathing_distant": {
+        "minecraft:behavior.mount_pathing": {
+          "priority": 2,
+          "speed_multiplier": 1.5,
+          "target_dist": 3,
+          "track_target": true
+        }
+      },
+      "tp:rover_attacking": {
+        "minecraft:behavior.melee_attack": {
+          "priority": 2,
+          "speed_multiplier": 1
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_rover", "mob"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.0
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:attack": {
+        "damage": 0
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:rover_make_seat": {
+        "add": { "component_groups": ["tp:rover_seat"] }
+      },
+      "tp:rover_make_pathing": {
+        "add": { "component_groups": ["tp:rover_seat", "tp:rover_pathing"] }
+      },
+      "tp:rover_make_pathing_distant": {
+        "add": { "component_groups": ["tp:rover_seat", "tp:rover_pathing_distant"] }
+      },
+      "tp:rover_make_attacking": {
+        "add": { "component_groups": ["tp:rover_attacking"] }
+      }
+    }
+  }
+}
