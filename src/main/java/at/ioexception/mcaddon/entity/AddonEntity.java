@@ -1061,8 +1061,9 @@ public class AddonEntity extends PathfinderMob
         if (carriesNow("minecraft:movement.hover")) return "hover";
         if (carriesNow("minecraft:movement.glide")) return "glide";
         if (carriesNow("minecraft:movement.fly")) return "fly";
-        // Swimming that banks into its turns, which is what Bedrock's dolphin and its sway both are.
-        if (carriesNow("minecraft:movement.dolphin") || carriesNow("minecraft:movement.sway")) return "swim";
+        if (carriesNow("minecraft:movement.sway")) return "sway";
+        // Swimming that banks into its turns, which is what Bedrock's dolphin is.
+        if (carriesNow("minecraft:movement.dolphin")) return "swim";
         if (carriesNow("minecraft:movement.jump") || carriesNow("minecraft:movement.skip")) return "hop";
 
         return "walk";
@@ -1096,6 +1097,7 @@ public class AddonEntity extends PathfinderMob
             case "glide" -> new GlideMoveControl(this, liveComponent("minecraft:movement.glide"));
             case "swim" -> new net.minecraft.world.entity.ai.control.SmoothSwimmingMoveControl(
                 this, 85, 10, 0.02f, 0.1f, true);
+            case "sway" -> new SwayMoveControl(this, liveComponent("minecraft:movement.sway"));
             case "hop" -> new HopMoveControl(this);
             default -> new net.minecraft.world.entity.ai.control.MoveControl(this);
         };
