@@ -2984,7 +2984,19 @@ publishes nothing on, decided here:
   so a crowd blocking the far block counts nothing against it.
 
 **The game test world is dark.** `isBrightOutside` answered false there at a clock of 25020, so a test
-about the day runs `time set day` and a goal asks the clock.
+about the day runs in the mod's own `mcaddon:gametest/daytime` environment, a `clock_time` of 1000,
+and a goal asks the clock. The environment puts those tests in a batch of their own: a test in the
+default batches that sets night, such as the sleep tests, otherwise turned the sky dark under them.
+
+**The game test world has more than one biome.** On 26.3 the rain tests stood in a desert, where no
+rain falls, so a test whose answer depends on the biome runs `fillbiome` over its area first.
+
+**An experience orb may hold several.** Java merges a new orb into one of the same value whose id
+matches its own modulo 40, so a test summing orbs reads `AbacusGameTests.experienceIn`, which counts
+each orb's merged count as well.
+
+**A sleeping player needs a bed.** `LivingEntity.tick` wakes a sleeper whose bed is gone, so a test
+that calls `startSleeping` places one first (`NapperGameTests.bed`).
 ## Carrying blocks, laying, working and giving
 
 `tp:keeper` carries one goal per group and `KeeperGoalGameTests` reads each back off the world.
@@ -3007,7 +3019,7 @@ about the day runs `time set day` and a goal asks the clock.
   shift is left than `work_in_rain_tolerance`. The cooldown starts as the goal stops and runs
   alongside the goal's own wait between station searches. The rain tests run in the mod's own
   `mcaddon:gametest/clear_sky` test environment, which puts them in a batch of their own, so the
-  rain they set reaches no other test.
+  rain they set reaches no other test, and fill their area with plains.
 - `minecraft:behavior.work_composter` visits the composter every `use_block_min` to `use_block_max`
   ticks (100 and 200), counted from arrival, up to `block_interaction_max` visits. Mojang publishes no
   rule for a visit, so it follows Java's `WorkAtComposter`: a ready composter is emptied first

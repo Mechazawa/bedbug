@@ -1056,9 +1056,7 @@ public final class BehaviourGameTests {
             helper.getLevel().damageSources().playerAttack(killer), KILLING_BLOW);
 
         helper.assertTrue(!ember.isAlive(), ENTITY + " survived a killing blow.");
-        int awarded = helper.getLevel().getEntitiesOfClass(
-                net.minecraft.world.entity.ExperienceOrb.class, ember.getBoundingBox().inflate(8))
-            .stream().mapToInt(net.minecraft.world.entity.ExperienceOrb::getValue).sum();
+        int awarded = AbacusGameTests.experienceIn(helper, ember.getBoundingBox().inflate(8));
         helper.assertTrue(awarded >= GROWN_REWARD,
             ENTITY + " was killed carrying a group worth " + GROWN_REWARD
                 + " and left " + awarded + " experience.");
