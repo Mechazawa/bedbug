@@ -963,8 +963,10 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     protected PathNavigation createNavigation(Level level) {
-        if (carriesNow("minecraft:navigation.fly") || carriesNow("minecraft:navigation.hover")
-            || carriesNow("minecraft:navigation.float") || carriesNow("minecraft:can_fly")) {
+        if (carriesNow("minecraft:navigation.fly") || carriesNow("minecraft:navigation.hover")) {
+            return new Pathing.AirNavigation(this, level);
+        }
+        if (carriesNow("minecraft:navigation.float") || carriesNow("minecraft:can_fly")) {
             return new FlyingPathNavigation(this, level);
         }
         if (carriesNow("minecraft:navigation.swim")) {
@@ -975,7 +977,7 @@ public class AddonEntity extends PathfinderMob
             return new WallClimberNavigation(this, level);
         }
         PathNavigation swimming = pathing().navigatorFor(this, level);
-        return swimming != null ? swimming : super.createNavigation(level);
+        return swimming != null ? swimming : new WalkingNavigation(this, level);
     }
 
     /**
@@ -989,8 +991,33 @@ public class AddonEntity extends PathfinderMob
         PathNavigation asked = createNavigation(level());
         if (asked.getClass() != navigation.getClass()) navigation = asked;
 
-        pathing().applyTo(this, navigation, carriesNow("minecraft:annotation.open_door"));
+        pathing().applyTo(this, navigation, carriesNow("minecraft:annotation.open_door")
+            || carriesNow("minecraft:annotation.break_door"));
+        if (navigation instanceof WalkingNavigation walking) priceBlocks(walking);
         applyMoveControl();
+    }
+
+    /**
+     * What `minecraft:preferred_path` charges for standing on each block and for a step up, on top of
+     * Java's own price for the kind of ground, the larger of the two counting. A block in no list
+     * costs `default_block_cost`.
+     */
+    private void priceBlocks(WalkingNavigation walking) {
+        com.google.gson.JsonObject path = definition == null ? null : liveComponent("minecraft:preferred_path");
+        if (path == null) {
+            walking.price(null, 0);
+            return;
+        }
+
+        java.util.Map<net.minecraft.world.level.block.Block, Double> costs = new java.util.HashMap<>();
+        for (com.google.gson.JsonElement set : at.ioexception.mcaddon.util.Json.list(path, "preferred_path_blocks")) {
+            if (!set.isJsonObject()) continue;
+
+            double cost = Goals.number(set.getAsJsonObject(), "cost", 0);
+            Goals.blocks(set.getAsJsonObject(), "blocks").forEach(block -> costs.putIfAbsent(block, cost));
+        }
+        double otherwise = Goals.number(path, "default_block_cost", 0);
+        walking.price(state -> costs.getOrDefault(state.getBlock(), otherwise), Goals.number(path, "jump_cost", 0));
     }
 
     /**

@@ -1,0 +1,189 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:wayfarer",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "component_groups": {
+      "tp:wayfarer_door_annotated": {
+        "minecraft:annotation.break_door": {
+          "break_time": 1,
+          "min_difficulty": "peaceful"
+        },
+        "minecraft:behavior.break_door": {
+          "priority": 0
+        }
+      },
+      "tp:wayfarer_door_unannotated": {
+        "minecraft:annotation.break_door": {
+          "break_time": 1,
+          "min_difficulty": "peaceful"
+        },
+        "minecraft:behavior.break_door": {
+          "priority": 0
+        },
+        "minecraft:navigation.walk": {
+          "using_door_annotation": false
+        }
+      },
+      "tp:wayfarer_portal_shy": {
+        "minecraft:navigation.walk": {
+          "avoid_portals": true
+        }
+      },
+      "tp:wayfarer_block_shy": {
+        "minecraft:navigation.walk": {
+          "blocks_to_avoid": [
+            {
+              "name": "minecraft:gold_block"
+            },
+            {
+              "tags": "query.any_tag('trapdoors')"
+            }
+          ]
+        }
+      },
+      "tp:wayfarer_grounded": {
+        "minecraft:navigation.walk": {
+          "can_jump": false
+        }
+      },
+      "tp:wayfarer_amphibious": {
+        "minecraft:navigation.walk": {
+          "is_amphibious": true
+        }
+      },
+      "tp:wayfarer_paved": {
+        "minecraft:preferred_path": {
+          "default_block_cost": 3,
+          "jump_cost": 0,
+          "preferred_path_blocks": [
+            {
+              "blocks": [
+                "grass_path"
+              ],
+              "cost": 0
+            }
+          ]
+        }
+      },
+      "tp:wayfarer_level": {
+        "minecraft:preferred_path": {
+          "default_block_cost": 0,
+          "jump_cost": 20,
+          "preferred_path_blocks": []
+        }
+      },
+      "tp:wayfarer_hovering": {
+        "minecraft:can_fly": {},
+        "minecraft:navigation.hover": {},
+        "minecraft:movement.hover": {}
+      },
+      "tp:wayfarer_hovering_from_air": {
+        "minecraft:can_fly": {},
+        "minecraft:navigation.hover": {
+          "can_path_from_air": true
+        },
+        "minecraft:movement.hover": {}
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_wayfarer",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.8
+      },
+      "minecraft:health": {
+        "value": 100,
+        "max": 100
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:wayfarer_door_annotated": {
+        "add": {
+          "component_groups": [
+            "tp:wayfarer_door_annotated"
+          ]
+        }
+      },
+      "tp:wayfarer_door_unannotated": {
+        "add": {
+          "component_groups": [
+            "tp:wayfarer_door_unannotated"
+          ]
+        }
+      },
+      "tp:wayfarer_portal_shy": {
+        "add": {
+          "component_groups": [
+            "tp:wayfarer_portal_shy"
+          ]
+        }
+      },
+      "tp:wayfarer_block_shy": {
+        "add": {
+          "component_groups": [
+            "tp:wayfarer_block_shy"
+          ]
+        }
+      },
+      "tp:wayfarer_grounded": {
+        "add": {
+          "component_groups": [
+            "tp:wayfarer_grounded"
+          ]
+        }
+      },
+      "tp:wayfarer_amphibious": {
+        "add": {
+          "component_groups": [
+            "tp:wayfarer_amphibious"
+          ]
+        }
+      },
+      "tp:wayfarer_paved": {
+        "add": {
+          "component_groups": [
+            "tp:wayfarer_paved"
+          ]
+        }
+      },
+      "tp:wayfarer_level": {
+        "add": {
+          "component_groups": [
+            "tp:wayfarer_level"
+          ]
+        }
+      },
+      "tp:wayfarer_hovering": {
+        "add": {
+          "component_groups": [
+            "tp:wayfarer_hovering"
+          ]
+        }
+      },
+      "tp:wayfarer_hovering_from_air": {
+        "add": {
+          "component_groups": [
+            "tp:wayfarer_hovering_from_air"
+          ]
+        }
+      }
+    }
+  }
+}

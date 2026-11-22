@@ -47,13 +47,6 @@ INDEX = "Entity component definitions.json"
 # list rather than a regression. `--min-declarations 1` gates on the whole tail.
 GATE = 8
 
-# Reasons several navigation components share.
-DOOR_ANNOTATION = ("Not in the published schema. Mojang writes it beside `minecraft:annotation.open_door`, "
-                   "and that component is what decides whether the pathfinder plans through a closed door.")
-AMPHIBIOUS = ("Walking the bottom under water: a Java mob that may not float sinks and walks it, and water is "
-              "priced at nothing unless `avoid_water` says otherwise, so nothing is left to set.")
-FROM_AIR = "Java's flying navigator starts a path from wherever the entity is, the air included."
-
 TEMPT_SOUND = ("Mojang's documentation counts the gap between tempt sounds in ticks, and its cat writes "
                "[0, 100] where its strider writes 2 to 5, which no one unit fits; the sound is left unmade "
                "rather than made at one of the two rates.")
@@ -118,16 +111,12 @@ REASONS = {
                             "attributes `parent_centric_attribute_blending` lists are blended, by Java's "
                             "own horse breeding.",
     },
-    "minecraft:preferred_path": {
-        "*": "Per-block path costs. Java's walk node evaluator prices each node by the path type it "
-             "classes the block as and keeps no price per block, so the prices need an evaluator of this "
-             "mod's own, which is not written; `max_fall_blocks` is read.",
-    },
 
     # Fields read somewhere other than through a field helper.
     "minecraft:behavior.random_look_around": {
-        "look_distance": "Java's random look aims at a point one block away at the eye's own height, so the "
-                         "distance along that bearing changes no angle the head turns through.",
+        "look_distance": "Java's `RandomLookAroundGoal.tick` aims the look control at a point on the chosen "
+                         "bearing at the eye's own height, and how far along that bearing the point lies "
+                         "changes no angle the head turns through.",
     },
     "minecraft:rail_sensor": {
         "tick_command_block_on_activate": "Only an entity carrying a command block has one to tick: in Bedrock "
@@ -154,26 +143,6 @@ REASONS = {
     "minecraft:follow_range": {"max": "Java fixes the attribute's own ceiling."},
     "minecraft:knockback_resistance": {"max": "Java fixes the attribute's own ceiling."},
     "minecraft:movement": {"max": "Java fixes the attribute's own ceiling."},
-
-    # Navigation. Java asks its node evaluator about doors and floating and the mob what each kind of
-    # ground costs; what is left here is what it has no question for.
-    "minecraft:navigation.walk": {
-        "using_door_annotation": DOOR_ANNOTATION,
-        "is_amphibious": AMPHIBIOUS,
-        "avoid_portals": "Java's pathfinder classes a portal block as open ground, so there is no kind of "
-                         "ground to price it by.",
-        "blocks_to_avoid": "Java prices a step by the kind of ground it is rather than by the block, so a "
-                           "list of blocks would take a node evaluator of this mod's own.",
-    },
-    "minecraft:navigation.generic": {
-        "using_door_annotation": DOOR_ANNOTATION,
-        "is_amphibious": AMPHIBIOUS,
-        "can_jump": "Java's ground navigator plans every step up a block as a jump and has no switch for "
-                    "a mob that may not; the one vanilla entity saying no is a dolphin, which swims.",
-    },
-    "minecraft:navigation.float": {"using_door_annotation": DOOR_ANNOTATION},
-    "minecraft:navigation.hover": {"can_path_from_air": FROM_AIR},
-    "minecraft:navigation.fly": {"can_path_from_air": FROM_AIR},
 
     # Movement styles.
     "minecraft:movement.sway": {
@@ -230,8 +199,9 @@ REASONS = {
     },
     "minecraft:behavior.trade_with_player": {"filters": "Java's merchant screen opens for whoever clicks."},
     "minecraft:behavior.swim_wander": {
-        "look_ahead": "Java's swimming navigator plans the whole path through the water, around whatever "
-                      "is in the way, before the entity moves, so there is no distance ahead to look.",
+        "look_ahead": "The wander is a path `WaterBoundPathNavigation` plans through the water to a spot "
+                      "`BehaviorUtils.getRandomSwimmablePos` picks, around whatever is in the way, before "
+                      "the entity moves, so there is no distance ahead to look for an obstacle.",
     },
     "minecraft:behavior.player_ride_tamed": {
         "priority": "The behaviour is answered as a rule on who may get on, asked whenever somebody tries, "

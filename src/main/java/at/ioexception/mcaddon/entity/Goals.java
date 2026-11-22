@@ -191,6 +191,46 @@ final class Goals {
     }
 
     /**
+     * The block states a component's list of block descriptors matches, by name or by `tags`.
+     *
+     * A descriptor's `tags` is a Molang expression over the block's tags. Only `query.any_tag` and
+     * `query.all_tags` are answered, each tag asked of Java as a block tag of that name, which is how
+     * Bedrock's `trapdoors` reaches Java's.
+     */
+    static java.util.function.Predicate<net.minecraft.world.level.block.state.BlockState> blockMatcher(
+        JsonObject component, String key) {
+        Set<Block> named = blocks(component, key);
+        java.util.List<java.util.function.Predicate<net.minecraft.world.level.block.state.BlockState>> tagged =
+            Json.list(component, key).stream()
+                .filter(JsonElement::isJsonObject)
+                .map(element -> Json.text(element.getAsJsonObject(), "tags", null))
+                .filter(java.util.Objects::nonNull)
+                .map(Goals::tagTest)
+                .toList();
+        return state -> named.contains(state.getBlock()) || tagged.stream().anyMatch(test -> test.test(state));
+    }
+
+    private static java.util.function.Predicate<net.minecraft.world.level.block.state.BlockState> tagTest(
+        String expression) {
+        java.util.regex.Matcher call = TAG_QUERY.matcher(expression);
+        if (!call.find()) return state -> false;
+
+        boolean all = call.group(1).startsWith("all");
+        java.util.List<net.minecraft.tags.TagKey<Block>> tags = java.util.Arrays.stream(call.group(2).split(","))
+            .map(name -> name.trim().replaceAll("^['\"]|['\"]$", ""))
+            .map(net.minecraft.resources.Identifier::tryParse)
+            .filter(java.util.Objects::nonNull)
+            .map(id -> net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.BLOCK, id))
+            .toList();
+        return all
+            ? state -> !tags.isEmpty() && tags.stream().allMatch(state::is)
+            : state -> tags.stream().anyMatch(state::is);
+    }
+
+    private static final java.util.regex.Pattern TAG_QUERY =
+        java.util.regex.Pattern.compile("(?:query|q)\\.(any_tag|all_tags)\\s*\\(([^)]*)\\)");
+
+    /**
      * A block descriptor's own name, which a pack writes either bare or with the states beside it.
      *
      * `randomly_placeable_blocks` wraps the descriptor in an entry carrying a weight and a filter, so
