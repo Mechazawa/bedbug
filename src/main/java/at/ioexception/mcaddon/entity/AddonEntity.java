@@ -19,7 +19,6 @@ import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.BreathAirGoal;
-import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsTargetGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
@@ -602,6 +601,8 @@ public class AddonEntity extends PathfinderMob
         refreshStep();
 
         refreshBreath();
+        refreshPhysics();
+        refreshBuoyancy();
         refreshFuse();
         refreshHome();
         refreshContainer();
@@ -650,6 +651,34 @@ public class AddonEntity extends PathfinderMob
     }
 
     private Breath breath;
+
+    /**
+     * What `minecraft:physics` says moves the entity. Collision is Java's `noPhysics`, which also
+     * keeps other entities from pushing it.
+     */
+    private void refreshPhysics() {
+        com.google.gson.JsonObject physics = liveComponent("minecraft:physics");
+        weightless = !Goals.flag(physics, "has_gravity", true);
+        pushedOutOfBlocks = Goals.flag(physics, "push_towards_closest_space", false);
+        if (flight == null) noPhysics = !Goals.flag(physics, "has_collision", true);
+    }
+
+    private boolean weightless;
+
+    private boolean pushedOutOfBlocks;
+
+    @Override
+    public boolean isNoGravity() {
+        return super.isNoGravity() || weightless || buoyancy != null && buoyancy.weightless(this);
+    }
+
+    /** Moves the entity towards open air while its box is inside a block, the way Java moves an item. */
+    private void pushOutOfBlocks() {
+        if (!pushedOutOfBlocks || noPhysics) return;
+        if (level().noCollision(this, getBoundingBox().deflate(1.0E-7))) return;
+
+        moveTowardsClosestSpace(getX(), (getBoundingBox().minY + getBoundingBox().maxY) / 2, getZ());
+    }
 
     /**
      * Lights the fuse of a `minecraft:explode` that arrives with `fuse_lit`, and puts it out again
@@ -1059,8 +1088,9 @@ public class AddonEntity extends PathfinderMob
         if (carriesNow("minecraft:movement.hover")) return "hover";
         if (carriesNow("minecraft:movement.glide")) return "glide";
         if (carriesNow("minecraft:movement.fly")) return "fly";
-        // Swimming that banks into its turns, which is what Bedrock's dolphin and its sway both are.
-        if (carriesNow("minecraft:movement.dolphin") || carriesNow("minecraft:movement.sway")) return "swim";
+        if (carriesNow("minecraft:movement.sway")) return "sway";
+        // Swimming that banks into its turns, which is what Bedrock's dolphin is.
+        if (carriesNow("minecraft:movement.dolphin")) return "swim";
         if (carriesNow("minecraft:movement.jump") || carriesNow("minecraft:movement.skip")) return "hop";
 
         return "walk";
@@ -1094,6 +1124,7 @@ public class AddonEntity extends PathfinderMob
             case "glide" -> new GlideMoveControl(this, liveComponent("minecraft:movement.glide"));
             case "swim" -> new net.minecraft.world.entity.ai.control.SmoothSwimmingMoveControl(
                 this, 85, 10, 0.02f, 0.1f, true);
+            case "sway" -> new SwayMoveControl(this, liveComponent("minecraft:movement.sway"));
             case "hop" -> new HopMoveControl(this);
             default -> new net.minecraft.world.entity.ai.control.MoveControl(this);
         };
@@ -2696,35 +2727,38 @@ public class AddonEntity extends PathfinderMob
         heal(1);
     }
 
-    /** Rises through the liquid it is in, which is the whole of what a buoyant entity does. */
+    /**
+     * Rises through the liquid it is in. `minecraft:floats_in_liquid` floats in any liquid at the
+     * lift of a `base_buoyancy` of one, and `minecraft:buoyant` in the liquids it names.
+     */
     private void rideLiquid() {
-        com.google.gson.JsonObject buoyant = liveComponent("minecraft:buoyant");
-        boolean floating = declaresNow("minecraft:floats_in_liquid") ? isInWater() || isInLava()
-            : buoyant != null
-                && ((isInWater() && floatsOn(buoyant, "water")) || (isInLava() && floatsOn(buoyant, "lava")));
-        if (!floating) return;
-
-        double lift = Goals.number(buoyant, "base_buoyancy", 1) * BUOYANT_LIFT;
-        setDeltaMovement(getDeltaMovement().add(0, lift, 0));
+        if (buoyancy != null && buoyancy.floats(this)) {
+            buoyancy.ride(this);
+        } else if (declaresNow("minecraft:floats_in_liquid") && (isInWater() || isInLava())) {
+            setDeltaMovement(getDeltaMovement().add(0, Buoyancy.LIFT, 0));
+        } else {
+            return;
+        }
         fallDistance = 0;
     }
 
-    /** The lift a `base_buoyancy` of one gives each tick, in blocks a tick each tick. */
-    private static final double BUOYANT_LIFT = 0.03;
-
     /**
-     * Whether `liquid_blocks` names the liquid, still or flowing. A component naming none floats in
-     * water, which is where Java floats every mob that floats.
+     * The `minecraft:buoyant` the entity carries, read again as its groups change. Losing it while
+     * afloat pulls the entity down by `drag_down_on_buoyancy_removed`; an entity read back from
+     * storage carried none before and is pulled nowhere.
      */
-    private static boolean floatsOn(com.google.gson.JsonObject buoyant, String liquid) {
-        java.util.List<com.google.gson.JsonElement> named =
-            at.ioexception.mcaddon.util.Json.list(buoyant, "liquid_blocks");
-        if (named.isEmpty()) return liquid.equals("water");
+    private void refreshBuoyancy() {
+        Buoyancy before = buoyancy;
+        buoyancy = Buoyancy.tryFrom(liveComponent("minecraft:buoyant"));
+        if (before != null && buoyancy == null) before.dragDown(this);
+    }
 
-        return named.stream()
-            .filter(com.google.gson.JsonElement::isJsonPrimitive)
-            .map(block -> block.getAsString().replace("minecraft:", "").replace("flowing_", ""))
-            .anyMatch(liquid::equals);
+    private Buoyancy buoyancy;
+
+    @Override
+    protected void travelInFluid(net.minecraft.world.phys.Vec3 input) {
+        super.travelInFluid(input);
+        if (buoyancy != null) buoyancy.holdOffTheBank(this);
     }
 
     /** Ticks of the entity's own age at which something last hurt it, for the components that wait. */
@@ -3170,7 +3204,7 @@ public class AddonEntity extends PathfinderMob
         double speed = Goals.number(goal, "speed_multiplier", 1);
 
         switch (behaviour) {
-            case "minecraft:behavior.float" -> goals.add(priority, new FloatGoal(this));
+            case "minecraft:behavior.float" -> goals.add(priority, new StayAfloatGoal(this, goal));
             case "minecraft:behavior.panic" -> goals.add(priority, new PanickingGoal(this, goal));
             case "minecraft:behavior.swell" ->
                 goals.add(priority, new SwellGoal(this, goal));
@@ -3729,6 +3763,7 @@ public class AddonEntity extends PathfinderMob
         if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel)) return;
 
         stepOutOfWalls();
+        pushOutOfBlocks();
         turnRiders();
         animateState();
         everyTick();
@@ -4230,6 +4265,7 @@ public class AddonEntity extends PathfinderMob
      */
     private void everyTick() {
         holdBreath();
+        if (breath != null) breath.bubble(this);
         burnFuse();
         keepTransforming();
         noticeBeingHurt();

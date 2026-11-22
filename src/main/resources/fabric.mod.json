@@ -29,6 +29,7 @@
       "at.ioexception.mcaddon.gametest.PathingGameTests",
       "at.ioexception.mcaddon.gametest.NapperGameTests",
       "at.ioexception.mcaddon.gametest.DeathMessageGameTests",
+      "at.ioexception.mcaddon.gametest.PhysicsGameTests",
       "at.ioexception.mcaddon.gametest.DriftGoalGameTests",
       "at.ioexception.mcaddon.gametest.KeeperGoalGameTests",
       "at.ioexception.mcaddon.gametest.ItemGoalGameTests",
