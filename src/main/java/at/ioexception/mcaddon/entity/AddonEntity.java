@@ -4140,7 +4140,12 @@ public class AddonEntity extends PathfinderMob
      * pack declared the sensor at all; with none the whole feed costs a set lookup.
      */
     public static void rememberGameEvent(net.minecraft.server.level.ServerLevel level,
-        net.minecraft.world.phys.Vec3 where) {
+        net.minecraft.world.phys.Vec3 where, boolean noteBlock) {
+        if (noteBlock) {
+            level.getEntitiesOfClass(AddonEntity.class, net.minecraft.world.phys.AABB.ofSize(where,
+                    NOTE_EARSHOT * 2, NOTE_EARSHOT * 2, NOTE_EARSHOT * 2))
+                .forEach(heard -> heard.heardNoteAt = heard.tickCount);
+        }
         if (!AddonEntities.anyoneDeclares("minecraft:memory_sensor.game_event")) return;
 
         net.minecraft.world.phys.AABB earshot = net.minecraft.world.phys.AABB.ofSize(where,
@@ -4155,6 +4160,17 @@ public class AddonEntity extends PathfinderMob
 
     /** How far a game event carries, which is the range Java gives its own sculk sensor. */
     private static final double GAME_EVENT_EARSHOT = 16;
+
+    /** How far a played note block is heard, the range Java's allay listens over. */
+    private static final double NOTE_EARSHOT = 16;
+
+    /** The entity's own age at which it last heard a note block play, or negative while it has not. */
+    private int heardNoteAt = -1;
+
+    /** Ticks since a note block was last heard playing, or a huge number while none has been. */
+    public int sinceNoteBlock() {
+        return heardNoteAt < 0 ? Integer.MAX_VALUE : tickCount - heardNoteAt;
+    }
 
     /** The entity's own age at which it last heard something, or negative while it has heard nothing. */
     private int heardAt = -1;

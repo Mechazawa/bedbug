@@ -3320,3 +3320,9 @@ properties the pack named, because a test for a block asks about those and no ot
   `sound_interval` seconds while it stays so. Mojang's documentation says ticks, but its strider
   states 2 to 5, a sound several times a second in ticks, where its cat's 0 to 100 reads as seconds
   too; the schema gives every other sound interval in seconds, so seconds it is.
+- `minecraft:behavior.follow_owner` `ignore_vibration` false holds the follower back for 600 ticks
+  after it hears a note block play within 16 blocks (`AddonEntity.sinceNoteBlock`, fed from
+  `ServerLevelGameEventMixin` by `GameEvent.NOTE_BLOCK_PLAY`). Mojang does not say what vibration
+  counts; the allay is the one vanilla entity stating false, and Java's allay listens for note
+  blocks alone, over 16 blocks, and keeps a liked note block for 600 ticks (`AllayAi.hearNoteblock`).
+  A movement vibration would hold an allay back whenever its owner walked.

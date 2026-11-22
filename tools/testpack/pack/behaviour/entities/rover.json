@@ -219,6 +219,26 @@
             "range_max": 0.5
           }
         }
+      },
+      "tp:rover_following_minding": {
+        "minecraft:behavior.follow_owner": {
+          "priority": 1,
+          "speed_multiplier": 1,
+          "start_distance": 4,
+          "stop_distance": 2,
+          "can_teleport": false,
+          "ignore_vibration": false
+        }
+      },
+      "tp:rover_following": {
+        "minecraft:behavior.follow_owner": {
+          "priority": 1,
+          "speed_multiplier": 1,
+          "start_distance": 4,
+          "stop_distance": 2,
+          "can_teleport": false,
+          "ignore_vibration": true
+        }
       }
     },
     "components": {
@@ -352,6 +372,20 @@
         "add": {
           "component_groups": [
             "tp:rover_tempted_aloud"
+          ]
+        }
+      },
+      "tp:rover_make_following_minding": {
+        "add": {
+          "component_groups": [
+            "tp:rover_following_minding"
+          ]
+        }
+      },
+      "tp:rover_make_following": {
+        "add": {
+          "component_groups": [
+            "tp:rover_following"
           ]
         }
       }

@@ -219,10 +219,6 @@ REASONS = {
                                   "follows nothing: no vanilla entity states it and nothing says what "
                                   "a river is to a flight.",
     },
-    "minecraft:behavior.follow_owner": {
-        "ignore_vibration": "Whether a vibration interrupts the following. Only the allay says it does, and "
-                            "its note block goals sit above this one in priority, which is what interrupts it.",
-    },
     "minecraft:behavior.drink_potion": {
         "speed_modifier": "The potion's effects arrive the moment it is chosen, so there is no time spent "
                           "drinking for the entity to be slowed through.",

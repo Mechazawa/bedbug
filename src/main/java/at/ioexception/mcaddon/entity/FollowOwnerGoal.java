@@ -15,6 +15,10 @@ import java.util.EnumSet;
  * animals alone, so the same walk is carried out here over the owner taming stored. Bedrock states
  * the distances in blocks; the distance past which the entity teleports is the twelve Java's pets
  * teleport at, which Bedrock leaves unstated.
+ *
+ * With `ignore_vibration` false the entity stops following for thirty seconds after it hears a note
+ * block play within sixteen blocks. A vibration here is a note block because the one vanilla entity
+ * saying false is the allay, which Java's allay listens to for nothing else, over those numbers.
  */
 final class FollowOwnerGoal extends Goal {
     private static final double TELEPORT_PAST = 12;
@@ -32,6 +36,7 @@ final class FollowOwnerGoal extends Goal {
     private final boolean canTeleport;
     private final double maxDistance;
     private final double postTeleportDistance;
+    private final boolean minds;
     private LivingEntity owner;
     private int untilRepath;
 
@@ -43,6 +48,7 @@ final class FollowOwnerGoal extends Goal {
         this.canTeleport = Goals.flag(component, "can_teleport", true);
         this.maxDistance = Goals.number(component, "max_distance", 60);
         this.postTeleportDistance = Goals.number(component, "post_teleport_distance", stopDistance + 1);
+        this.minds = !Goals.flag(component, "ignore_vibration", true);
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 
@@ -66,8 +72,12 @@ final class FollowOwnerGoal extends Goal {
 
     /** A sitting, ridden or leashed entity stays where it was put, as Java's pets do. */
     private boolean held() {
-        return mob.getPose() == Pose.SITTING || mob.isPassenger() || mob.isLeashed();
+        return mob.getPose() == Pose.SITTING || mob.isPassenger() || mob.isLeashed()
+            || (minds && mob.sinceNoteBlock() < NOTE_MEMORY);
     }
+
+    /** How long a heard note block holds the entity back, Java's allay's liked note block cooldown. */
+    private static final int NOTE_MEMORY = 600;
 
     @Override
     public void start() {

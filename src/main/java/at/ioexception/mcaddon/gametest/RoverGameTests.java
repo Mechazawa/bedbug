@@ -229,6 +229,34 @@ public final class RoverGameTests {
         });
     }
 
+    /**
+     * A note block played nearby holds back a follower stating `ignore_vibration` false, while one
+     * ignoring vibrations walks to its owner.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
+    public void aNoteBlockHoldsBackAFollowerMindingVibrations(GameTestHelper helper) {
+        KeeperGoalGameTests.Listener owner = KeeperGoalGameTests.Listener.join(helper, new BlockPos(7, 0, 2));
+        owner.player().setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+        AddonEntity minding = rover(helper, "tp:rover_make_following_minding", new BlockPos(1, 0, 1));
+        if (minding == null) {
+            owner.leave();
+            helper.succeed();
+            return;
+        }
+        AddonEntity ignoring = rover(helper, "tp:rover_make_following", new BlockPos(1, 0, 3));
+        minding.setOwner(owner.player());
+        ignoring.setOwner(owner.player());
+        helper.getLevel().gameEvent(null, net.minecraft.world.level.gameevent.GameEvent.NOTE_BLOCK_PLAY,
+            helper.absolutePos(new BlockPos(1, 0, 2)));
+        helper.runAfterDelay(40, () -> {
+            helper.assertFalse(moved(helper, minding, 1, 1),
+                ROVER + " minding vibrations followed its owner just after a note block played.");
+            helper.assertTrue(moved(helper, ignoring, 1, 3), ROVER + " ignoring vibrations did not follow its owner.");
+            owner.leave();
+            helper.succeed();
+        });
+    }
+
     private static boolean moved(GameTestHelper helper, AddonEntity rover, int x, int z) {
         BlockPos at = helper.absolutePos(new BlockPos(x, 0, z));
         return rover.position().distanceTo(net.minecraft.world.phys.Vec3.atBottomCenterOf(at)) > 0.5;
