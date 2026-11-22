@@ -134,6 +134,41 @@ public final class ScriptGameTests {
         });
     }
 
+    /**
+     * A script taking an entity off one minecart and putting it in another in the same tick seats
+     * it, the way Villager News moves a villager onto a seat of its own and back. Java holds a rider
+     * back for three seconds after it last got off; `addRider` asks only the vehicle.
+     */
+    @GameTest()
+    public void aScriptMovesAPigFromOneMinecartToAnotherAtOnce(GameTestHelper helper) {
+        if (ServerHooks.scripts() == null) {
+            helper.succeed();
+            return;
+        }
+        Entity from = placed(helper, "minecart", STAND);
+        Entity to = placed(helper, "minecart", STAND.east(2));
+        Entity pig = placed(helper, "pig", STAND);
+        helper.assertTrue(Platform.mount(pig, from), "A pig could not board a minecart.");
+
+        BedrockLines.run(helper, Platform.commandSourceOf(pig, helper.getLevel()), "scriptevent tp:reseat");
+        helper.runAfterDelay(DELIVERED, () -> {
+            helper.assertTrue(Platform.tagsOf(pig).contains("tp:reseated_true"), "The script's addRider answered "
+                + Platform.tagsOf(pig) + " for a pig it had just taken off a minecart.");
+            helper.assertTrue(pig.getVehicle() == to, "The pig rides " + pig.getVehicle()
+                + " where the script moved it to the other minecart.");
+            helper.succeed();
+        });
+    }
+
+    private static Entity placed(GameTestHelper helper, String name, BlockPos where) {
+        Entity entity = Platform.createMob(BuiltInRegistries.ENTITY_TYPE
+            .getOptional(Platform.id("minecraft", name)).orElseThrow(), helper.getLevel());
+        BlockPos at = helper.absolutePos(where);
+        Platform.placeAt(entity, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+        helper.getLevel().addFreshEntity(entity);
+        return entity;
+    }
+
     /** A script asks a sign and an axe about Bedrock's item tags and reads them back by Bedrock's names. */
     @GameTest()
     public void aScriptAsksItemsAboutBedrocksTags(GameTestHelper helper) {

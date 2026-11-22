@@ -1,6 +1,8 @@
 package at.ioexception.mcaddon.clientgametest;
 
+import at.ioexception.mcaddon.client.render.JavaModelPoses;
 import at.ioexception.mcaddon.entity.AddonEntity;
+import at.ioexception.mcaddon.registry.ActiveAddons;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -13,6 +15,20 @@ import java.util.List;
 /** Finding what the server summoned in the client's copy of the world. */
 final class Entities {
     private Entities() {
+    }
+
+    /** Ticks another add-on is given to start animating a mob of the game's own it has just met. */
+    private static final int OTHER_ADDONS_TICKS = 10;
+
+    /**
+     * Whether an add-on other than the test pack plays a clip on this mob of the game's own before
+     * the test plays any, the way Villager News hides every villager by scaling it to nothing.
+     * Bedrock draws the mob that way too, so a test reading the mob's own pose has nothing to read.
+     */
+    static boolean animatedByAnotherAddon(ClientGameTestContext context, LivingEntity mob) {
+        context.waitTicks(OTHER_ADDONS_TICKS);
+        return ActiveAddons.active().converted().stream().anyMatch(pack -> !"tp".equals(pack.namespace()))
+            && context.computeOnClient(client -> JavaModelPoses.advance(mob, 0));
     }
 
     /** The first add-on entity of a type the client holds, waiting until there is one. */

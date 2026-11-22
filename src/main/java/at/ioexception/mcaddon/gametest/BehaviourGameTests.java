@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.server.EntityEvents;
+import at.ioexception.mcaddon.server.Rides;
 import at.ioexception.mcaddon.server.ServerHooks;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -1736,33 +1737,29 @@ public final class BehaviourGameTests {
      * it. A journeyman is Java's level three and Bedrock's tier two. The seat turns a villager a
      * quarter turn back from the way the perch faces and locks it there.
      */
-    @GameTest()
+    @GameTest(maxTicks = SPAWN_HANDLED_TICKS + SEATED_TICKS + 20)
     public void aSeatAsksItsRiderWhatItTradesAndTurnsIt(GameTestHelper helper) {
-        AddonEntity perch = spawn(helper, PERCH);
-        if (perch == null) {
+        if (AddonEntities.typeOf(PERCH) == null) {
             helper.succeed();
             return;
         }
-        perch.setYRot(PERCH_FACING);
+        Villager villager = standingVillager(helper, true);
 
-        ServerLevel level = helper.getLevel();
-        Villager villager = (Villager) Platform.createMob(BuiltInRegistries.ENTITY_TYPE
-            .getOptional(Platform.id("minecraft", "villager")).orElseThrow(), level);
-        Platform.placeAt(villager, perch.getX(), perch.getY(), perch.getZ(), 0f, 0f);
-        villager.setNoAi(true);
-        villager.setVillagerData(journeyman(villager, level));
-        level.addFreshEntity(villager);
-        helper.assertTrue(villager.startRiding(perch), PERCH + " would not seat a villager.");
+        helper.runAfterDelay(SPAWN_HANDLED_TICKS, () -> {
+            AddonEntity perch = spawn(helper, PERCH);
+            perch.setYRot(PERCH_FACING);
+            seat(helper, villager, perch);
 
-        helper.runAfterDelay(SEATED_TICKS, () -> {
-            helper.assertTrue(Platform.tagsOf(perch).contains("tp_perch_settled"),
-                PERCH + "'s controller never left its first state: " + Platform.tagsOf(perch));
-            helper.assertTrue(Platform.tagsOf(perch).contains("tp_perch_journeyman"),
-                PERCH + " never learnt from its seat that a journeyman sat on it: " + Platform.tagsOf(perch));
-            float off = Mth.wrapDegrees(villager.getYRot() - (PERCH_FACING + SEAT_TURN));
-            helper.assertTrue(Math.abs(off) < 0.01f, "The villager on " + PERCH + " faces " + villager.getYRot()
-                + " where its seat turns it to " + (PERCH_FACING + SEAT_TURN) + ".");
-            helper.succeed();
+            helper.runAfterDelay(SEATED_TICKS, () -> {
+                helper.assertTrue(Platform.tagsOf(perch).contains("tp_perch_settled"),
+                    PERCH + "'s controller never left its first state: " + Platform.tagsOf(perch));
+                helper.assertTrue(Platform.tagsOf(perch).contains("tp_perch_journeyman"),
+                    PERCH + " never learnt from its seat that a journeyman sat on it: " + Platform.tagsOf(perch));
+                float off = Mth.wrapDegrees(villager.getYRot() - (PERCH_FACING + SEAT_TURN));
+                helper.assertTrue(Math.abs(off) < 0.01f, "The villager on " + PERCH + " faces "
+                    + villager.getYRot() + " where its seat turns it to " + (PERCH_FACING + SEAT_TURN) + ".");
+                helper.succeed();
+            });
         });
     }
 
@@ -1770,27 +1767,23 @@ public final class BehaviourGameTests {
      * Every server expression shares one store of temporaries, so a condition a component states
      * reads what the seat of `tp:perch` wrote while the perch's own scripts did not touch it.
      */
-    @GameTest()
+    @GameTest(maxTicks = SPAWN_HANDLED_TICKS + SEATED_TICKS + 20)
     public void aComponentConditionReadsTheTemporariesTheSeatWrote(GameTestHelper helper) {
-        AddonEntity perch = spawn(helper, PERCH);
-        if (perch == null) {
+        if (AddonEntities.typeOf(PERCH) == null) {
             helper.succeed();
             return;
         }
+        Villager villager = standingVillager(helper, true);
 
-        ServerLevel level = helper.getLevel();
-        Villager villager = (Villager) Platform.createMob(BuiltInRegistries.ENTITY_TYPE
-            .getOptional(Platform.id("minecraft", "villager")).orElseThrow(), level);
-        Platform.placeAt(villager, perch.getX(), perch.getY(), perch.getZ(), 0f, 0f);
-        villager.setNoAi(true);
-        villager.setVillagerData(journeyman(villager, level));
-        level.addFreshEntity(villager);
-        helper.assertTrue(villager.startRiding(perch), PERCH + " would not seat a villager.");
+        helper.runAfterDelay(SPAWN_HANDLED_TICKS, () -> {
+            AddonEntity perch = spawn(helper, PERCH);
+            seat(helper, villager, perch);
 
-        helper.runAfterDelay(SEATED_TICKS, () -> {
-            helper.assertTrue(perch.holds("t.perch_tier == 2"), "A condition asked of " + PERCH
-                + " does not read t.perch_tier, which its seat writes for the journeyman on it.");
-            helper.succeed();
+            helper.runAfterDelay(SEATED_TICKS, () -> {
+                helper.assertTrue(perch.holds("t.perch_tier == 2"), "A condition asked of " + PERCH
+                    + " does not read t.perch_tier, which its seat writes for the journeyman on it.");
+                helper.succeed();
+            });
         });
     }
 
@@ -1802,36 +1795,52 @@ public final class BehaviourGameTests {
      * a quarter, and two for a pair, half a block either side along its own X, turning a villager
      * half a circle and a quarter back. Its own X points south while it faces west.
      */
-    @GameTest()
+    @GameTest(maxTicks = SPAWN_HANDLED_TICKS + 2 * SEATED_TICKS + 20)
     public void eachRiderSitsInItsOwnSeat(GameTestHelper helper) {
-        AddonEntity bench = spawn(helper, BENCH);
-        if (bench == null) {
+        if (AddonEntities.typeOf(BENCH) == null) {
             helper.succeed();
             return;
         }
-        bench.setYRot(BENCH_FACING);
+        Villager first = standingVillager(helper, false);
+        Villager second = standingVillager(helper, false);
 
-        ServerLevel level = helper.getLevel();
-        Villager first = seatedVillager(helper, level, bench);
-        helper.runAfterDelay(SEATED_TICKS, () -> {
-            assertSeated(helper, bench, first, 0, BENCH_FACING + 90, "alone");
+        helper.runAfterDelay(SPAWN_HANDLED_TICKS, () -> {
+            AddonEntity bench = spawn(helper, BENCH);
+            bench.setYRot(BENCH_FACING);
+            seat(helper, first, bench);
 
-            Villager second = seatedVillager(helper, level, bench);
             helper.runAfterDelay(SEATED_TICKS, () -> {
-                assertSeated(helper, bench, first, 0.5, BENCH_FACING + 180, "first of two");
-                assertSeated(helper, bench, second, -0.5, BENCH_FACING - 90, "second of two");
-                helper.succeed();
+                assertSeated(helper, bench, first, 0, BENCH_FACING + 90, "alone");
+
+                seat(helper, second, bench);
+                helper.runAfterDelay(SEATED_TICKS, () -> {
+                    assertSeated(helper, bench, first, 0.5, BENCH_FACING + 180, "first of two");
+                    assertSeated(helper, bench, second, -0.5, BENCH_FACING - 90, "second of two");
+                    helper.succeed();
+                });
             });
         });
     }
 
-    private static Villager seatedVillager(GameTestHelper helper, ServerLevel level, AddonEntity bench) {
+    /**
+     * Seats `rider` the way a script's `addRider` does. A villager another add-on took off a seat of
+     * its own as it spawned is one Java would hold back from boarding for three seconds.
+     */
+    private static void seat(GameTestHelper helper, Villager rider, AddonEntity seat) {
+        helper.assertTrue(Rides.hasRoom(seat, rider) && Platform.mount(rider, seat),
+            AddonEntities.identifierOf(seat.getType()) + " would not seat a villager.");
+    }
+
+    /** A still villager where the seat tests put their seat, a journeyman farmer when asked. */
+    private static Villager standingVillager(GameTestHelper helper, boolean journeyman) {
+        ServerLevel level = helper.getLevel();
         Villager villager = (Villager) Platform.createMob(BuiltInRegistries.ENTITY_TYPE
             .getOptional(Platform.id("minecraft", "villager")).orElseThrow(), level);
-        Platform.placeAt(villager, bench.getX(), bench.getY(), bench.getZ(), 0f, 0f);
+        BlockPos at = helper.absolutePos(STAND);
+        Platform.placeAt(villager, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
         villager.setNoAi(true);
+        if (journeyman) villager.setVillagerData(journeyman(villager, level));
         level.addFreshEntity(villager);
-        helper.assertTrue(villager.startRiding(bench), BENCH + " would not seat a villager.");
         return villager;
     }
 
@@ -1913,6 +1922,14 @@ public final class BehaviourGameTests {
 
     /** Enough for the perch to have run its first state and left it. */
     private static final int SEATED_TICKS = 5;
+
+    /**
+     * How long a new villager is left before it is seated. Another add-on may handle a villager as
+     * it spawns: Villager News seats each one on an entity of its own until that entity's seat has
+     * read its tier. A seat the test villager boarded first would lose it to that for those ticks,
+     * in Bedrock as here.
+     */
+    private static final int SPAWN_HANDLED_TICKS = 20;
 
     private static VillagerData journeyman(Villager villager, ServerLevel level) {
         //? if >=1.21.5 {

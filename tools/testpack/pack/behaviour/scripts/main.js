@@ -355,6 +355,16 @@ function boardTheBoat(player) {
     seats.addRider(sprite);
 }
 
+// `/scriptevent tp:reseat` takes whatever sent it off its minecart and puts it in another minecart
+// in the same tick, tagging it with what `addRider` answered.
+function reseat(rider) {
+    const from = rider.getComponent("minecraft:riding")?.entityRidingOn;
+    const to = rider.dimension.getEntities({ type: "minecraft:minecart", location: rider.location, maxDistance: 4 })
+        .find(cart => cart.id !== from?.id);
+    from?.getComponent("minecraft:rideable")?.ejectRider(rider);
+    rider.addTag(`tp:reseated_${to?.getComponent("minecraft:rideable")?.addRider(rider) ?? "nowhere"}`);
+}
+
 // Makes the player an operator twice and takes it away twice, tagging what each answered.
 function swapOperator(player) {
     const attempt = (name, call) => {
@@ -423,6 +433,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "tp:hud_hide": hideTheHotbar(player); break;
         case "tp:hud_reset": resetTheHud(player); break;
         case "tp:board": boardTheBoat(player); break;
+        case "tp:reseat": reseat(player); break;
         case "tp:override": overrideTheWisp(player, true); break;
         case "tp:override_clear": overrideTheWisp(player, false); break;
         case "tp:control_scheme": steer(player, event.message); break;

@@ -177,7 +177,7 @@ public final class Rides {
             : succeeded(command, "Summoned " + ridden + " ride(s).", ridden);
     }
 
-    private static boolean hasRoom(Entity ride, Entity rider) {
+    public static boolean hasRoom(Entity ride, Entity rider) {
         if (ride instanceof Player || ride == rider) return false;
         PassengerInvoker vehicle = (PassengerInvoker) ride;
         return vehicle.mcaddon$couldAcceptPassenger() && vehicle.mcaddon$canAddPassenger(rider);

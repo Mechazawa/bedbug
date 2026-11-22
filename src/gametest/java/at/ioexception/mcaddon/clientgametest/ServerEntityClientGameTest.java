@@ -155,6 +155,7 @@ public final class ServerEntityClientGameTest implements FabricClientGameTest {
     private static void vanillaAnimation(ClientGameTestContext context, TestServerContext server) {
         server.runCommand("execute at @p run summon minecraft:villager ~3 ~ ~3 {NoAI:1b}");
         LivingEntity villager = Entities.waitForClientLiving(context, "minecraft:villager");
+        if (Entities.animatedByAnotherAddon(context, villager)) return;
         float before = context.computeOnClient(client -> PosedParts.of(villager)).get("head").xScale();
         Assert.near(before, 1, TOLERANCE, "the villager's head scale before any clip is played");
 
