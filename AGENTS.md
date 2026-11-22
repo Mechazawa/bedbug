@@ -2981,6 +2981,9 @@ about the day runs `time set day` and a goal asks the clock.
 
 **The game test world has more than one biome.** On 26.3 the rain tests stood in a desert, where no
 rain falls, so a test whose answer depends on the biome runs `fillbiome` over its area first.
+
+**A sleeping player needs a bed.** `LivingEntity.tick` wakes a sleeper whose bed is gone, so a test
+that calls `startSleeping` places one first (`NapperGameTests.bed`).
 ## Carrying blocks, laying, working and giving
 
 `tp:keeper` carries one goal per group and `KeeperGoalGameTests` reads each back off the world.

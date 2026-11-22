@@ -253,6 +253,8 @@ public final class RoamGoalGameTests {
         }
 
         Player owner = helper.makeMockServerPlayerInLevel();
+        // A sleeper whose bed is gone wakes on its next tick.
+        NapperGameTests.bed(helper, new BlockPos(7, 1, 4));
         BlockPos bed = helper.absolutePos(new BlockPos(7, 1, 4));
         Platform.placeAt(owner, bed.getX() + 0.5, bed.getY(), bed.getZ() + 0.5, 0f, 0f);
         owner.startSleeping(bed);
