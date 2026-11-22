@@ -17,6 +17,7 @@
     "ServerPlayerChatMixin",
     "CommandsMixin",
     "ConnectionPacketLimitMixin",
+    "ConnectionReasonMixin",
     "SettingsAccessor",
     "LivingEntityMixin",
     "JumpingAccessor",
