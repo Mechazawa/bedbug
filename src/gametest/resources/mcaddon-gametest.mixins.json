@@ -8,6 +8,7 @@
   },
   "client": [
     "AddonParticleAccessor",
+    "ConnectionCloseMixin",
     "GuiGraphicsExtractorMixin",
     "HudTextAccessor",
     "IntegratedServerHaltMixin",
