@@ -223,8 +223,9 @@ REASONS = {
         "sound_interval": TEMPT_SOUND,
     },
     "minecraft:behavior.avoid_mob_type": {
-        "*": "Java's avoid goal flees whatever it is given at the speed it is given, with no sound, no "
-             "probability and no event when it gets away.",
+        "river_speed_multiplier": "Documented only as the speed 'when following river', and the goal "
+                                  "follows nothing: no vanilla entity states it and nothing says what "
+                                  "a river is to a flight.",
     },
     "minecraft:behavior.follow_owner": {
         "ignore_vibration": "Whether a vibration interrupts the following. Only the allay says it does, and "

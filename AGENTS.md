@@ -3304,3 +3304,15 @@ properties the pack named, because a test for a block asks about those and no ot
   asked as the component arrives and on every sensor pass, so a broken block lets go within ten
   ticks and one put back holds the entity again. An entity spawned in the open has no listed block
   at its home and is not held, which is what a bee summoned away from a hive is.
+- `minecraft:behavior.avoid_mob_type` is `AvoidMobsGoal`, which takes only the spot finding from
+  Java's `AvoidEntityGoal`. Without `ignore_visibility` a candidate has to be in line of sight. The
+  flight lasts until the entity is `max_flee` blocks from what it fled, planning a new spot within
+  `avoid_target_xz` and `avoid_target_y` each time it arrives, and runs at the sprint speed inside
+  `sprint_distance`. `remove_target` clears the target as the flight starts, `avoid_mob_sound` is
+  made then and every `sound_interval` seconds (the schema's unit), and `on_escape_event` is raised
+  when the flight ends at `max_flee`, its `target` naming the fleeing entity (`self`) or what it fled.
+  Mojang documents `probability_per_strength` only as a chance to stop avoiding "based on that
+  entity's strength". Decided here, after Java's wolf, which flees a stronger llama more often: a
+  candidate carrying `minecraft:strength` (a pack's own, or a Java llama's `getStrength`) is fled at
+  `probability_per_strength` times its strength, rolled each time the goal looks, and one carrying
+  none is always fled.

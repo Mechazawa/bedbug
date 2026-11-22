@@ -56,6 +56,155 @@
             "minecraft:web"
           ]
         }
+      },
+      "tp:rover_avoid_seen": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ]
+        }
+      },
+      "tp:rover_avoid_blind": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ],
+          "ignore_visibility": true
+        }
+      },
+      "tp:rover_avoid_escaping": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ],
+          "max_flee": 4,
+          "on_escape_event": {
+            "event": "tp:rover_escaped",
+            "target": "self"
+          }
+        }
+      },
+      "tp:rover_avoid_dropping": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ],
+          "remove_target": true
+        }
+      },
+      "tp:rover_avoid_wary": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "llama"
+              },
+              "max_dist": 5
+            },
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ],
+          "probability_per_strength": 0
+        }
+      },
+      "tp:rover_avoid_aloud": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ],
+          "avoid_mob_sound": "retreat",
+          "sound_interval": {
+            "min": 0.5,
+            "max": 0.5
+          }
+        }
+      },
+      "tp:rover_avoid_pacing": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5,
+              "walk_speed_multiplier": 0.5,
+              "sprint_speed_multiplier": 1.5
+            }
+          ],
+          "sprint_distance": 2
+        }
+      },
+      "tp:rover_avoid_near": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ],
+          "avoid_target_xz": 1,
+          "avoid_target_y": 1
+        }
+      },
+      "tp:rover_escaped": {
+        "minecraft:is_chested": {}
       }
     },
     "components": {
@@ -119,6 +268,69 @@
         "add": {
           "component_groups": [
             "tp:rover_home_listed"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_seen": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_seen"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_blind": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_blind"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_escaping": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_escaping"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_dropping": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_dropping"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_wary": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_wary"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_aloud": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_aloud"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_pacing": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_pacing"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_near": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_near"
+          ]
+        }
+      },
+      "tp:rover_escaped": {
+        "add": {
+          "component_groups": [
+            "tp:rover_escaped"
           ]
         }
       }

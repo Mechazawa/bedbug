@@ -11,6 +11,8 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.block.Blocks;
 
+import java.util.List;
+
 /**
  * The goal fields `tp:rover` carries one group each of, read back off the world.
  */
@@ -71,6 +73,144 @@ public final class RoverGameTests {
             ROVER + " is still held to a home whose cobweb is gone."));
     }
 
+    /**
+     * Without `ignore_visibility` a pig behind a wall frightens nothing; with it, the same pig sends
+     * the rover off.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
+    public void anEntityFleesOnlyWhatItSeesUnlessToldOtherwise(GameTestHelper helper) {
+        for (int y = 0; y < 3; y++) {
+            for (int z = 0; z < 5; z++) helper.setBlock(new BlockPos(3, y, z), Blocks.STONE);
+        }
+        AddonEntity seeing = rover(helper, "tp:rover_make_avoid_seen", new BlockPos(2, 0, 1));
+        if (seeing == null) {
+            helper.succeed();
+            return;
+        }
+        AddonEntity blind = rover(helper, "tp:rover_make_avoid_blind", new BlockPos(2, 0, 3));
+        pig(helper, new BlockPos(4, 0, 2));
+        helper.runAfterDelay(40, () -> {
+            helper.assertFalse(seeing.value("is_avoiding_mobs") == Boolean.TRUE || moved(helper, seeing, 2, 1),
+                ROVER + " fled a pig it cannot see.");
+            helper.assertTrue(moved(helper, blind, 2, 3),
+                ROVER + " stating ignore_visibility did not flee the pig behind the wall.");
+            helper.succeed();
+        });
+    }
+
+    /** The flight ends `max_flee` blocks from the pig, with `on_escape_event`. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void anEntityEscapesAtItsMaxFleeAndSaysSo(GameTestHelper helper) {
+        AddonEntity rover = rover(helper, "tp:rover_make_avoid_escaping", STAND);
+        if (rover == null) {
+            helper.succeed();
+            return;
+        }
+        pig(helper, STAND.east(2));
+        helper.succeedWhen(() -> helper.assertTrue(rover.declaresNow("minecraft:is_chested"),
+            ROVER + " never raised on_escape_event."));
+    }
+
+    /** `remove_target` drops what the entity was after as it starts to flee. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
+    public void anEntityFleeingDropsItsTarget(GameTestHelper helper) {
+        AddonEntity rover = rover(helper, "tp:rover_make_avoid_dropping", STAND);
+        if (rover == null) {
+            helper.succeed();
+            return;
+        }
+        Mob pig = pig(helper, STAND.east(2));
+        rover.setTarget(pig);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(rover.value("is_avoiding_mobs") == Boolean.TRUE, ROVER + " never fled.");
+            helper.assertTrue(rover.getTarget() == null, ROVER + " fled its target and kept it.");
+        });
+    }
+
+    /**
+     * `probability_per_strength` of nothing never flees a llama, which carries a strength, and
+     * always flees a pig, which carries none.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
+    public void aStrongCandidateIsFledByItsStrength(GameTestHelper helper) {
+        AddonEntity nearLlama = rover(helper, "tp:rover_make_avoid_wary", STAND);
+        if (nearLlama == null) {
+            helper.succeed();
+            return;
+        }
+        Mob llama = still(helper, "llama", STAND.east(2));
+        helper.runAfterDelay(40, () -> {
+            helper.assertFalse(nearLlama.value("is_avoiding_mobs") == Boolean.TRUE,
+                ROVER + " fled a llama at a chance of nothing per point of strength.");
+            llama.discard();
+            pig(helper, STAND.east(2));
+            helper.succeedWhen(() -> helper.assertTrue(nearLlama.value("is_avoiding_mobs") == Boolean.TRUE,
+                ROVER + " did not flee a pig, which has no strength to be weighed."));
+        });
+    }
+
+    /** `avoid_mob_sound` is made as the flight starts and again every `sound_interval` seconds. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void aFleeingEntityMakesItsAvoidSound(GameTestHelper helper) {
+        KeeperGoalGameTests.Listener listener = KeeperGoalGameTests.Listener.join(helper, STAND.south(3));
+        AddonEntity rover = rover(helper, "tp:rover_make_avoid_aloud", STAND);
+        if (rover == null) {
+            listener.leave();
+            helper.succeed();
+            return;
+        }
+        pig(helper, STAND.east(2));
+        helper.succeedWhen(() -> {
+            List<Long> heard = listener.heard("tp:rover.retreat", rover);
+            helper.assertTrue(heard.size() >= 2, ROVER + " made its retreat sound " + heard.size() + " times.");
+            helper.assertTrue(heard.get(1) - heard.get(0) >= 9 && heard.get(1) - heard.get(0) <= 12,
+                ROVER + " left " + (heard.get(1) - heard.get(0)) + " ticks between half second sounds.");
+            listener.leave();
+        });
+    }
+
+    /** Outside `sprint_distance` the flight runs at the walking speed. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 40)
+    public void aFleeingEntitySprintsOnlyWithinItsSprintDistance(GameTestHelper helper) {
+        AddonEntity rover = rover(helper, "tp:rover_make_avoid_pacing", STAND);
+        if (rover == null) {
+            helper.succeed();
+            return;
+        }
+        pig(helper, STAND.east(4));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(rover.value("is_avoiding_mobs") == Boolean.TRUE, ROVER + " never fled.");
+            helper.assertTrue(rover.getMoveControl().getSpeedModifier() == 0.5, ROVER
+                + " four blocks off with a sprint_distance of 2 runs at " + rover.getMoveControl().getSpeedModifier());
+        });
+    }
+
+    /** `avoid_target_xz` and `avoid_target_y` bound the spot the flight heads for. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 40)
+    public void aFleeingEntityPicksItsSpotWithinItsAvoidTargetBox(GameTestHelper helper) {
+        for (int x = 0; x < 8; x++) {
+            for (int z = 0; z < 8; z++) helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+        }
+        AddonEntity rover = rover(helper, "tp:rover_make_avoid_near", new BlockPos(2, 1, 4));
+        if (rover == null) {
+            helper.succeed();
+            return;
+        }
+        BlockPos start = rover.blockPosition();
+        pig(helper, new BlockPos(4, 1, 4));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(rover.getNavigation().getPath() != null, ROVER + " never planned a flight.");
+            BlockPos spot = rover.getNavigation().getPath().getTarget();
+            helper.assertTrue(Math.abs(spot.getX() - start.getX()) <= 1 && Math.abs(spot.getZ() - start.getZ()) <= 1,
+                ROVER + " with an avoid_target_xz of 1 heads for " + spot + " from " + start + ".");
+        });
+    }
+
+    private static boolean moved(GameTestHelper helper, AddonEntity rover, int x, int z) {
+        BlockPos at = helper.absolutePos(new BlockPos(x, 0, z));
+        return rover.position().distanceTo(net.minecraft.world.phys.Vec3.atBottomCenterOf(at)) > 0.5;
+    }
+
     private static void chase(GameTestHelper helper, String mountEvent, String riderEvent, double within) {
         AddonEntity mount = rover(helper, mountEvent, STAND);
         if (mount == null) {
@@ -91,9 +231,17 @@ public final class RoverGameTests {
     }
 
     private static Mob pig(GameTestHelper helper) {
+        return pig(helper, STAND.east(APART));
+    }
+
+    private static Mob pig(GameTestHelper helper, BlockPos where) {
+        return still(helper, "pig", where);
+    }
+
+    private static Mob still(GameTestHelper helper, String kind, BlockPos where) {
         Mob pig = (Mob) Platform.createMob(BuiltInRegistries.ENTITY_TYPE
-            .getOptional(Platform.id("minecraft", "pig")).orElseThrow(), helper.getLevel());
-        BlockPos at = helper.absolutePos(STAND.east(APART));
+            .getOptional(Platform.id("minecraft", kind)).orElseThrow(), helper.getLevel());
+        BlockPos at = helper.absolutePos(where);
         Platform.placeAt(pig, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
         pig.setNoAi(true);
         helper.getLevel().addFreshEntity(pig);
