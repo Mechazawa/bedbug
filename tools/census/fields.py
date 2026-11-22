@@ -113,8 +113,9 @@ REASONS = {
     # Fields read somewhere other than through a field helper.
     "minecraft:type_family": {"family": "Read where the families are collected."},
     "minecraft:behavior.random_look_around": {
-        "look_distance": "Java's random look aims at a point one block away at the eye's own height, so the "
-                         "distance along that bearing changes no angle the head turns through.",
+        "look_distance": "Java's `RandomLookAroundGoal.tick` aims the look control at a point on the chosen "
+                         "bearing at the eye's own height, and how far along that bearing the point lies "
+                         "changes no angle the head turns through.",
     },
     "minecraft:rail_sensor": {
         "tick_command_block_on_activate": "Java's `activateMinecart` is overridden by `MinecartCommandBlock` "
@@ -215,8 +216,9 @@ REASONS = {
     },
     "minecraft:behavior.trade_with_player": {"filters": "Java's merchant screen opens for whoever clicks."},
     "minecraft:behavior.swim_wander": {
-        "look_ahead": "Java's swimming navigator plans the whole path through the water, around whatever "
-                      "is in the way, before the entity moves, so there is no distance ahead to look.",
+        "look_ahead": "The wander is a path `WaterBoundPathNavigation` plans through the water to a spot "
+                      "`BehaviorUtils.getRandomSwimmablePos` picks, around whatever is in the way, before "
+                      "the entity moves, so there is no distance ahead to look for an obstacle.",
     },
     "minecraft:behavior.player_ride_tamed": {
         "priority": "The behaviour is answered as a rule on who may get on, asked whenever somebody tries, "
