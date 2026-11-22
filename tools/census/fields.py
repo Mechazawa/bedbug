@@ -262,11 +262,6 @@ REASONS = {
         "magic": "A drink here takes no time, its effects landing the tick its conditions hold, so the "
                  "ranged attack never runs beside a drink it would have to be kept apart from.",
     },
-    "minecraft:area_attack": {
-        "death_message_override": "Java words a death by the msgId of the damage type that dealt it, a "
-                                  "registered type shared by every blow of that kind rather than "
-                                  "something one blow carries.",
-    },
 }
 
 # The shapes a field name reaches the JSON through. Each captures the field it asks for.

@@ -2584,8 +2584,10 @@ public class AddonEntity extends PathfinderMob
                 nearby -> nearby != this
                     && filter.matches(new Filter.Context(this, nearby, nearby, ServerHooks.state())));
         net.minecraft.world.damagesource.DamageSource blow = damageSources().mobAttack(this);
-        net.minecraft.world.damagesource.DamageSource dealt = Goals.flag(attack, "use_self_as_damage_source", true)
-            ? blow : new net.minecraft.world.damagesource.DamageSource(blow.typeHolder());
+        net.minecraft.world.damagesource.DamageSource dealt = WordedDamageSource.worded(
+            Goals.flag(attack, "use_self_as_damage_source", true)
+                ? blow : new net.minecraft.world.damagesource.DamageSource(blow.typeHolder()),
+            Goals.text(attack, "death_message_override"));
         struck.forEach(nearby -> Platform.hurt(nearby, level, dealt, damage));
         if (!struck.isEmpty()) areaAttackReadyAt = tickCount + Goals.ticks(attack, "damage_cooldown", 0);
     }

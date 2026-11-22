@@ -1,0 +1,41 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:scorcher",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_scorcher",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.8,
+        "height": 0.8
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0
+      },
+      "minecraft:physics": {},
+      "minecraft:area_attack": {
+        "damage_range": 0.5,
+        "damage_per_tick": 1,
+        "death_message_override": "tp.death.scorched",
+        "entity_filter": {
+          "test": "is_family",
+          "subject": "other",
+          "value": "pig"
+        }
+      }
+    }
+  }
+}

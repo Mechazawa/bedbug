@@ -3288,3 +3288,10 @@ value or a named state picks a member of. A Bedrock id may be a Java block in a 
 the way back starts from a `BlockState`: a lit furnace reports itself as `minecraft:lit_furnace`. A
 command line is translated through `BedrockBlockNames.Resolved.command`, which writes only the
 properties the pack named, because a test for a block asks about those and no others.
+
+## Census reasons: misc
+
+- `minecraft:area_attack` `death_message_override` deals the blow through `entity.WordedDamageSource`,
+  a `DamageSource` whose `getLocalizedDeathMessage` answers the pack's key. Mojang publishes no
+  arguments for the key, so it takes Bedrock's death message order: the victim, then the killer when
+  the blow names one. `DeathMessageGameTests` reads the key off a pig's `CombatTracker`.
