@@ -2764,6 +2764,8 @@ AddonsScreen(parent)` is the one way in for a world, which only shows what is on
 opens from a button of its own; `addToPauseMenu` puts the button on the pause menu through Fabric's `ScreenEvents`, in the
 row of the lowest button, which it moves down a row. The three screens extend `ColumnScreen`, a
 heading, a `ScrollingColumn` and a Done button that goes back to the parent.
+The screen without switches says above its rows that add-ons are switched in Edit World. No Bedrock
+wording for that was found, so the line is this mod's own.
 
 Each add-on is one `AddonRow` widget: the pack's `pack.png` (a `DynamicTexture` per converted root,
 loaded when first needed and released in `removed()`, with the game's `unknown_pack.png` as the
@@ -2771,7 +2773,14 @@ fallback), name and version over one truncated description line, an On/Off label
 `IconButton`s laid over the row's right edge (gear for `PackSettingsScreen`, disabled with a tooltip
 when no pack has settings; info for `AddonReportScreen`). A click on the row body opens it to the full
 descriptions, authors, both packs and each pack's modules with their version and description;
-the screen keeps which roots are open and rebuilds, so the column learns the new height. The row
+the screen keeps which roots are open and rebuilds, so the column learns the new height.
+**A screen hands a click only to the first of its children under the pointer** (`getChildAt` in
+`ContainerEventHandler.mouseClicked`), and the row is added before the buttons over it, so
+`AddonRow.isMouseOver` answers false over their corner; otherwise the row takes their clicks. A test
+presses these buttons with the pointer (`AddonRows.turn` and `click`), because `onPress` passes this
+by. Java's Edit World fills a window 240 high with 6 pixels to spare, so `EditWorldScreenMixin`
+shrinks the gap over Save and Cancel to nothing to make room for its button, and
+`EditWorldAddonsClientGameTest` asks that every widget stays on the screen. The row
 draws through `Platform.paint`, and the gear and info pictures are this mod's own
 `textures/gui/*.png`, since Java ships no gear. The version-specific widget API is written for 26
 and later only. `AddonReportScreen`

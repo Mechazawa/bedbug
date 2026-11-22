@@ -198,13 +198,13 @@ public final class AddonRow extends AbstractWidget {
         });
     }
 
-    private boolean overButtons(double x, double y) {
-        return y < getY() + HEADER && x >= getX() + controlsLeft();
-    }
-
+    /**
+     * A screen hands a click only to the first of its children under the pointer, and the row comes
+     * before the buttons laid over it, so the row leaves their corner to them.
+     */
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        return !overButtons(event.x(), event.y()) && super.mouseClicked(event, doubleClick);
+    public boolean isMouseOver(double x, double y) {
+        return super.isMouseOver(x, y) && !(y < getY() + HEADER && x >= getX() + controlsLeft());
     }
 
     @Override

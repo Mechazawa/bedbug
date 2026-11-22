@@ -18,7 +18,6 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerCon
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -88,16 +87,20 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
         context.waitForScreen(PauseScreen.class);
         context.clickScreenButton("mcaddon.addons.button");
         context.waitForScreen(AddonsScreen.class);
+        Assert.that(shown(context).contains("Turn add-ons on or off for a world in Edit World."),
+            "Expected the pause menu's Add-Ons screen to say where add-ons are switched, and found " + shown(context));
         collapsedRow(context);
         expandedRow(context);
 
-        context.runOnClient(client -> pressAfter(ADDON + " 1.0.0", "What does not work"));
+        clickOnRow(context, "What does not work");
         context.waitForScreen(AddonReportScreen.class);
         context.runOnClient(client -> Platform.currentScreen().onClose());
         context.waitForScreen(AddonsScreen.class);
 
-        context.runOnClient(client -> pressAfter(ADDON + " 1.0.0", "Settings"));
-        context.waitForScreen(PackSettingsScreen.class);
+        clickOnRow(context, "Settings");
+        Worlds.waitForClient(context, client -> Platform.currentScreen() instanceof PackSettingsScreen, PATIENCE,
+            () -> "Expected Settings to open the add-on's settings, and found " + Platform.currentScreen() + " "
+                + shown(Platform.currentScreen()));
         Worlds.waitForClient(context, client -> shown(Platform.currentScreen()).contains("Ember glows: On")
                 && widget(Platform.currentScreen(), "Ember glows: On").active, PATIENCE,
             () -> "Expected the host's own world settings to be changeable, and found "
@@ -212,8 +215,11 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
         server.runOnServer(minecraft -> Platform.setOperator(minecraft, player(minecraft), false));
         context.runOnClient(client -> Platform.setScreen(new AddonsScreen(null)));
         context.waitForScreen(AddonsScreen.class);
-        context.runOnClient(client -> pressAfter(ADDON + " 1.0.0", "Settings"));
-        context.waitForScreen(PackSettingsScreen.class);
+        context.waitTick();
+        clickOnRow(context, "Settings");
+        Worlds.waitForClient(context, client -> Platform.currentScreen() instanceof PackSettingsScreen, PATIENCE,
+            () -> "Expected Settings to open the add-on's settings, and found " + Platform.currentScreen() + " "
+                + shown(Platform.currentScreen()));
         Worlds.waitForClient(context, client -> shown(Platform.currentScreen()).stream()
                 .anyMatch(line -> line.startsWith("Only an operator or the owner of the world")), PATIENCE,
             () -> "Expected a player who is no operator told they cannot change the world's settings, and found "
@@ -232,8 +238,11 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
         server.runOnServer(minecraft -> Platform.setOperator(minecraft, player(minecraft), true));
         context.runOnClient(client -> Platform.setScreen(new AddonsScreen(null)));
         context.waitForScreen(AddonsScreen.class);
-        context.runOnClient(client -> pressAfter(ADDON + " 1.0.0", "Settings"));
-        context.waitForScreen(PackSettingsScreen.class);
+        context.waitTick();
+        clickOnRow(context, "Settings");
+        Worlds.waitForClient(context, client -> Platform.currentScreen() instanceof PackSettingsScreen, PATIENCE,
+            () -> "Expected Settings to open the add-on's settings, and found " + Platform.currentScreen() + " "
+                + shown(Platform.currentScreen()));
         Worlds.waitForClient(context, client -> widget(Platform.currentScreen(), "Ember glows: On").active, PATIENCE,
             () -> "Expected an operator able to change the world's settings, and found "
                 + shown(Platform.currentScreen()));
@@ -283,18 +292,31 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
                 : java.util.stream.Stream.of(child));
     }
 
-    /** Presses the first button labelled `label` that comes after the line starting with `heading`. */
-    private static void pressAfter(String heading, String label) {
-        List<AbstractWidget> widgets = widgets(Platform.currentScreen());
-        int after = widgets.stream().map(widget -> widget.getMessage().getString()).toList().indexOf(
-            widgets.stream().map(widget -> widget.getMessage().getString())
-                .filter(text -> text.startsWith(heading)).findFirst().orElseThrow());
-        widgets.stream().skip(after)
-            .filter(widget -> widget instanceof AbstractButton && widget.getMessage().getString().equals(label))
-            .map(AbstractButton.class::cast)
-            .findFirst()
-            .orElseThrow(() -> new AssertionError("No " + label + " button after " + heading))
-            .onPress(new net.minecraft.client.input.MouseButtonInfo(0, 0));
+    /**
+     * A click with the pointer on the button labelled `label` laid over the test add-on's row. A screen
+     * opened straight from play lets the mouse go and moves the cursor to the middle of the window, and
+     * a click sent before the next tick lands there, so such a screen is given a tick first.
+     */
+    private static void clickOnRow(ClientGameTestContext context, String label) {
+        double[] point = context.computeOnClient(client -> {
+            AddonRow row = widgets(Platform.currentScreen()).stream()
+                .filter(AddonRow.class::isInstance)
+                .map(AddonRow.class::cast)
+                .filter(one -> one.title().equals(ADDON + " 1.0.0"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No row for " + ADDON + " on " + Platform.currentScreen()));
+            AbstractWidget button = widgets(Platform.currentScreen()).stream()
+                .filter(widget -> widget.getMessage().getString().equals(label))
+                .filter(widget -> widget.getY() >= row.getY() && widget.getY() < row.getY() + row.getHeight())
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No " + label + " button on the row of " + ADDON));
+            int scale = client.getWindow().getGuiScale();
+            return new double[] {(button.getX() + button.getWidth() / 2.0) * scale,
+                (button.getY() + button.getHeight() / 2.0) * scale};
+        });
+        context.getInput().setCursorPos(point[0], point[1]);
+        context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
+        context.waitTick();
     }
 
     /** A click with the pointer in the middle of the widget, which reaches it only while it is shown. */
