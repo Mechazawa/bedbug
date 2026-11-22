@@ -91,8 +91,6 @@ REASONS = {
         "push_towards_closest_space": "The one vanilla entity declaring it is the player, which this mod "
                                       "applies nothing to.",
     },
-    "minecraft:push_through": {"*": "A crowd spacing per entity, which Java holds nowhere."},
-    "minecraft:can_climb": {"*": "Carries no fields; declaring it is the whole statement."},
     "minecraft:inventory": {
         "container_type": "The screen a player opens onto the entity's slots, which Java builds for its own "
                           "horses, chest minecarts and hoppers by class. The entity holds the slots here and "
@@ -102,9 +100,6 @@ REASONS = {
         "additional_slots_per_strength": "Only Mojang's llama writes it, beside an `inventory_size`, and the "
                                          "documentation leaves open how the two add up; its "
                                          "`minecraft:strength` sizes a container alone at three slots a point.",
-    },
-    "minecraft:equipment": {
-        "*": "Names a loot table Java rolls for a mob's gear at spawn, which the loot reader covers.",
     },
     "minecraft:dweller": {
         "*": "Village membership. Java's point of interest manager would let any mob claim a bed or a job "
@@ -123,7 +118,6 @@ REASONS = {
     },
 
     # Fields read somewhere other than through a field helper.
-    "minecraft:type_family": {"family": "Read where the families are collected."},
     "minecraft:behavior.random_look_around": {
         "look_distance": "Java's random look aims at a point one block away at the eye's own height, so the "
                          "distance along that bearing changes no angle the head turns through.",
@@ -136,14 +130,11 @@ REASONS = {
                                             "alone, and a pack's entity is not one, so it has no command block "
                                             "to stop ticking.",
     },
-    "minecraft:loot": {"table": "Read by the loot table converter, which files the table under this path."},
     "minecraft:trade_table": {
-        "table": "Read where the trades are loaded, while the pack is still open.",
         "*": "Bedrock's own trading screen: Java's merchant screen has no display name of its own and "
              "no economy to convert the trades into.",
     },
     "minecraft:economy_trade_table": {
-        "table": "Read where the trades are loaded, while the pack is still open.",
         "*": "The cure discounts and the persistence belong to Bedrock's villager economy, which Java's "
              "merchant screen has no counterpart for.",
     },
@@ -197,7 +188,6 @@ REASONS = {
              "mount's own movement goals are switched off while it is ridden, so the chase and the "
              "distance kept belong to the rider's attack goal.",
     },
-    "minecraft:behavior.share_items": {"*": "Java's stroll goal has no arrival radius of its own."},
     "minecraft:behavior.sleep": {
         "sleep_collider_width": SLEEPING_BOX,
         "sleep_collider_height": SLEEPING_BOX,
