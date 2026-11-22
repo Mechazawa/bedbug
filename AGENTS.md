@@ -3548,8 +3548,9 @@ publishes nothing:
   free bed, bell and job site within 48 blocks, Java's `AcquirePoi` range, every
   `update_interval_base` plus up to `update_interval_variant` ticks (60 and 40 where unstated, as
   every vanilla dweller writes them), and gives them back when it dies or is discarded. The other
-  roles claim nothing. What each counts for is under `## Census gap: dweller-roles`. `preferred_profession` narrows the job site to that Java profession's
-  (`stone_mason` is `mason`, the other names lose their underscores). `SleepGoal` and `WorkGoal` go
+  roles claim nothing. What each counts for is under `## Census gap: dweller-roles`.
+  `preferred_profession` narrows the job site to that Java profession's (`stone_mason` is `mason`,
+  the other names lose their underscores). `SleepGoal` and `WorkGoal` go
   to the claimed bed and job site first.
 
 ## Census reasons: goals
