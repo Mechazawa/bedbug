@@ -15,6 +15,7 @@ import at.ioexception.mcaddon.bedrock.model.BedrockGeometry;
 import net.minecraft.world.entity.Entity;
 import org.joml.Vector3f;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -67,9 +68,9 @@ public final class EntityAnimator {
             }
 
             @Override
-            public void particle(String effect, String locator, List<MolangExpression> preEffectScript,
+            public Runnable particle(String effect, String locator, List<MolangExpression> preEffectScript,
                 boolean bound) {
-                listener.particle(definition.resolveParticle(effect), locator, preEffectScript, bound);
+                return listener.particle(definition.resolveParticle(effect), locator, preEffectScript, bound);
             }
         });
     }
@@ -84,9 +85,17 @@ public final class EntityAnimator {
         float crossFadeSeconds;
         float crossFadeLength;
 
+        /** What ends each effect the current state started, which Bedrock does as the state is left. */
+        final List<Runnable> effects = new ArrayList<>();
+
         /** How strongly the state being left still applies, which falls to zero over its length. */
         float weightOfLeaving() {
             return crossFadeLength <= 0f ? 0f : crossFadeSeconds / crossFadeLength;
+        }
+
+        void endEffects() {
+            effects.forEach(Runnable::run);
+            effects.clear();
         }
     }
 
@@ -210,7 +219,7 @@ public final class EntityAnimator {
 
         if (firstRun) {
             for (AnimationAction statement : state.onEntry()) statement.run(entity, environment);
-            fireStateEffects(state);
+            fireStateEffects(state, current);
         }
 
         current.timeInState += deltaSeconds;
@@ -228,6 +237,7 @@ public final class EntityAnimator {
             if (!controller.states().containsKey(transition.target())) continue;
 
             for (AnimationAction statement : state.onExit()) statement.run(entity, environment);
+            current.endEffects();
             current.leaving = state;
             current.crossFadeSeconds = state.blendTransition();
             current.crossFadeLength = state.blendTransition();
@@ -235,7 +245,7 @@ public final class EntityAnimator {
             current.timeInState = 0f;
             state = controller.states().get(current.state);
             for (AnimationAction statement : state.onEntry()) statement.run(entity, environment);
-            fireStateEffects(state);
+            fireStateEffects(state, current);
             break;
         }
         player.scopeFinishedTo(null);
@@ -277,12 +287,15 @@ public final class EntityAnimator {
         return Math.max(0f, value.asFloat());
     }
 
-    /** A controller state's own effects, which fire once as the state is entered. */
-    private void fireStateEffects(AnimationController.State state) {
+    /**
+     * A controller state's own effects, which fire once as the state is entered. Its particle effects
+     * run until the state is left, which ends them however long they would have run.
+     */
+    private void fireStateEffects(AnimationController.State state, ControllerState current) {
         for (String effect : state.soundEffects()) listener.sound(definition.resolveSound(effect));
         for (AnimationController.Effect effect : state.particleEffects()) {
-            listener.particle(definition.resolveParticle(effect.effect()), effect.locator(),
-                effect.preEffectScript(), effect.bound());
+            current.effects.add(listener.particle(definition.resolveParticle(effect.effect()),
+                effect.locator(), effect.preEffectScript(), effect.bound()));
         }
     }
 

@@ -45,10 +45,25 @@ public final class AddonEmitters {
 
     private static final List<Running> RUNNING = new ArrayList<>();
 
+    /** What ends an effect that started no emitter. */
+    public static final Runnable NOTHING = () -> { };
+
     /** The emitter making a particle at this moment, whose variables the particle is born with. */
     private static Running emitting;
 
     private AddonEmitters() {
+    }
+
+    /**
+     * The frame an emitter's particles move in when its `emitter_local_space` puts them in the
+     * entity's space: they keep their place relative to the anchor as it moves and, when `turns`,
+     * as the entity turns.
+     */
+    public record Space(Supplier<Vec3> anchor, Entity entity, boolean turns) {
+        /** The way the entity faces, which is the way its drawn model is turned. */
+        public float yaw() {
+            return entity instanceof LivingEntity living ? living.yBodyRot : entity.getYRot();
+        }
     }
 
     /** One effect in flight, at a place or following something. */
@@ -59,6 +74,9 @@ public final class AddonEmitters {
 
         /** Null for an effect standing still, which is how a one-off burst is left behind. */
         private final Entity following;
+
+        /** The entity's space its particles move in, or null where they move in the world's. */
+        private final Space space;
 
         /** Where the emitter stands at this moment, which moves with the entity or locator it is bound to. */
         private final Supplier<Vec3> anchor;
@@ -83,6 +101,12 @@ public final class AddonEmitters {
         private float travelled;
         private Vec3 was;
 
+        /** How far the emitter moved in its last tick, in blocks a tick. */
+        private Vec3 velocity = Vec3.ZERO;
+
+        /** Set once whatever started the effect ends it, which it does on its next tick. */
+        private boolean ended;
+
         private Running(ParticleDefinition definition, SimpleParticleType type, Entity following,
             Supplier<Vec3> anchor, int depth, MolangEnvironment.Queries queries,
             List<MolangExpression> preEffectScript) {
@@ -91,6 +115,10 @@ public final class AddonEmitters {
             this.following = following;
             this.anchor = anchor;
             this.depth = depth;
+
+            ParticleDefinition.Emitter.LocalSpace local = definition.emitter().localSpace();
+            this.space = local == null || !local.position() || following == null ? null
+                : new Space(anchor, following, local.rotation());
 
             if (queries != null) environment.setQueries(queries);
             randomise(environment, "emitter_random_");
@@ -143,35 +171,32 @@ public final class AddonEmitters {
         }
     }
 
-    /** Starts an effect at a point, or following an entity when one is given. */
-    public static void start(String identifier, Entity following, Vec3 at) {
-        start(identifier, following, placed(following, at), 0, null, List.of());
-    }
-
-    /** A point that stays put, or that keeps its offset from the entity it follows. */
-    private static Supplier<Vec3> placed(Entity following, Vec3 at) {
-        return following == null ? () -> at : () -> following.position().add(at);
+    /** Starts an effect standing at a point. */
+    public static void start(String identifier, Vec3 at) {
+        start(identifier, null, () -> at, 0, null, List.of());
     }
 
     /**
      * Starts an effect an entity's animation asked for: its emitter stands wherever `anchor` says at
      * each moment, answers the entity's queries, and runs the animation's `pre_effect_script` as it
-     * starts. An effect not bound to the entity is given no entity to follow.
+     * starts. An effect not bound to the entity is given no entity to follow. What comes back ends
+     * the emitter; the particles it made live out their lives.
      */
-    public static void start(String identifier, Entity following, Supplier<Vec3> anchor,
+    public static Runnable start(String identifier, Entity following, Supplier<Vec3> anchor,
         MolangEnvironment.Queries queries, List<MolangExpression> preEffectScript) {
-        start(identifier, following, anchor, 0, queries, preEffectScript);
+        return start(identifier, following, anchor, 0, queries, preEffectScript);
     }
 
-    private static void start(String identifier, Entity following, Supplier<Vec3> anchor, int depth,
+    private static Runnable start(String identifier, Entity following, Supplier<Vec3> anchor, int depth,
         MolangEnvironment.Queries queries, List<MolangExpression> preEffectScript) {
         SimpleParticleType type = AddonParticles.typeOf(identifier);
         ParticleDefinition definition = AddonParticles.definitionOf(identifier);
-        if (type == null || definition == null || depth > MAXIMUM_DEPTH) return;
+        if (type == null || definition == null || depth > MAXIMUM_DEPTH) return NOTHING;
 
         Running effect = new Running(definition, type, following, anchor, depth, queries, preEffectScript);
         RUNNING.add(effect);
         raise(effect, definition.emitter().events().creation());
+        return () -> effect.ended = true;
     }
 
     /**
@@ -227,9 +252,25 @@ public final class AddonEmitters {
         return emitting == null ? new MolangEnvironment() : emitting.environment.copy();
     }
 
-    /** Counts a particle the emitter making particles at this moment just made among its own. */
+    /**
+     * Counts a particle the emitter making particles at this moment just made among its own, and
+     * puts it in the entity's space where the emitter's `emitter_local_space` asks for that.
+     */
     public static void adopt(AddonParticle particle) {
-        if (emitting != null) emitting.alive.add(particle);
+        if (emitting == null) return;
+        emitting.alive.add(particle);
+        if (emitting.space != null) particle.carriedBy(emitting.space);
+    }
+
+    /**
+     * The velocity a particle made at this moment takes on from its emitter, in blocks a tick:
+     * the emitter's own where its `emitter_local_space` asks for it and it is bound to an entity.
+     */
+    public static Vec3 inheritedVelocity() {
+        if (emitting == null || emitting.following == null) return Vec3.ZERO;
+
+        ParticleDefinition.Emitter.LocalSpace local = emitting.definition.emitter().localSpace();
+        return local != null && local.velocity() ? emitting.velocity : Vec3.ZERO;
     }
 
     /** Writes each curve's answer to the Molang variable it is named after. */
@@ -243,7 +284,7 @@ public final class AddonEmitters {
     private static boolean advance(Running effect) {
         float was = effect.loopAge();
         effect.age += 1f / 20f;
-        if (effect.age > MAXIMUM_SECONDS) return false;
+        if (effect.ended || effect.age > MAXIMUM_SECONDS) return false;
         if (effect.following != null && effect.following.isRemoved()) return false;
         if (effect.looped()) was = 0f;
 
@@ -282,7 +323,10 @@ public final class AddonEmitters {
     private static void travelled(Running effect) {
         Vec3 here = effect.where();
         float before = effect.travelled;
-        if (effect.was != null) effect.travelled += (float) effect.was.distanceTo(here);
+        if (effect.was != null) {
+            effect.velocity = here.subtract(effect.was);
+            effect.travelled += (float) effect.velocity.length();
+        }
         effect.was = here;
 
         for (ParticleEvent.Travel travel : effect.definition.emitter().events().travel()) {
@@ -359,21 +403,21 @@ public final class AddonEmitters {
     }
 
     private static void raise(Running effect, List<String> names) {
-        fire(effect.definition, names, effect.environment, effect.where(), effect.following,
-            effect.depth);
+        fire(effect.definition, names, effect.environment, effect.where(), effect, effect.depth);
     }
 
-    /** Raises the named events of an effect, wherever the thing raising them stands. */
+    /** Raises the named events of a particle, which is bound to nothing, where it stands. */
     public static void fire(ParticleDefinition definition, List<String> names,
-        MolangEnvironment environment, Vec3 at, Entity following) {
-        fire(definition, names, environment, at, following, 0);
+        MolangEnvironment environment, Vec3 at) {
+        fire(definition, names, environment, at, null, 0);
     }
 
+    /** `source` is the emitter raising the events, or null for a particle. */
     private static void fire(ParticleDefinition definition, List<String> names,
-        MolangEnvironment environment, Vec3 at, Entity following, int depth) {
+        MolangEnvironment environment, Vec3 at, Running source, int depth) {
         for (String name : names) {
             ParticleEvent event = definition.event(name);
-            if (event != null) run(definition, event, environment, at, following, depth);
+            if (event != null) run(definition, event, environment, at, source, depth);
         }
     }
 
@@ -384,16 +428,16 @@ public final class AddonEmitters {
      * small tree and this walks it.
      */
     private static void run(ParticleDefinition definition, ParticleEvent event,
-        MolangEnvironment environment, Vec3 at, Entity following, int depth) {
+        MolangEnvironment environment, Vec3 at, Running source, int depth) {
         if (depth > MAXIMUM_DEPTH) return;
         if (event.expression() != null) event.expression().evaluate(environment);
         if (event.log() != null) McAddon.LOGGER.debug("Particle event: {}", event.log());
         if (event.sound() != null) play(definition, event.sound(), at);
-        if (event.particle() != null) show(event.particle(), environment, at, following, depth);
+        if (event.particle() != null) show(event.particle(), environment, at, source, depth);
 
-        event.sequence().forEach(node -> run(definition, node, environment, at, following, depth));
+        event.sequence().forEach(node -> run(definition, node, environment, at, source, depth));
         chosen(event, environment)
-            .ifPresent(node -> run(definition, node, environment, at, following, depth));
+            .ifPresent(node -> run(definition, node, environment, at, source, depth));
     }
 
     /** The one node a weighted choice landed on, or nothing when there were none to choose from. */
@@ -414,17 +458,20 @@ public final class AddonEmitters {
     /**
      * Starts the effect an event names, at the point it was raised from.
      *
-     * A bound effect follows the entity the raising one was hanging off; the rest are left standing
-     * where they were made.
+     * An `emitter_bound` effect raised by an emitter bound to an entity is bound the same way: it
+     * stands wherever the raising emitter stands, which is the locator it follows as the model
+     * animates. The rest are left standing where they were made.
      */
     private static void show(ParticleEvent.Visual visual, MolangEnvironment environment, Vec3 at,
-        Entity following, int depth) {
+        Running source, int depth) {
         if (visual.before() != null) visual.before().evaluate(environment);
 
-        boolean bound = "emitter_bound".equals(visual.type());
-        Entity carrier = bound ? following : null;
-        Vec3 where = bound && following != null ? at.subtract(following.position()) : at;
-        start(visual.effect(), carrier, placed(carrier, where), depth + 1, null, List.of());
+        boolean bound = "emitter_bound".equals(visual.type()) && source != null && source.following != null;
+        if (bound) {
+            start(visual.effect(), source.following, source.anchor, depth + 1, null, List.of());
+        } else {
+            start(visual.effect(), null, () -> at, depth + 1, null, List.of());
+        }
     }
 
     /** Plays one of the pack's own sound events, under the namespace the effect itself carries. */

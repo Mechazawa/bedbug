@@ -59,7 +59,7 @@ public final class McAddonClient implements ClientModInitializer {
             }
         });
         Channels.receiveParticle((effect, x, y, z) ->
-            at.ioexception.mcaddon.client.render.AddonEmitters.start(effect, null,
+            at.ioexception.mcaddon.client.render.AddonEmitters.start(effect,
                 new net.minecraft.world.phys.Vec3(x, y, z)));
         Channels.receiveForm(AddonFormScreen::receive);
         Channels.receiveInstructions((kind, body) -> {
