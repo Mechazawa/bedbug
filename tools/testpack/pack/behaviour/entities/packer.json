@@ -1,0 +1,69 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:packer",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_packer", "mob"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.8,
+        "height": 0.8
+      },
+      "minecraft:health": {
+        "value": 10,
+        "max": 10
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "component_groups": {
+      "tp:packer_chest": {
+        "minecraft:inventory": {
+          "container_type": "container",
+          "inventory_size": 8
+        }
+      },
+      "tp:packer_saddlebag": {
+        "minecraft:inventory": {
+          "container_type": "horse",
+          "inventory_size": 16,
+          "additional_slots_per_strength": 3
+        },
+        "minecraft:strength": {
+          "value": 2,
+          "max": 5
+        }
+      },
+      "tp:packer_siphoned": {
+        "minecraft:inventory": {
+          "container_type": "minecart_chest",
+          "inventory_size": 5,
+          "can_be_siphoned_from": true
+        }
+      },
+      "tp:packer_sealed": {
+        "minecraft:inventory": {
+          "container_type": "minecart_chest",
+          "inventory_size": 5
+        }
+      }
+    },
+    "events": {
+      "tp:packer_chest": {"add": {"component_groups": ["tp:packer_chest"]}},
+      "tp:packer_saddlebag": {"add": {"component_groups": ["tp:packer_saddlebag"]}},
+      "tp:packer_siphon": {"add": {"component_groups": ["tp:packer_siphoned"]}},
+      "tp:packer_seal": {"add": {"component_groups": ["tp:packer_sealed"]}}
+    }
+  }
+}

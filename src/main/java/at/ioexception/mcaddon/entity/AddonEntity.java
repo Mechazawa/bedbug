@@ -799,18 +799,24 @@ public class AddonEntity extends PathfinderMob
      * The container the entity carries, sized by whichever component asks for one at this moment.
      *
      * `minecraft:inventory` states the number of slots outright and `minecraft:strength` states how
-     * much the entity can carry, three slots per point in both editions. Either arrives with the
+     * much the entity can carry, three slots per point in both editions. With both, the inventory's
+     * `additional_slots_per_strength` gives the slots per point, up to its `inventory_size`. Either arrives with the
      * group that gives the entity something to carry things for, so the container is built again
      * whenever the number of slots the pack asks for has moved. What was in it is carried across,
      * because the items belong to the entity rather than to the group that asked for the room.
      */
     private void refreshContainer() {
         int slots = 0;
+        int strength = (int) Math.min(liveNumber("minecraft:strength", "value", 1),
+            liveNumber("minecraft:strength", "max", 5));
+        int perStrength = (int) liveNumber("minecraft:inventory", "additional_slots_per_strength", 0);
         if (declaresNow("minecraft:inventory")) {
             slots = Math.max(1, (int) liveNumber("minecraft:inventory", "inventory_size", 5));
+            if (perStrength > 0 && declaresNow("minecraft:strength")) {
+                slots = Math.max(1, Math.min(slots, perStrength * strength));
+            }
         } else if (declaresNow("minecraft:strength")) {
-            slots = Math.max(1, (int) Math.min(liveNumber("minecraft:strength", "value", 1),
-                liveNumber("minecraft:strength", "max", 5)) * 3);
+            slots = Math.max(1, strength * 3);
         }
         if (slots == 0 || (carried != null && carried.getContainerSize() == slots)) return;
 
@@ -6361,6 +6367,7 @@ public class AddonEntity extends PathfinderMob
             && player.getVehicle() == this) {
             return InteractionResult.PASS;
         }
+        if (!isClientSide() && openedBy(player)) return InteractionResult.SUCCESS;
         // `crouching_skip_interact` is a rideable entity asking to be mounted rather than used when
         // the player is crouching, which is the opposite of what Java does for its own mounts.
         com.google.gson.JsonObject rideable = definition == null
@@ -6397,6 +6404,28 @@ public class AddonEntity extends PathfinderMob
         priceFor(player);
         openTradingScreen(player, tradeTitle(), 1);
         return InteractionResult.SUCCESS;
+    }
+
+    /**
+     * Opens the entity's slots to the player where its `container_type` lets a player open them: a
+     * chest kind on any use, and a horse's saddlebags while the player crouches, as Bedrock's horse
+     * opens them. True as well when the player already has them open, so the other hand's use does
+     * not open them a second time.
+     */
+    private boolean openedBy(Player player) {
+        String type = Goals.text(liveComponent("minecraft:inventory"), "container_type");
+        if (carried == null || type == null) return false;
+        boolean opens = switch (type) {
+            case "horse" -> player.isCrouching();
+            case "container", "minecart_chest", "chest_boat", "hopper", "minecart_hopper" -> true;
+            default -> false;
+        };
+        if (!opens) return false;
+
+        if (!(player.containerMenu instanceof StockMenu open && open.belongsTo(this))) {
+            player.openMenu(StockMenu.of(this, carried));
+        }
+        return true;
     }
 
     /**
