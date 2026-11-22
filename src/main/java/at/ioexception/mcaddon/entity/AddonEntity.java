@@ -2879,8 +2879,8 @@ public class AddonEntity extends PathfinderMob
     private Buoyancy buoyancy;
 
     @Override
-    protected void travelInFluid(net.minecraft.world.phys.Vec3 input) {
-        super.travelInFluid(input);
+    public void travel(net.minecraft.world.phys.Vec3 input) {
+        super.travel(input);
         if (buoyancy != null) buoyancy.holdOffTheBank(this);
     }
 
