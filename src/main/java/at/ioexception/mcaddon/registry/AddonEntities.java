@@ -9,6 +9,7 @@ import com.google.gson.JsonObject;
 import at.ioexception.mcaddon.bedrock.behaviour.TradeTable;
 import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.entity.AddonEntity;
+import at.ioexception.mcaddon.entity.SiphonedEntity;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.pack.PackRole;
 import at.ioexception.mcaddon.pack.PackSet;
@@ -273,7 +274,18 @@ public final class AddonEntities {
 
         AddonRegistry.Shape shape() {
             return new AddonRegistry.Shape("entity", definition.identifier(), pack.displayName(),
-                population + " " + width() + " " + height());
+                population + " " + width() + " " + height() + (siphoned() ? " siphoned" : ""));
+        }
+
+        /** Whether any group lets a hopper reach the entity's inventory, which decides its class. */
+        boolean siphoned() {
+            return java.util.stream.Stream.concat(
+                    java.util.stream.Stream.of(definition.components().get("minecraft:inventory")),
+                    definition.componentGroups().values().stream()
+                        .map(group -> group.get("minecraft:inventory"))
+                        .filter(body -> body != null && body.isJsonObject())
+                        .map(com.google.gson.JsonElement::getAsJsonObject))
+                .anyMatch(inventory -> ServerEntityDefinition.flag(inventory, "can_be_siphoned_from", false));
         }
 
         /**
@@ -295,8 +307,8 @@ public final class AddonEntities {
                 return null;
             }
 
-            EntityType<AddonEntity> type = Platform.buildEntityType(
-                EntityType.Builder.of(AddonEntity::new, population).sized(width(), height()), id);
+            EntityType<AddonEntity> type = Platform.buildEntityType(EntityType.Builder.<AddonEntity>of(
+                siphoned() ? SiphonedEntity::new : AddonEntity::new, population).sized(width(), height()), id);
             count(definition);
             Registry.register(BuiltInRegistries.ENTITY_TYPE, id, type);
             AddonRegistry.built(shape());

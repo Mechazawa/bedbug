@@ -80,6 +80,13 @@ public class AddonEntity extends PathfinderMob
     /** The table the offers on the screen were built out of, so a group naming another rebuilds them. */
     private TradeTable offered;
     private boolean offersOverridden;
+    /** Offers `persist_trades` carried here, kept until the entity next trades by a table of its own. */
+    private boolean offersKept;
+    /**
+     * The gossip each player who cured this trader left, as Bedrock's minor and major positive
+     * values, which `cured_discount` adds to and `max_cured_discount` caps.
+     */
+    private final java.util.Map<java.util.UUID, int[]> cured = new java.util.HashMap<>();
     private int tradeExperience;
     private Identifier lootTable;
     private Age age;
@@ -821,18 +828,24 @@ public class AddonEntity extends PathfinderMob
      * The container the entity carries, sized by whichever component asks for one at this moment.
      *
      * `minecraft:inventory` states the number of slots outright and `minecraft:strength` states how
-     * much the entity can carry, three slots per point in both editions. Either arrives with the
+     * much the entity can carry, three slots per point in both editions. With both, the inventory's
+     * `additional_slots_per_strength` gives the slots per point, up to its `inventory_size`. Either arrives with the
      * group that gives the entity something to carry things for, so the container is built again
      * whenever the number of slots the pack asks for has moved. What was in it is carried across,
      * because the items belong to the entity rather than to the group that asked for the room.
      */
     private void refreshContainer() {
         int slots = 0;
+        int strength = (int) Math.min(liveNumber("minecraft:strength", "value", 1),
+            liveNumber("minecraft:strength", "max", 5));
+        int perStrength = (int) liveNumber("minecraft:inventory", "additional_slots_per_strength", 0);
         if (declaresNow("minecraft:inventory")) {
             slots = Math.max(1, (int) liveNumber("minecraft:inventory", "inventory_size", 5));
+            if (perStrength > 0 && declaresNow("minecraft:strength")) {
+                slots = Math.max(1, Math.min(slots, perStrength * strength));
+            }
         } else if (declaresNow("minecraft:strength")) {
-            slots = Math.max(1, (int) Math.min(liveNumber("minecraft:strength", "value", 1),
-                liveNumber("minecraft:strength", "max", 5)) * 3);
+            slots = Math.max(1, strength * 3);
         }
         if (slots == 0 || (carried != null && carried.getContainerSize() == slots)) return;
 
@@ -904,6 +917,17 @@ public class AddonEntity extends PathfinderMob
         if (table == null) table = liveText("minecraft:economy_trade_table", "table");
 
         return AddonEntities.tradeTable(getType(), table);
+    }
+
+    /**
+     * The title of the trading screen: the `display_name` of the table the entity trades by, a key
+     * of the pack's own text, or the entity's own name where that table states none.
+     */
+    private net.minecraft.network.chat.Component tradeTitle() {
+        String named = liveText("minecraft:trade_table", "table") != null
+            ? liveText("minecraft:trade_table", "display_name")
+            : liveText("minecraft:economy_trade_table", "display_name");
+        return named == null ? getDisplayName() : net.minecraft.network.chat.Component.translatable(named);
     }
 
     /**
@@ -2328,6 +2352,95 @@ public class AddonEntity extends PathfinderMob
         tradeExperience = before.tradeExperience;
     }
 
+    /**
+     * What a trader takes of the one it was before a transformation, and of whoever caused it.
+     *
+     * Offers the old one's table marked `persist_trades`, or carried here already, stay whole and wait
+     * for a table to trade by. A `convert_trades_economy` table hands an `economy_trade_table` its
+     * fresh offers with the result components of the old trade for the same items. A player who
+     * caused the transformation cured this trader.
+     */
+    public void inheritTrades(AddonEntity before, net.minecraft.world.entity.Entity cause) {
+        boolean persists = before.offersKept
+            || Goals.flag(before.liveComponent("minecraft:trade_table"), "persist_trades", false)
+            || Goals.flag(before.liveComponent("minecraft:economy_trade_table"), "persist_trades", false);
+        boolean converts = Goals.flag(before.liveComponent("minecraft:trade_table"), "convert_trades_economy", false)
+            && liveComponent("minecraft:economy_trade_table") != null;
+        MerchantOffers old = (persists || converts) && before.trades() != null ? before.getOffers() : before.offers;
+
+        if (persists && old != null) {
+            offers = old;
+            shown = before.shown;
+            TradeTable table = trades();
+            offersKept = table == null;
+            offered = table;
+            offeredTiers = table == null ? -1 : table.reached(tradeExperience);
+        } else if (converts && old != null) {
+            getOffers().forEach(fresh -> old.stream()
+                .filter(was -> sameTrade(was, fresh))
+                .findFirst()
+                .ifPresent(was -> fresh.getResult().applyComponents(was.getResult().getComponentsPatch())));
+        }
+        if (cause instanceof Player player) curedBy(player);
+        if (trades() != null) getOffers();
+        saveTrading();
+    }
+
+    private static boolean sameTrade(net.minecraft.world.item.trading.MerchantOffer one,
+        net.minecraft.world.item.trading.MerchantOffer other) {
+        return one.getBaseCostA().getItem() == other.getBaseCostA().getItem()
+            && one.getCostB().getItem() == other.getCostB().getItem()
+            && one.getResult().getItem() == other.getResult().getItem();
+    }
+
+    /**
+     * The player cured this trader, which `cured_discount` turns into gossip a later trade prices by.
+     * Bedrock's default pair is Java's own cure, and its `max_cured_discount` is Java's ceiling.
+     */
+    private void curedBy(Player player) {
+        com.google.gson.JsonObject economy = liveComponent("minecraft:economy_trade_table");
+        if (economy == null) return;
+
+        int[] added = gossipPair(economy.get("cured_discount"));
+        int[] ceiling = gossipPair(economy.get("max_cured_discount"));
+        int[] gossip = cured.computeIfAbsent(player.getUUID(), id -> new int[2]);
+        for (int kind = 0; kind < 2; kind++) {
+            gossip[kind] = ceiling[kind] < 0 ? Math.max(ceiling[kind], gossip[kind] + added[kind])
+                : Math.min(ceiling[kind], gossip[kind] + added[kind]);
+        }
+    }
+
+    /** A minor and a major gossip value, written as a pair or as one number for both. */
+    private static int[] gossipPair(com.google.gson.JsonElement written) {
+        if (written != null && written.isJsonArray() && written.getAsJsonArray().size() == 2) {
+            return new int[] {written.getAsJsonArray().get(0).getAsInt(), written.getAsJsonArray().get(1).getAsInt()};
+        }
+        if (written != null && written.isJsonPrimitive()) {
+            return new int[] {written.getAsInt(), written.getAsInt()};
+        }
+        return new int[] {CURE_MINOR, CURE_MAJOR};
+    }
+
+    /** Bedrock's default `cured_discount`, which are Java's minor and major positive gossip of a cure. */
+    private static final int CURE_MINOR = -25;
+    private static final int CURE_MAJOR = -20;
+
+    /** How much a major gossip outweighs a minor one, as Java's `GossipType` weighs them. */
+    private static final int MAJOR_WEIGHT = 5;
+
+    /**
+     * Prices the offers for the player about to trade, as Java's villager does for its reputation:
+     * each offer moves by the reputation times its price multiplier.
+     */
+    private void priceFor(Player player) {
+        int[] gossip = cured.get(player.getUUID());
+        if (gossip == null) return;
+
+        int reputation = -(gossip[0] + MAJOR_WEIGHT * gossip[1]);
+        getOffers().forEach(offer -> offer.addToSpecialPriceDiff(
+            -net.minecraft.util.Mth.floor(reputation * offer.getPriceMultiplier())));
+    }
+
     /** Leaves what the entity carries in its inventory on the ground where it stands. */
     public void dropInventory() {
         if (carried == null) return;
@@ -2348,13 +2461,15 @@ public class AddonEntity extends PathfinderMob
      * `begin_transform_sound` is made as it starts. The wait ends with the transformation unless the
      * group carrying the component has gone by then, which is how a cure is called off.
      */
-    public boolean startTransforming(com.google.gson.JsonObject body) {
+    public boolean startTransforming(com.google.gson.JsonObject body, net.minecraft.world.entity.Entity cause) {
         makeNoise(at.ioexception.mcaddon.util.Json.text(body, "begin_transform_sound", null));
         transforming = Transformation.tryFrom(body, this);
+        transformedBy = cause == null ? null : cause.getUUID();
         return transforming != null;
     }
 
     private Transformation transforming;
+    private java.util.UUID transformedBy;
 
     private void keepTransforming() {
         if (transforming == null) return;
@@ -2366,7 +2481,10 @@ public class AddonEntity extends PathfinderMob
 
         com.google.gson.JsonObject body = transforming.body();
         transforming = null;
-        EntityEvents.transform(this, body, ServerHooks.state());
+        net.minecraft.world.entity.Entity cause = transformedBy == null
+            || !(level() instanceof net.minecraft.server.level.ServerLevel level)
+            ? null : level.getEntity(transformedBy);
+        EntityEvents.transform(this, body, cause, ServerHooks.state());
     }
 
     /** The owner's id, or null while nobody owns this entity. */
@@ -3782,6 +3900,7 @@ public class AddonEntity extends PathfinderMob
             noticeRaidWon();
             rise();
             manageAsTrader();
+            dwell();
             despawn();
             expireSummons();
             burnInDaylight();
@@ -5275,6 +5394,18 @@ public class AddonEntity extends PathfinderMob
     public void remove(net.minecraft.world.entity.Entity.RemovalReason reason) {
         super.remove(reason);
         if (bossBar != null) bossBar.removeAllPlayers();
+        if (reason.shouldDestroy()) Dwelling.release(this);
+    }
+
+    /** The game tick of the next look round the dwelling `minecraft:dweller` names. */
+    private int dwellAt;
+
+    private void dwell() {
+        Dwelling dwelling = Dwelling.tryFrom(liveComponent("minecraft:dweller"));
+        if (dwelling == null || tickCount < dwellAt) return;
+
+        dwellAt = tickCount + dwelling.interval(getRandom());
+        dwelling.claim(this);
     }
 
     /** Shows a pack's boss its bar, to everybody inside the range the component named. */
@@ -6314,6 +6445,7 @@ public class AddonEntity extends PathfinderMob
             && player.getVehicle() == this) {
             return InteractionResult.PASS;
         }
+        if (!isClientSide() && openedBy(player)) return InteractionResult.SUCCESS;
         // `crouching_skip_interact` is a rideable entity asking to be mounted rather than used when
         // the player is crouching, which is the opposite of what Java does for its own mounts.
         com.google.gson.JsonObject rideable = definition == null
@@ -6347,8 +6479,31 @@ public class AddonEntity extends PathfinderMob
         if (getTradingPlayer() != null) return super.mobInteract(player, hand);
 
         setTradingPlayer(player);
-        openTradingScreen(player, getDisplayName(), 1);
+        priceFor(player);
+        openTradingScreen(player, tradeTitle(), 1);
         return InteractionResult.SUCCESS;
+    }
+
+    /**
+     * Opens the entity's slots to the player where its `container_type` lets a player open them: a
+     * chest kind on any use, and a horse's saddlebags while the player crouches, as Bedrock's horse
+     * opens them. True as well when the player already has them open, so the other hand's use does
+     * not open them a second time.
+     */
+    private boolean openedBy(Player player) {
+        String type = Goals.text(liveComponent("minecraft:inventory"), "container_type");
+        if (carried == null || type == null) return false;
+        boolean opens = switch (type) {
+            case "horse" -> player.isCrouching();
+            case "container", "minecart_chest", "chest_boat", "hopper", "minecart_hopper" -> true;
+            default -> false;
+        };
+        if (!opens) return false;
+
+        if (!(player.containerMenu instanceof StockMenu open && open.belongsTo(this))) {
+            player.openMenu(StockMenu.of(this, carried));
+        }
+        return true;
     }
 
     /**
@@ -6427,6 +6582,9 @@ public class AddonEntity extends PathfinderMob
     @Override
     public void setTradingPlayer(Player player) {
         tradingPlayer = player;
+        if (player == null && offers != null) {
+            offers.forEach(net.minecraft.world.item.trading.MerchantOffer::resetSpecialPriceDiff);
+        }
     }
 
     @Override
@@ -6445,6 +6603,11 @@ public class AddonEntity extends PathfinderMob
     public MerchantOffers getOffers() {
         TradeTable trades = trades();
         int reached = trades == null ? 0 : trades.reached(tradeExperience);
+        if (offersKept && trades != null) {
+            offersKept = false;
+            offered = trades;
+            offeredTiers = reached;
+        }
         if (offers != null && (offersOverridden || reached == offeredTiers && trades == offered)) {
             return offers;
         }
@@ -6510,6 +6673,15 @@ public class AddonEntity extends PathfinderMob
             stock.add(entry);
         }
         saved.add("inventory", stock);
+        saved.addProperty("kept", offersKept);
+        com.google.gson.JsonObject gossip = new com.google.gson.JsonObject();
+        cured.forEach((player, values) -> {
+            com.google.gson.JsonArray pair = new com.google.gson.JsonArray();
+            pair.add(values[0]);
+            pair.add(values[1]);
+            gossip.add(player.toString(), pair);
+        });
+        saved.add("cured", gossip);
         ServerHooks.state().setTrading(getUUID(), saved);
     }
 
@@ -6519,6 +6691,12 @@ public class AddonEntity extends PathfinderMob
 
         var ops = level().registryAccess().createSerializationContext(com.mojang.serialization.JsonOps.INSTANCE);
         tradeExperience = (int) at.ioexception.mcaddon.util.Json.number(saved, "experience", 0);
+        offersKept = saved.has("kept") && saved.get("kept").getAsBoolean();
+        cured.clear();
+        if (saved.has("cured") && saved.get("cured").isJsonObject()) {
+            saved.getAsJsonObject("cured").entrySet().forEach(entry ->
+                cured.put(java.util.UUID.fromString(entry.getKey()), gossipPair(entry.getValue())));
+        }
         spent.clear();
         at.ioexception.mcaddon.util.Json.list(saved, "spent").forEach(key -> spent.add(key.getAsString()));
 

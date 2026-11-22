@@ -80,25 +80,16 @@ REASONS = {
              "sends on the type's own `updateInterval` and on every impulse, so the entity is kept in step "
              "either way.",
     },
-    "minecraft:inventory": {
-        "container_type": "The screen a player opens onto the entity's slots, which Java builds for its own "
-                          "horses, chest minecarts and hoppers by class. The entity holds the slots here and "
-                          "has no screen onto them, so a player cannot open them.",
-        "can_be_siphoned_from": "A Java hopper draws from an entity that is a container, which only Java's "
-                                "own minecarts and boats are.",
-        "additional_slots_per_strength": "Only Mojang's llama writes it, beside an `inventory_size`, and the "
-                                         "documentation leaves open how the two add up; its "
-                                         "`minecraft:strength` sizes a container alone at three slots a point.",
-    },
     "minecraft:dweller": {
-        "*": "Village membership. Java's point of interest manager would let any mob claim a bed or a job "
-             "site, but the village those claims make up, its gossip, its golems and its raids, is kept by "
-             "Java's villager brain, which a pack's entity has none of; the restriction radius is read.",
-    },
-    "minecraft:offspring": {
-        "blend_attributes": "Mojang's documentation names no attribute and no rule this blends by; the "
-                            "attributes `parent_centric_attribute_blending` lists are blended, by Java's "
-                            "own horse breeding.",
+        "dwelling_type": "`village` is the one type published, and Java keeps a village as the points of "
+                         "interest in `PoiManager`, which is where `Dwelling` takes its claims, so there "
+                         "is no second kind of dwelling to choose.",
+        "can_migrate": "Moving between villages. Java keeps no village an entity belongs to: "
+                       "`ServerLevel.isVillage` asks only whether points of interest are near a place, so "
+                       "there is no first village to stay in and no second one to move to.",
+        "first_founding_reward": "Reputation a player earns as a village is first founded. Java founds no "
+                                 "village, it has points of interest and no moment one starts, and keeps "
+                                 "reputation per villager in `Villager.gossips` rather than per village.",
     },
 
     # Fields read somewhere other than through a field helper.
@@ -119,12 +110,12 @@ REASONS = {
                                             "not got.",
     },
     "minecraft:trade_table": {
-        "*": "Bedrock's own trading screen: Java's merchant screen has no display name of its own and "
-             "no economy to convert the trades into.",
+        "new_screen": "Picks between Bedrock's two trading layouts. A merchant opens Java's one "
+                      "`MenuType.MERCHANT` screen, `MerchantScreen`, so there is no second layout to pick.",
     },
     "minecraft:economy_trade_table": {
-        "*": "The cure discounts and the persistence belong to Bedrock's villager economy, which Java's "
-             "merchant screen has no counterpart for.",
+        "new_screen": "Picks between Bedrock's two trading layouts. A merchant opens Java's one "
+                      "`MenuType.MERCHANT` screen, `MerchantScreen`, so there is no second layout to pick.",
     },
 
     # Attributes. Bedrock states a value and a ceiling; Java's attributes carry a fixed ceiling of
@@ -165,9 +156,6 @@ REASONS = {
 
         "priority": "Drinking runs beside the entity's goals on the sensor pass rather than as one of "
                     "them, so it has no place among them to take.",
-    },
-    "minecraft:behavior.trade_interest": {
-        "*": "Java's merchant screen opens on a click rather than after a mob has shown interest.",
     },
     "minecraft:behavior.trade_with_player": {"filters": "Java's merchant screen opens for whoever clicks."},
     "minecraft:behavior.swim_wander": {

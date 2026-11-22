@@ -259,6 +259,11 @@ public final class WorkGoal extends Goal {
                 type -> type.value().is(Blocks.COMPOSTER.defaultBlockState()),
                 mob.blockPosition(), SEARCH_RADIUS, PoiManager.Occupancy.ANY).orElse(null);
         }
+        BlockPos claimed = Dwelling.jobSite(mob);
+        if (claimed != null && level.getPoiManager().exists(claimed,
+            type -> type.is(PoiTypeTags.ACQUIRABLE_JOB_SITE))) {
+            return claimed;
+        }
         return level.getPoiManager().findClosest(type -> type.is(PoiTypeTags.ACQUIRABLE_JOB_SITE),
             mob.blockPosition(), SEARCH_RADIUS, PoiManager.Occupancy.ANY).orElse(null);
     }

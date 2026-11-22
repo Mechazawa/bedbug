@@ -1,0 +1,118 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:haggler",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_haggler", "mob"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.5,
+        "height": 0.75
+      },
+      "minecraft:health": {
+        "value": 10,
+        "max": 10
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "component_groups": {
+      "tp:haggler_named": {
+        "minecraft:trade_table": {
+          "display_name": "tp.haggler.counter",
+          "table": "trading/haggler_trades.json"
+        }
+      },
+      "tp:haggler_interested": {
+        "minecraft:trade_table": {
+          "table": "trading/haggler_trades.json"
+        },
+        "minecraft:behavior.trade_interest": {
+          "priority": 1,
+          "within_radius": 4,
+          "interest_time": 45,
+          "carried_item_switch_time": 0.5,
+          "remove_item_time": 1,
+          "cooldown": 2
+        }
+      },
+      "tp:haggler_persisting": {
+        "minecraft:economy_trade_table": {
+          "table": "trading/haggler_trades.json",
+          "persist_trades": true
+        }
+      },
+      "tp:haggler_forgetful": {
+        "minecraft:economy_trade_table": {
+          "table": "trading/haggler_trades.json"
+        }
+      },
+      "tp:haggler_converting": {
+        "minecraft:trade_table": {
+          "table": "trading/haggler_trades.json",
+          "convert_trades_economy": true
+        }
+      },
+      "tp:haggler_turning": {
+        "minecraft:transformation": {
+          "into": "tp:haggler",
+          "add": {
+            "component_groups": ["tp:haggler_husk"]
+          }
+        }
+      },
+      "tp:haggler_husk": {
+        "minecraft:is_shaking": {}
+      },
+      "tp:haggler_returning": {
+        "minecraft:transformation": {
+          "into": "tp:haggler",
+          "add": {
+            "component_groups": ["tp:haggler_restocked"]
+          }
+        }
+      },
+      "tp:haggler_restocked": {
+        "minecraft:economy_trade_table": {
+          "table": "trading/haggler_trades.json"
+        }
+      },
+      "tp:haggler_curing": {
+        "minecraft:transformation": {
+          "into": "tp:haggler",
+          "add": {
+            "component_groups": ["tp:haggler_cured"]
+          }
+        }
+      },
+      "tp:haggler_cured": {
+        "minecraft:economy_trade_table": {
+          "table": "trading/haggler_trades.json",
+          "cured_discount": [-25, -20],
+          "max_cured_discount": [-25, -20]
+        }
+      }
+    },
+    "events": {
+      "tp:haggler_name": {"add": {"component_groups": ["tp:haggler_named"]}},
+      "tp:haggler_interest": {"add": {"component_groups": ["tp:haggler_interested"]}},
+      "tp:haggler_persist": {"add": {"component_groups": ["tp:haggler_persisting"]}},
+      "tp:haggler_forget": {"add": {"component_groups": ["tp:haggler_forgetful"]}},
+      "tp:haggler_convert": {"add": {"component_groups": ["tp:haggler_converting"]}},
+      "tp:haggler_turn": {"add": {"component_groups": ["tp:haggler_turning"]}},
+      "tp:haggler_return": {"add": {"component_groups": ["tp:haggler_returning"]}},
+      "tp:haggler_cure": {"add": {"component_groups": ["tp:haggler_curing"]}}
+    }
+  }
+}
