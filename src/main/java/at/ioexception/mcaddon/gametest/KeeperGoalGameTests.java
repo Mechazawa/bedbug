@@ -211,6 +211,12 @@ public final class KeeperGoalGameTests {
         BlockPos tolerantAt = new BlockPos(1, 0, 1);
         BlockPos strictAt = new BlockPos(1, 0, 4);
         BlockPos rainedOn = helper.absolutePos(tolerantAt.east().above());
+        // The test world has every biome, and rain falls in none of the dry ones.
+        BlockPos low = rainedOn.offset(-11, -8, -11);
+        BlockPos high = rainedOn.offset(11, 8, 11);
+        MinecraftServer server = helper.getLevel().getServer();
+        server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "fillbiome " + low.getX() + " "
+            + low.getY() + " " + low.getZ() + " " + high.getX() + " " + high.getY() + " " + high.getZ() + " minecraft:plains");
         helper.setBlock(tolerantAt.east(), station);
         helper.setBlock(strictAt.east(), station);
         AddonEntity[] keepers = new AddonEntity[2];
