@@ -20,7 +20,8 @@ import java.util.Map;
  * property `property_inheritance` names from one parent or the other, and its colour from one parent
  * or, under `combine_parent_colors`, from the dye the two parents' colours make together. Each
  * attribute `parent_centric_attribute_blending` names is blended out of both parents' values the
- * way Java breeds a horse, inside the range the child's own component states.
+ * way Java breeds a horse, inside the range the child's own component states, unless
+ * `blend_attributes` turns blending off.
  */
 public final class Offspring {
     /**
@@ -70,7 +71,8 @@ public final class Offspring {
     private Offspring(JsonObject component) {
         this.inheritsOwner = Goals.flag(component, "inherit_tamed", true);
         this.inherited = names(component.get("property_inheritance"));
-        this.blended = names(component.get("parent_centric_attribute_blending"));
+        this.blended = Goals.flag(component, "blend_attributes", true)
+            ? names(component.get("parent_centric_attribute_blending")) : List.of();
         this.combinesColours = Goals.flag(component, "combine_parent_colors", false);
 
         JsonObject mutation = Goals.object(component, "mutation_factor");

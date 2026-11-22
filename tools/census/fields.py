@@ -111,11 +111,6 @@ REASONS = {
              "site, but the village those claims make up, its gossip, its golems and its raids, is kept by "
              "Java's villager brain, which a pack's entity has none of; the restriction radius is read.",
     },
-    "minecraft:offspring": {
-        "blend_attributes": "Mojang's documentation names no attribute and no rule this blends by; the "
-                            "attributes `parent_centric_attribute_blending` lists are blended, by Java's "
-                            "own horse breeding.",
-    },
     "minecraft:preferred_path": {
         "*": "Per-block path costs. Java's walk node evaluator prices each node by the path type it "
              "classes the block as and keeps no price per block, so the prices need an evaluator of this "
