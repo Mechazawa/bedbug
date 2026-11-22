@@ -35,7 +35,8 @@ public final class BedrockRulesClientGameTest implements FabricClientGameTest {
                 "the coordinates stayed, or the day count went, once showcoordinates was off.");
 
             world.getServer().runCommand(
-                "give @a minecraft:diamond_pickaxe[minecraft:can_break={blocks:\"minecraft:stone\"}]");
+                "item replace entity @a weapon.mainhand with minecraft:diamond_pickaxe[minecraft:can_break={blocks:"
+                    + "\"minecraft:stone\"}]");
             context.waitFor(client -> client.player.getMainHandItem().has(DataComponents.CAN_BREAK));
             Assert.that(!breakLines(context).isEmpty(), "a pickaxe naming what it breaks says nothing about it.");
             world.getServer().runCommand("bedrock gamerule showtags false");
