@@ -1,10 +1,13 @@
 package at.ioexception.mcaddon.clientgametest;
 
 import at.ioexception.mcaddon.client.render.AddonEmitters;
+import at.ioexception.mcaddon.client.render.AddonParticle;
+import at.ioexception.mcaddon.clientgametest.mixin.ParticleMotionAccessor;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 
 import java.util.List;
@@ -61,6 +64,8 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             settling(context, world);
             flare(context, world);
             thud(context, world);
+            bounce(context, world);
+            skid(context, world);
         }
     }
 
@@ -308,7 +313,10 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
      * `variable.burst` to three, which the effect's instant rate reads, so the script runs in the
      * emitter. `tp:wake` and `tp:wake_loose` both start at the `tip` locator while the clip lifts the
      * body two blocks over a second: the wake is bound and rises with the locator and follows the
-     * flare when it is moved, and the loose one is not bound and stays where it started.
+     * flare when it is moved, and the loose one is not bound and stays where it started. The wake
+     * starts `tp:wake_child` as it is created through an `emitter_bound` event, which binds the child to
+     * the same locator. `tp:fling` takes on the rising locator's velocity, and `tp:tether`'s particles
+     * move in the flare's space, so they follow it when it is moved.
      */
     private static void flare(ClientGameTestContext context, TestSingleplayerContext world) {
         context.runOnClient(client -> Born.clear());
@@ -326,9 +334,18 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         double rise = context.computeOnClient(client -> spread(Born.of("tp:wake")));
         Assert.that(rise > 1.5, "tp:wake follows its locator as the clip lifts it two blocks, and its particles"
             + " were born " + rise + " blocks apart in height.");
+        double childRise = context.computeOnClient(client -> spread(Born.of("tp:wake_child")));
+        Assert.that(childRise > 1.5, "tp:wake_child is started by tp:wake as emitter_bound, so it follows the"
+            + " same locator as the clip lifts it two blocks, and its particles were born " + childRise
+            + " blocks apart in height.");
+        double flung = context.computeOnClient(client -> Born.of("tp:fling").stream()
+            .mapToDouble(born -> born.velocity().y).max().orElse(0));
+        Assert.that(flung > 0.05, "tp:fling takes on its emitter's velocity as the clip lifts the tip two blocks a"
+            + " second, and its fastest particle rose at " + flung * 20 + " blocks a second.");
 
         AddonEntity flare = Entities.waitForClient(context, "tp:flare");
         double from = context.computeOnClient(client -> flare.getX());
+        int tethers = context.computeOnClient(client -> Born.of("tp:tether").size());
         world.getServer().runCommand("execute as @e[type=tp:flare] at @s run tp @s ~6 ~ ~");
         Worlds.waitForClient(context, client -> flare.getX() > from + 5.9, PATIENCE,
             () -> "tp:flare was moved six blocks and the client never saw it arrive.");
@@ -345,8 +362,41 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             "tp:wake is bound to the flare and was born away from it after it moved.");
         Assert.that(!stayed.isEmpty() && stayed.stream().allMatch(born -> Math.abs(born.at().x - from) < 1),
             "tp:wake_loose is not bound to the flare and followed it when it moved.");
+        List<Born.Particle> carried = context.computeOnClient(client -> Born.of("tp:tether").subList(0, tethers));
+        Assert.that(!carried.isEmpty() && carried.stream().allMatch(born ->
+                Math.abs(born.particle().getBoundingBox().getCenter().x - to) < 1.5),
+            "tp:tether moves in the flare's space and its particles were left behind when the flare moved.");
+        turned(context, world, flare);
         world.getServer().runCommand("kill @e[type=tp:flare]");
         context.runOnClient(client -> AddonEmitters.clear());
+    }
+
+    /**
+     * `tp:tether`'s particles move in the flare's space, rotation included, so one standing beside the
+     * flare is carried round it by as far as the flare's body turns.
+     */
+    private static void turned(ClientGameTestContext context, TestSingleplayerContext world, AddonEntity flare) {
+        AddonParticle held = context.computeOnClient(client -> Born.of("tp:tether").getLast().particle());
+        Vec3 before = context.computeOnClient(client -> held.getBoundingBox().getCenter().subtract(flare.position()));
+        float yawBefore = context.computeOnClient(client -> flare.yBodyRot);
+        world.getServer().runCommand("execute as @e[type=tp:flare] at @s run tp @s ~ ~ ~ ~90 ~");
+        Worlds.waitForClient(context, client -> Math.abs(flare.getYRot() - yawBefore) > 89, PATIENCE,
+            () -> "tp:flare was turned a quarter and the client never saw it turn.");
+        // A teleport turns the entity and leaves its head and body to follow later, so they are turned with it.
+        context.runOnClient(client -> {
+            flare.setYHeadRot(flare.getYRot());
+            flare.setYBodyRot(flare.getYRot());
+        });
+        context.waitTicks(10);
+        Vec3 after = context.computeOnClient(client -> held.getBoundingBox().getCenter().subtract(flare.position()));
+        float turn = context.computeOnClient(client -> flare.yBodyRot) - yawBefore;
+        Assert.that(Math.abs(turn) > 30, "tp:flare was turned a quarter, and its body turned " + turn + " degrees.");
+
+        double cos = Math.cos(Math.toRadians(turn));
+        double sin = Math.sin(Math.toRadians(turn));
+        Vec3 wanted = new Vec3(before.x * cos - before.z * sin, after.y, before.x * sin + before.z * cos);
+        Assert.that(after.distanceTo(wanted) < 0.15, "tp:tether turns with the flare's body by " + turn
+            + " degrees, from " + before + " to " + wanted + ", and its particle stood at " + after + ".");
     }
 
     /**
@@ -366,6 +416,54 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         world.getServer().runCommand("bedrock execute as @p at @s run particle tp:thud_hard ~ ~ ~3");
         Worlds.waitForClient(context, client -> !Born.of("tp:thud_mark").isEmpty(), PATIENCE,
             () -> "tp:thud_hard lands at about ten blocks a second and never raised its collision event.");
+    }
+
+    /**
+     * `tp:bounce` falls a block onto the ground with a `coefficient_of_restitution` of 0.8, so it
+     * comes back up after every landing and lands again.
+     */
+    private static void bounce(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:bounce ~ ~ ~3");
+        Worlds.waitForClient(context, client -> !Born.of("tp:bounce").isEmpty(), PATIENCE,
+            () -> "tp:bounce emits one particle at once and none was made.");
+        Born.Particle bounce = context.computeOnClient(client -> Born.of("tp:bounce").get(0));
+
+        int rises = 0;
+        boolean falling = false;
+        double was = context.computeOnClient(client -> bounce.particle().getBoundingBox().minY);
+        for (int tick = 0; tick < 50; tick++) {
+            context.waitTick();
+            double now = context.computeOnClient(client -> bounce.particle().getBoundingBox().minY);
+            if (now < was) falling = true;
+            if (now > was && falling) {
+                rises++;
+                falling = false;
+            }
+            was = now;
+        }
+        Assert.that(rises >= 2, "tp:bounce bounces at 0.8 of its landing speed and came back up " + rises
+            + " times in two and a half seconds.");
+    }
+
+    /**
+     * `tp:skid` drops a fifth of a block moving two blocks a second along x, and its `collision_drag`
+     * of four takes four blocks a second off that speed for every second on the ground, so it slides
+     * half a block further and stops dead.
+     */
+    private static void skid(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:skid ~ ~ ~3");
+        Worlds.waitForClient(context, client -> !Born.of("tp:skid").isEmpty(), PATIENCE,
+            () -> "tp:skid emits one particle at once and none was made.");
+        Born.Particle skid = context.computeOnClient(client -> Born.of("tp:skid").get(0));
+        Worlds.waitForClient(context, client -> ((ParticleMotionAccessor) skid.particle()).mcaddon$xd() == 0,
+            40, () -> "tp:skid's collision_drag slows it by a fixed four blocks a second each second and it"
+                + " was still moving at " + ((ParticleMotionAccessor) skid.particle()).mcaddon$xd() * 20
+                + " blocks a second.");
+        double slid = context.computeOnClient(client -> skid.particle().getBoundingBox().getCenter().x - skid.at().x);
+        Assert.that(slid > 0.6, "tp:skid falls a third of a block along x and slides half a block more,"
+            + " and moved " + slid + " blocks.");
     }
 
     /** How far apart in height the particles were born. */

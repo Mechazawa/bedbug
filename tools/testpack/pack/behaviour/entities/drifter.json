@@ -175,9 +175,9 @@
           "entity_types": [
             {
               "filters": {
-                "test": "is_family",
+                "test": "has_tag",
                 "subject": "other",
-                "value": "pig"
+                "value": "tp_escorted"
               }
             }
           ]
@@ -261,6 +261,29 @@
           "min_change_direction_time": 1,
           "add_random_time_range": 0,
           "turn_range": 20
+        }
+      },
+      "tp:drifter_escorting_alone": {
+        "minecraft:behavior.swim_with_entity": {
+          "priority": 0,
+          "success_rate": 1,
+          "chance_to_stop": 1,
+          "state_check_interval": 0.25,
+          "catch_up_threshold": 6,
+          "match_direction_threshold": 2,
+          "catch_up_multiplier": 2,
+          "speed_multiplier": 1.5,
+          "search_range": 10,
+          "stop_distance": 3,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "has_tag",
+                "subject": "other",
+                "value": "tp_escorted_alone"
+              }
+            }
+          ]
         }
       }
     },
@@ -417,6 +440,13 @@
       "tp:drifter_untempted": {
         "set_property": {
           "tp:untempted": true
+        }
+      },
+      "tp:drifter_make_escorting_alone": {
+        "add": {
+          "component_groups": [
+            "tp:drifter_escorting_alone"
+          ]
         }
       }
     }

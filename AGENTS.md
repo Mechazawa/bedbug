@@ -3133,11 +3133,32 @@ first standing place; 0, the default, checks every place in one tick and picks t
   (`query.surface_particle_color`).
 - An effect an animation starts at a locator stands where the drawn model puts that locator at each
   tick, so it rises and turns with the bone. With `bind_to_actor` false it is left in the world where
-  the locator was as it started and outlives the entity. An `emitter_bound` event's effect follows the
-  entity, not the locator. The emitter's own orientation does not follow the bone, because
-  `emitter_local_space` is not acted on.
+  the locator was as it started and outlives the entity. An `emitter_bound` event raised by such an
+  emitter starts an effect bound to the same locator, as Mojang's particle documentation says: it
+  stands wherever the raising emitter stands at each tick. Raised by an emitter bound to nothing, or
+  by a particle, it is left where it was made, as an `emitter` event's effect is.
+- `emitter_local_space` applies only to an emitter bound to an entity, as Mojang says. `position`
+  keeps each particle's place relative to the emitter's anchor as it moves (`AddonParticle.carry`),
+  `rotation` also turns the particle and its velocity about the anchor by however far the entity's
+  body turned since the last tick, and `velocity` adds the anchor's movement over its last tick to a
+  new particle's velocity. Mojang calls `rotation` without `position` invalid, so it is ignored. The
+  turn read is the body's yaw, which the model is drawn with; a locator's own orientation and the
+  emitter's shape are not turned with the bone, since Mojang publishes no rule for either.
+- A controller state's `particle_effects` end as the state is left, as Mojang's particle
+  documentation says: `EffectSink.particle` hands back what ends the emitter and the controller's
+  `ControllerState` runs it on the transition. Mojang does not say what an ended emitter does, so it
+  raises its expiration event like any emitter that runs out, and the particles it made live out
+  their own lifetimes. An animation timeline's effects are fire and forget and are never ended.
 - A collision event's `min_speed` is at least two blocks a second, its default, as Mojang documents.
   `events` may be one event or a list.
+- Java's `Particle.move` stops a particle for good once a block stops its fall exactly, which is
+  how a particle lying on the ground lands. A particle with a collision component clears that flag
+  (`ParticleCollisionAccessor`) before each move, so it slides and bounces on. Mojang says
+  `collision_drag` slows the particle "by this amount in blocks/sec when in contact", which is read
+  as a deceleration: every tick on the ground takes a twentieth of `collision_drag` blocks a second
+  off the speed along the ground, down to nothing, as Blockbench's Wintersky does.
+  `coefficient_of_restitution` sends a landing particle back up at that share of the speed it came
+  down at; a horizontal collision stops that axis, as Java's move does.
 
 ## Molang in entity components and events
 

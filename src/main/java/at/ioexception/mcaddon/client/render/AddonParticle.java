@@ -9,6 +9,7 @@ import at.ioexception.mcaddon.bedrock.particle.Billboard;
 import at.ioexception.mcaddon.bedrock.particle.ParticleDefinition;
 import at.ioexception.mcaddon.bedrock.particle.ParticleEvent;
 import at.ioexception.mcaddon.bedrock.particle.ParticleTint;
+import at.ioexception.mcaddon.mixin.ParticleCollisionAccessor;
 import at.ioexception.mcaddon.registry.AddonBlocks;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.SingleQuadParticle;
@@ -57,6 +58,11 @@ public class AddonParticle extends SingleQuadParticle {
 
     /** Where in the flipbook the particle is, in whole frames from the first. */
     private float frame;
+
+    /** The entity's space this particle moves in, and where the anchor stood and the entity faced last tick. */
+    private AddonEmitters.Space space;
+    private Vec3 anchorWas;
+    private float yawWas;
 
     protected AddonParticle(ClientLevel level, double x, double y, double z,
         double dx, double dy, double dz, TextureAtlasSprite sprite, ParticleDefinition definition,
@@ -111,6 +117,7 @@ public class AddonParticle extends SingleQuadParticle {
             return;
         }
 
+        carry();
         ParticleDefinition.Particle particle = definition.particle();
         if (particle.initialization() != null) {
             particle.initialization().perUpdate().evaluate(environment);
@@ -120,6 +127,9 @@ public class AddonParticle extends SingleQuadParticle {
             hasPhysics = particle.collision().enabled().evaluate(environment).truthy();
         }
         if (particle.dynamic() != null) accelerate(particle.dynamic());
+        if (particle.collision() != null) {
+            ((ParticleCollisionAccessor) (Object) this).mcaddon$setStoppedByCollision(false);
+        }
         if (particle.parametric() != null) follow(particle.parametric());
         else move(xd, yd, zd);
 
@@ -132,6 +142,39 @@ public class AddonParticle extends SingleQuadParticle {
         if (beyondKillPlane() || inWrongBlock()) remove();
     }
 
+    /** Puts the particle in an entity's space, from where the entity stands and faces now. */
+    void carriedBy(AddonEmitters.Space space) {
+        this.space = space;
+        this.anchorWas = space.anchor().get();
+        this.yawWas = space.yaw();
+    }
+
+    /**
+     * Moves a particle in an entity's space by what the anchor did since the last tick: along with
+     * it, and turned about it by however far the entity turned, velocity included. A particle whose
+     * entity is gone stays where it was left.
+     */
+    private void carry() {
+        if (space == null || space.entity().isRemoved()) return;
+
+        Vec3 anchor = space.anchor().get();
+        float yaw = space.yaw();
+        double turn = space.turns() ? Math.toRadians(yaw - yawWas) : 0;
+        double cos = Math.cos(turn);
+        double sin = Math.sin(turn);
+
+        double across = x - anchorWas.x;
+        double along = z - anchorWas.z;
+        setPos(anchor.x + across * cos - along * sin, anchor.y + y - anchorWas.y,
+            anchor.z + across * sin + along * cos);
+        double speedAcross = xd;
+        xd = speedAcross * cos - zd * sin;
+        zd = speedAcross * sin + zd * cos;
+
+        anchorWas = anchor;
+        yawWas = yaw;
+    }
+
     /** Raises the timeline events this particle passed over during this tick. */
     private void timeline(float was) {
         for (ParticleEvent.Moment moment : definition.particle().events().timeline()) {
@@ -141,7 +184,7 @@ public class AddonParticle extends SingleQuadParticle {
 
     private void raise(List<String> events) {
         if (events.isEmpty()) return;
-        AddonEmitters.fire(definition, events, environment, new Vec3(x, y, z), null);
+        AddonEmitters.fire(definition, events, environment, new Vec3(x, y, z));
     }
 
     /**
@@ -159,7 +202,9 @@ public class AddonParticle extends SingleQuadParticle {
      * What a collision does once the particle has touched something.
      *
      * Bedrock either ends the particle on contact or slows it and bounces it, and Java's own move
-     * has already stopped it against the block by the time this runs.
+     * has already stopped it against the block by the time this runs. `collision_drag` takes that
+     * many blocks a second off the speed along the ground for every second in contact, and
+     * `coefficient_of_restitution` sends the particle back up at that share of the speed it landed at.
      */
     private boolean grounded() {
         ParticleDefinition.Particle.Collision collision = definition.particle().collision();
@@ -177,10 +222,14 @@ public class AddonParticle extends SingleQuadParticle {
             return true;
         }
 
-        float drag = collision.drag().asFloat(environment);
         float bounce = collision.restitution().asFloat(environment);
-        xd *= Math.max(0f, 1f - drag / 20f);
-        zd *= Math.max(0f, 1f - drag / 20f);
+        double along = Math.sqrt(xd * xd + zd * zd);
+        if (along > 0) {
+            double slowed = Math.max(0,
+                along - BedrockUnits.blocksPerTickSquared(collision.drag().asFloat(environment)));
+            xd *= slowed / along;
+            zd *= slowed / along;
+        }
         yd = Math.abs(yd) * bounce;
         return false;
     }

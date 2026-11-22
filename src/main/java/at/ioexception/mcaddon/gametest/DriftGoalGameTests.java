@@ -356,7 +356,7 @@ public final class DriftGoalGameTests {
     public void aSwimFollowsTheEntityItsTypesName(GameTestHelper helper) {
         pool(helper, 2);
         Mob pig = escorted(helper, new BlockPos(7, 0, 4), 0f);
-        AddonEntity drifter = swimmer(helper, new BlockPos(1, 0, 4));
+        AddonEntity drifter = swimmer(helper, "escorting", new BlockPos(1, 0, 4));
         if (drifter == null) {
             helper.succeed();
             return;
@@ -374,7 +374,7 @@ public final class DriftGoalGameTests {
     public void aSwimCloseByMatchesTheWayTheOtherFaces(GameTestHelper helper) {
         pool(helper, 2);
         escorted(helper, new BlockPos(5, 0, 4), EAST);
-        AddonEntity drifter = swimmer(helper, new BlockPos(4, 0, 5));
+        AddonEntity drifter = swimmer(helper, "escorting", new BlockPos(4, 0, 5));
         if (drifter == null) {
             helper.succeed();
             return;
@@ -391,8 +391,10 @@ public final class DriftGoalGameTests {
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = ESCORT_TICKS + 20)
     public void aSwimGivesUpOnAnEntityOutOfTheWater(GameTestHelper helper) {
         pool(helper, 2);
+        // A tag of its own, so the swimmer cannot take up a neighbouring test's pig after giving up.
         Mob pig = escorted(helper, new BlockPos(6, 0, 4), 0f);
-        AddonEntity drifter = swimmer(helper, new BlockPos(1, 0, 4));
+        pig.addTag("tp_escorted_alone");
+        AddonEntity drifter = swimmer(helper, "escorting_alone", new BlockPos(1, 0, 4));
         if (drifter == null) {
             helper.succeed();
             return;
@@ -422,8 +424,8 @@ public final class DriftGoalGameTests {
         return drifter.runningGoals().stream().anyMatch(goal -> goal.startsWith("SwimWithEntityGoal"));
     }
 
-    private static AddonEntity swimmer(GameTestHelper helper, BlockPos where) {
-        AddonEntity drifter = moving(helper, "escorting", where);
+    private static AddonEntity swimmer(GameTestHelper helper, String group, BlockPos where) {
+        AddonEntity drifter = moving(helper, group, where);
         if (drifter != null) drifter.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(SWIM_SPEED);
         return drifter;
     }

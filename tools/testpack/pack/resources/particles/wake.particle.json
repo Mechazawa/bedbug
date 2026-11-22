@@ -44,6 +44,17 @@
       },
       "minecraft:emitter_lifetime_once": {
         "active_time": 4
+      },
+      "minecraft:emitter_lifetime_events": {
+        "creation_event": "trail"
+      }
+    },
+    "events": {
+      "trail": {
+        "particle_effect": {
+          "effect": "tp:wake_child",
+          "type": "emitter_bound"
+        }
       }
     }
   }
