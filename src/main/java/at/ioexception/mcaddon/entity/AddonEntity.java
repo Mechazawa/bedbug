@@ -83,11 +83,7 @@ public class AddonEntity extends PathfinderMob
     private boolean offersOverridden;
     /** Offers `persist_trades` carried here, kept until the entity next trades by a table of its own. */
     private boolean offersKept;
-    /**
-     * The gossip each player who cured this trader left, as Bedrock's minor and major positive
-     * values, which `cured_discount` adds to and `max_cured_discount` caps.
-     */
-    private final java.util.Map<java.util.UUID, int[]> cured = new java.util.HashMap<>();
+    private final CureGossip cured = new CureGossip();
     private int tradeExperience;
     private Identifier lootTable;
     private Age age;
@@ -2411,50 +2407,20 @@ public class AddonEntity extends PathfinderMob
             && one.getResult().getItem() == other.getResult().getItem();
     }
 
-    /**
-     * The player cured this trader, which `cured_discount` turns into gossip a later trade prices by.
-     * Bedrock's default pair is Java's own cure, and its `max_cured_discount` is Java's ceiling.
-     */
+    /** The player cured this trader, which `cured_discount` turns into gossip a later trade prices by. */
     private void curedBy(Player player) {
         com.google.gson.JsonObject economy = liveComponent("minecraft:economy_trade_table");
-        if (economy == null) return;
-
-        int[] added = gossipPair(economy.get("cured_discount"));
-        int[] ceiling = gossipPair(economy.get("max_cured_discount"));
-        int[] gossip = cured.computeIfAbsent(player.getUUID(), id -> new int[2]);
-        for (int kind = 0; kind < 2; kind++) {
-            gossip[kind] = ceiling[kind] < 0 ? Math.max(ceiling[kind], gossip[kind] + added[kind])
-                : Math.min(ceiling[kind], gossip[kind] + added[kind]);
-        }
+        if (economy != null) cured.cure(player.getUUID(), economy, level().getGameTime());
     }
-
-    /** A minor and a major gossip value, written as a pair or as one number for both. */
-    private static int[] gossipPair(com.google.gson.JsonElement written) {
-        if (written != null && written.isJsonArray() && written.getAsJsonArray().size() == 2) {
-            return new int[] {written.getAsJsonArray().get(0).getAsInt(), written.getAsJsonArray().get(1).getAsInt()};
-        }
-        if (written != null && written.isJsonPrimitive()) {
-            return new int[] {written.getAsInt(), written.getAsInt()};
-        }
-        return new int[] {CURE_MINOR, CURE_MAJOR};
-    }
-
-    /** Bedrock's default `cured_discount`, which are Java's minor and major positive gossip of a cure. */
-    private static final int CURE_MINOR = -25;
-    private static final int CURE_MAJOR = -20;
-
-    /** How much a major gossip outweighs a minor one, as Java's `GossipType` weighs them. */
-    private static final int MAJOR_WEIGHT = 5;
 
     /**
      * Prices the offers for the player about to trade, as Java's villager does for its reputation:
      * each offer moves by the reputation times its price multiplier.
      */
     private void priceFor(Player player) {
-        int[] gossip = cured.get(player.getUUID());
-        if (gossip == null) return;
+        int reputation = cured.reputation(player.getUUID());
+        if (reputation == 0) return;
 
-        int reputation = -(gossip[0] + MAJOR_WEIGHT * gossip[1]);
         getOffers().forEach(offer -> offer.addToSpecialPriceDiff(
             -net.minecraft.util.Mth.floor(reputation * offer.getPriceMultiplier())));
     }
@@ -3895,6 +3861,7 @@ public class AddonEntity extends PathfinderMob
         mountJump.tick();
         if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel)) return;
 
+        if (cured.age(level().getGameTime())) saveTrading();
         stepOutOfWalls();
         pushOutOfBlocks();
         turnRiders();
@@ -6707,14 +6674,7 @@ public class AddonEntity extends PathfinderMob
         }
         saved.add("inventory", stock);
         saved.addProperty("kept", offersKept);
-        com.google.gson.JsonObject gossip = new com.google.gson.JsonObject();
-        cured.forEach((player, values) -> {
-            com.google.gson.JsonArray pair = new com.google.gson.JsonArray();
-            pair.add(values[0]);
-            pair.add(values[1]);
-            gossip.add(player.toString(), pair);
-        });
-        saved.add("cured", gossip);
+        cured.writeTo(saved);
         ServerHooks.state().setTrading(getUUID(), saved);
     }
 
@@ -6725,11 +6685,7 @@ public class AddonEntity extends PathfinderMob
         var ops = level().registryAccess().createSerializationContext(com.mojang.serialization.JsonOps.INSTANCE);
         tradeExperience = (int) at.ioexception.mcaddon.util.Json.number(saved, "experience", 0);
         offersKept = saved.has("kept") && saved.get("kept").getAsBoolean();
-        cured.clear();
-        if (saved.has("cured") && saved.get("cured").isJsonObject()) {
-            saved.getAsJsonObject("cured").entrySet().forEach(entry ->
-                cured.put(java.util.UUID.fromString(entry.getKey()), gossipPair(entry.getValue())));
-        }
+        cured.readFrom(saved);
         spent.clear();
         at.ioexception.mcaddon.util.Json.list(saved, "spent").forEach(key -> spent.add(key.getAsString()));
 

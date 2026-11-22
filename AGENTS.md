@@ -3528,7 +3528,7 @@ publishes nothing:
   are Java's own cure gossip and ceilings (`GossipType` `MINOR_POSITIVE` and `MAJOR_POSITIVE`). The
   price is Java's `Villager.updateSpecialPrices`: a reputation of minor plus five times major moves
   each offer by the reputation times its price multiplier, for that player only, until the screen
-  closes. Nothing decays. `use_legacy_price_formula` and the nearby cure fields are not read.
+  closes. The gossip decays as Java's does (see `## Census gap: cure-decay`). `use_legacy_price_formula` and the nearby cure fields are not read.
 - **`container_type`** opens Java's chest grid in whole rows (at most six) over the slots, the cells
   past the last slot shut: `container`, `minecart_chest`, `chest_boat`, `hopper` and
   `minecart_hopper` on any use, `horse` only to a crouching player, `inventory` never. Java's horse,
@@ -3608,3 +3608,18 @@ publishes nothing:
   Mojang does not say what the offset is measured from. Here it is the floor of the bed's block,
   because Java places a sleeper 0.6875 above that floor and Mojang's villager states 0.6 with a
   height of 0.3, which then rests on the mattress.
+
+## Census gap: cure-decay
+
+`entity/CureGossip` holds a cured trader's gossip per player and decays it by Java's rule, read off
+26.2's `Villager.maybeDecayGossip` and `GossipContainer`: once the game time (not the time of day)
+is a day of 24000 ticks past the last decay, each value shrinks by its `GossipType.decayPerDay`, one
+for minor positive and none for major positive, and a value under two is forgotten. A pack writes
+Bedrock's values as negative discounts, so the size shrinks and the sign stays. Mojang's
+`cured_discount` documentation says the pair is the minor and major positive gossip and says
+nothing on decay, and the Minecraft Wiki gives no Bedrock rule of its own, so Java's rule stands.
+The clock starts at the cure, which lands on the entity the transformation just made, as Java's
+cured villager starts its clock on its first tick; a saved trader with no clock starts one on its
+next tick without decaying. The last decay is saved as `cure_decayed` beside `cured` in the trader's
+`AddonState.trading` entry. `CureDecayGameTests` puts that time a day back and reads the entry in
+again on each of thirty ticks, and the curer's bread goes from two emeralds to three.
