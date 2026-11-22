@@ -109,11 +109,6 @@ REASONS = {
                             "attributes `parent_centric_attribute_blending` lists are blended, by Java's "
                             "own horse breeding.",
     },
-    "minecraft:preferred_path": {
-        "*": "Per-block path costs. Java's walk node evaluator prices each node by the path type it "
-             "classes the block as and keeps no price per block, so the prices need an evaluator of this "
-             "mod's own, which is not written; `max_fall_blocks` is read.",
-    },
 
     # Fields read somewhere other than through a field helper.
     "minecraft:type_family": {"family": "Read where the families are collected."},

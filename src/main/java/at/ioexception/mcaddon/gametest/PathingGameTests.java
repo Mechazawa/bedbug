@@ -18,7 +18,7 @@ import net.minecraft.world.level.pathfinder.Path;
 import java.util.stream.IntStream;
 
 /**
- * The fields of `minecraft:navigation.*`, read back off the paths the
+ * The fields of `minecraft:navigation.*` and `minecraft:preferred_path`, read back off the paths the
  * entity's navigator plans.
  *
  * `tp:wayfarer` walks with an empty `minecraft:navigation.walk`, and each of its groups carries one
@@ -28,6 +28,9 @@ import java.util.stream.IntStream;
 public final class PathingGameTests {
     private static final String WAYFARER = "tp:wayfarer";
     private static final String EMPTY = "fabric-gametest-api-v1:empty";
+
+    /** A follow range long enough for a search that prices its steps to reach round a ridge. */
+    private static final double LONG_FOLLOW = 64;
 
     /** The corridor's middle, where each test puts what the wayfarer has to cross. */
     private static final int MIDDLE = 4;
@@ -97,6 +100,58 @@ public final class PathingGameTests {
             WAYFARER + " is not amphibious and planned a walk along the bottom of deep water.");
         helper.assertTrue(reaches(helper, amphibious, across),
             WAYFARER + " is amphibious and planned no walk along the bottom of deep water.");
+        helper.succeed();
+    }
+
+    /** `preferred_path_blocks` and `default_block_cost` send a walk the long way round over a path. */
+    @GameTest(structure = EMPTY)
+    public void aPreferredPathIsWalkedTheLongWayRound(GameTestHelper helper) {
+        floor(helper);
+        for (int step = 1; step <= 6; step++) {
+            helper.setBlock(new BlockPos(step, 0, 3), Blocks.DIRT_PATH);
+            if (step <= 3) {
+                helper.setBlock(new BlockPos(1, 0, step), Blocks.DIRT_PATH);
+                helper.setBlock(new BlockPos(6, 0, step), Blocks.DIRT_PATH);
+            }
+        }
+        AddonEntity plain = wayfarer(helper, null, new BlockPos(1, 1, 1));
+        AddonEntity paved = wayfarer(helper, "tp:wayfarer_paved", new BlockPos(1, 1, 1));
+        if (plain == null || paved == null) {
+            helper.succeed();
+            return;
+        }
+
+        BlockPos target = new BlockPos(6, 1, 1);
+        helper.assertFalse(visits(helper, plain, target, node -> node.getZ() == 3),
+            WAYFARER + " prefers no block and took the long way round.");
+        helper.assertTrue(visits(helper, paved, target, node -> node.getZ() == 3),
+            WAYFARER + " prices stone over a dirt path and walked straight across the stone.");
+        helper.succeed();
+    }
+
+    /** `jump_cost` sends a walk round a ridge it would otherwise climb over. */
+    @GameTest(structure = EMPTY)
+    public void aJumpCostSendsAWalkRoundARidge(GameTestHelper helper) {
+        floor(helper);
+        for (int z = 0; z <= 4; z++) {
+            helper.setBlock(new BlockPos(3, 1, z), Blocks.STONE);
+            helper.setBlock(new BlockPos(4, 1, z), Blocks.STONE);
+        }
+        AddonEntity plain = wayfarer(helper, null, new BlockPos(1, 1, 1));
+        AddonEntity level = wayfarer(helper, "tp:wayfarer_level", new BlockPos(1, 1, 1));
+        if (plain == null || level == null) {
+            helper.succeed();
+            return;
+        }
+
+        BlockPos target = new BlockPos(6, 1, 1);
+        // Java's search stops at a walked distance of the follow range, and it counts a node's walk
+        // from whichever neighbour last looked at it, so a priced search falls short at sixteen.
+        level.getAttribute(Attributes.FOLLOW_RANGE).setBaseValue(LONG_FOLLOW);
+        helper.assertTrue(visits(helper, plain, target, node -> node.getY() == 2),
+            WAYFARER + " pays nothing to jump and walked round the ridge.");
+        helper.assertFalse(visits(helper, level, target, node -> node.getY() == 2),
+            WAYFARER + " pays twenty to jump and climbed over the ridge.");
         helper.succeed();
     }
 
@@ -191,6 +246,16 @@ public final class PathingGameTests {
     private static boolean reaches(GameTestHelper helper, AddonEntity entity, BlockPos target) {
         Path path = entity.getNavigation().createPath(helper.absolutePos(target), 0);
         return path != null && path.canReach();
+    }
+
+    private static boolean visits(GameTestHelper helper, AddonEntity entity, BlockPos target,
+        java.util.function.Predicate<BlockPos> node) {
+        Path path = entity.getNavigation().createPath(helper.absolutePos(target), 0);
+        helper.assertTrue(path != null && path.canReach(), WAYFARER + " planned no path to its target.");
+        BlockPos origin = helper.absolutePos(BlockPos.ZERO);
+        return IntStream.range(0, path.getNodeCount())
+            .mapToObj(i -> path.getNodePos(i).subtract(origin))
+            .anyMatch(node);
     }
 
     /** A corridor one block wide along Z at X 3, closed at both ends, over a stone floor. */

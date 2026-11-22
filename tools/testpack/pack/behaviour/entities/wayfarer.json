@@ -56,6 +56,27 @@
           "is_amphibious": true
         }
       },
+      "tp:wayfarer_paved": {
+        "minecraft:preferred_path": {
+          "default_block_cost": 3,
+          "jump_cost": 0,
+          "preferred_path_blocks": [
+            {
+              "blocks": [
+                "grass_path"
+              ],
+              "cost": 0
+            }
+          ]
+        }
+      },
+      "tp:wayfarer_level": {
+        "minecraft:preferred_path": {
+          "default_block_cost": 0,
+          "jump_cost": 20,
+          "preferred_path_blocks": []
+        }
+      },
       "tp:wayfarer_hovering": {
         "minecraft:can_fly": {},
         "minecraft:navigation.hover": {},
@@ -132,6 +153,20 @@
         "add": {
           "component_groups": [
             "tp:wayfarer_amphibious"
+          ]
+        }
+      },
+      "tp:wayfarer_paved": {
+        "add": {
+          "component_groups": [
+            "tp:wayfarer_paved"
+          ]
+        }
+      },
+      "tp:wayfarer_level": {
+        "add": {
+          "component_groups": [
+            "tp:wayfarer_level"
           ]
         }
       },

@@ -3289,7 +3289,7 @@ properties the pack named, because a test for a block asks about those and no ot
 ## Census reasons: nav
 
 `entity/WalkingNavigation` is the ground navigator of every add-on entity that walks. Its evaluator
-is Java's `WalkNodeEvaluator` with four refusals laid over the nodes Java places.
+is Java's `WalkNodeEvaluator` with four refusals and one price laid over the nodes Java places.
 `tp:wayfarer` carries one group per field and `PathingGameTests` reads each back off a planned path.
 Mojang publishes the fields and one line each, so these rules are decided here:
 
@@ -3309,3 +3309,11 @@ Mojang publishes the fields and one line each, so these rules are decided here:
   plan from the air through `Pathing.AirNavigation`; without it they plan only on the ground or in
   a liquid. Every vanilla fly and hover entity states it true. `navigation.float` keeps Java's
   flying navigator, which plans from anywhere.
+- `minecraft:preferred_path` prices a node at its ground block's cost (`default_block_cost` for a
+  block in no list) plus `jump_cost` for a step up, and the node costs the larger of that and Java's
+  own price for its kind of ground. Java gives a node one price whichever neighbour reaches it, so a
+  node first reached by a step up keeps the jump cost for that search.
+
+Java's search stops at a walked distance of the follow range and counts a node's walk from the last
+neighbour that looked at it, so a priced search can fall short where an unpriced one reaches.
+`aJumpCostSendsAWalkRoundARidge` gives its wayfarer a follow range of 64 for that reason.

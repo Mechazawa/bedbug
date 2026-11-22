@@ -13,6 +13,7 @@ import net.minecraft.world.level.pathfinder.PathfindingContext;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 
 import java.util.function.Predicate;
+import java.util.function.ToDoubleFunction;
 
 /**
  * Java's ground navigator, planning with what a pack's `minecraft:navigation.walk` or `generic` and
@@ -20,12 +21,15 @@ import java.util.function.Predicate;
  *
  * Java prices a node by the kind of ground it is. Bedrock also names blocks to keep off, refuses
  * steps up for a mob that may not jump, keeps a mob that is not amphibious off the bottom of deep
- * water,. Each of those is a node this evaluator refuses after Java's own evaluator has placed it.
+ * water, and prices each block a mob prefers. Each of those is a node this evaluator refuses or
+ * prices after Java's own evaluator has placed it.
  */
 final class WalkingNavigation extends GroundPathNavigation {
     private Predicate<BlockState> avoided = state -> false;
     private boolean jumps = true;
     private boolean amphibious;
+    private ToDoubleFunction<BlockState> blockCost;
+    private double jumpCost;
 
     WalkingNavigation(Mob mob, Level level) {
         super(mob, level);
@@ -35,6 +39,12 @@ final class WalkingNavigation extends GroundPathNavigation {
         this.avoided = avoid;
         this.jumps = canJump;
         this.amphibious = walksUnderWater;
+    }
+
+    /** What each block costs to stand on and a step up adds, or no cost at all for `null`. */
+    void price(ToDoubleFunction<BlockState> perBlock, double perJump) {
+        this.blockCost = perBlock;
+        this.jumpCost = perJump;
     }
 
     @Override
@@ -62,6 +72,11 @@ final class WalkingNavigation extends GroundPathNavigation {
             if (node == null || node.costMalus < 0) return node;
             if (underWater(node)) return null;
 
+            if (blockCost != null) {
+                BlockState ground = currentContext.getBlockState(new BlockPos(node.x, node.y - 1, node.z));
+                double cost = blockCost.applyAsDouble(ground) + (node.y > y ? jumpCost : 0);
+                node.costMalus = Math.max(node.costMalus, (float) cost);
+            }
             return node;
         }
 
