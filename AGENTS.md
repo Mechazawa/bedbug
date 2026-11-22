@@ -3068,6 +3068,7 @@ The repository secret `MODRINTH_TOKEN` must hold a Modrinth token with the read-
 - Bedrock effect ids differ from Java's in `BedrockEffectNames`; `Platform.addEffect`, `hasEffect` and `removeEffect` translate, and a script sees Bedrock's id.
 - A script's `playSound` resolves a name through `BedrockSoundNames.played`: the id as written, then the pack's own definitions, then Bedrock's name (`mob.x.y` falls back to `entity.x.y`). While several add-ons ship a script the bridge has no namespace, so the pack's own definitions are skipped.
 - The census scripts need `scratchpad/bedrock` in the worktree and run without `python -I`, because they import each other.
+- A script's `addRider` asks only the vehicle (`Rides.hasRoom`) and then seats the rider by force, as `/ride` does. Java's own boarding refuses a rider for three seconds after it last got off, and Villager News takes each new villager off its vehicle, seats it on an entity of its own and puts it back in one tick. `ScriptGameTests.aScriptMovesAPigFromOneMinecartToAnotherAtOnce` holds it.
 
 ## Sleep, sit, mingle and avoid block goals
 

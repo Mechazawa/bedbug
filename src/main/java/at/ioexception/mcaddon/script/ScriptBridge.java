@@ -22,6 +22,7 @@ import at.ioexception.mcaddon.script.surface.Registries;
 import at.ioexception.mcaddon.script.surface.TickingAreas;
 import at.ioexception.mcaddon.script.surface.Worlds;
 import at.ioexception.mcaddon.server.PackCommand;
+import at.ioexception.mcaddon.server.Rides;
 import at.ioexception.mcaddon.state.AddonState;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -768,11 +769,15 @@ public final class ScriptBridge {
         return entity.getPassengers().stream().map(Entity::getStringUUID).toArray(String[]::new);
     }
 
+    /**
+     * Asks only the vehicle. Java holds a rider back for three seconds after it last got off, and a
+     * script taking an entity off one vehicle and putting it on another in the same tick is seated.
+     */
     @HostAccess.Export
     public boolean addRider(String id, String riderId) {
         Entity vehicle = entity(id);
         Entity rider = entity(riderId);
-        return vehicle != null && rider != null && rider.startRiding(vehicle);
+        return vehicle != null && rider != null && Rides.hasRoom(vehicle, rider) && Platform.mount(rider, vehicle);
     }
 
     @HostAccess.Export
