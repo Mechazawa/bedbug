@@ -219,8 +219,10 @@ REASONS = {
                       "is in the way, before the entity moves, so there is no distance ahead to look.",
     },
     "minecraft:behavior.player_ride_tamed": {
-        "priority": "The behaviour is answered as a rule on who may get on, asked whenever somebody tries, "
-                    "so there is no goal for a priority to place.",
+        "priority": "Mojang's goal holds no controls by default, so its priority orders it against "
+                    "nothing, and Java moves a player-ridden mount in LivingEntity.travelRidden rather "
+                    "than through any goal, so what it would place has no effect here; the behaviour "
+                    "is answered as the rule on who may get on.",
     },
     "minecraft:flocking": {
         "low_flock_limit": "Documented only as the low bound of a flock, with nothing said of what a smaller "
@@ -240,8 +242,9 @@ REASONS = {
         "ride_text": "Java shows no prompt of its own for using a mob.",
     },
     "minecraft:behavior.dragondeath": {
-        "priority": "The long death runs in LivingEntity.tickDeath, once the entity is dead and no goal "
-                    "runs, so there is no goal for a priority to order.",
+        "priority": "The long death runs in LivingEntity.tickDeath, and LivingEntity.aiStep skips "
+                    "serverAiStep, where the goals run, while isImmobile answers isDeadOrDying, so no "
+                    "goal is left for a priority to order against.",
     },
     "minecraft:projectile": {
         "is_dangerous": "Java's one dangerous projectile is the blue wither skull, whose flag is a field of "
