@@ -65,6 +65,10 @@ SLEEPING_BOX = ("From 1.21 Java's `LivingEntity.getDimensions` is final and answ
                 "block for the sleeping pose, which is the pose a sleeping entity takes here, so a box of a "
                 "pack's own has nowhere to go.")
 
+TOUCH_TEXT = ("Mojang documents it as the label of the interact button shown with touch-screen controls. "
+              "Java has no touch-screen controls and no interact button, and Bedrock shows the label to no "
+              "keyboard player either.")
+
 # A field a reader may skip, and why. Keyed by component, then by field; the key "*" covers every
 # field of that component that no reader names.
 REASONS = {
@@ -79,7 +83,10 @@ REASONS = {
         "suffocateTime": "An older spelling the schemas no longer describe; the default stands in for it.",
     },
     "minecraft:conditional_bandwidth_optimization": {
-        "*": "How often Bedrock's own server resends an entity, which Java decides for itself.",
+        "*": "Which position updates Bedrock's server may skip to save bandwidth, by distance and by filter, "
+             "a saving Mojang describes as changing nothing a player sees. Java's `ServerEntity.sendChanges` "
+             "sends on the type's own `updateInterval` and on every impulse, so the entity is kept in step "
+             "either way.",
     },
     "minecraft:physics": {
         "has_gravity": "Java can switch gravity off per entity, but Mojang's fish declare it off and still "
@@ -123,12 +130,15 @@ REASONS = {
                          "distance along that bearing changes no angle the head turns through.",
     },
     "minecraft:rail_sensor": {
-        "tick_command_block_on_activate": "Java's `activateMinecart` is overridden by `MinecartCommandBlock` "
-                                          "alone, and a pack's entity is not one, so it has no command block "
-                                          "to start ticking.",
-        "tick_command_block_on_deactivate": "Java's `activateMinecart` is overridden by `MinecartCommandBlock` "
-                                            "alone, and a pack's entity is not one, so it has no command block "
-                                            "to stop ticking.",
+        "tick_command_block_on_activate": "Only an entity carrying a command block has one to tick: in Bedrock "
+                                          "that is the engine's own command block minecart, whose command no "
+                                          "pack can write, and in Java `MinecartCommandBlock.getCommandBlock`, "
+                                          "which an `AddonEntity` has not got.",
+        "tick_command_block_on_deactivate": "Only an entity carrying a command block has one to tick: in "
+                                            "Bedrock that is the engine's own command block minecart, whose "
+                                            "command no pack can write, and in Java "
+                                            "`MinecartCommandBlock.getCommandBlock`, which an `AddonEntity` has "
+                                            "not got.",
     },
     "minecraft:trade_table": {
         "*": "Bedrock's own trading screen: Java's merchant screen has no display name of its own and "
@@ -241,22 +251,19 @@ REASONS = {
                            "is where the entity stood as the component arrived, which is no such block, so "
                            "the list has nothing to be checked against.",
     },
-    "minecraft:rideable": {
-        "interact_text": "Java shows no prompt of its own for using a mob.",
-    },
-    "minecraft:is_dyeable": {"interact_text": "Java shows no prompt of its own for using a mob."},
-    "minecraft:tamemount": {
-        "feed_text": "Java shows no prompt of its own for using a mob.",
-        "ride_text": "Java shows no prompt of its own for using a mob.",
-    },
+    "minecraft:rideable": {"interact_text": TOUCH_TEXT},
+    "minecraft:is_dyeable": {"interact_text": TOUCH_TEXT},
+    "minecraft:tamemount": {"feed_text": TOUCH_TEXT, "ride_text": TOUCH_TEXT},
     "minecraft:behavior.dragondeath": {
         "priority": "The long death runs in LivingEntity.tickDeath, once the entity is dead and no goal "
                     "runs, so there is no goal for a priority to order.",
     },
     "minecraft:projectile": {
-        "is_dangerous": "Java's one dangerous projectile is the blue wither skull, whose flag is a field of "
-                        "WitherSkull that sets its block resistance cap and its look; no goal asks any "
-                        "projectile whether it is dangerous.",
+        "is_dangerous": "Mojang's schema says it affects AI reactions and client behaviour and names none, and "
+                        "no published goal or client field mentions it. In Java only `WitherSkull.getInertia`, "
+                        "`WitherSkull.getBlockExplosionResistance` and `WitherSkullRenderer` read "
+                        "`isDangerous`, and Mojang's dangerous skull states its inertia, its blast's "
+                        "`max_resistance` and its texture in fields of their own.",
     },
     "minecraft:shooter": {
         "magic": "A drink here takes no time, its effects landing the tick its conditions hold, so the "
