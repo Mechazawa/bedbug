@@ -50,6 +50,7 @@
     "VillagerMixin",
     "MobEventsMixin",
     "MobPickupMixin",
+    "AvoidedBlockMixin",
     "ShearEventMixin",
     "RaiderCelebrateMixin",
     "VillagerCelebrateMixin",

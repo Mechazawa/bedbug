@@ -21,6 +21,10 @@
             "repair_amount": "query.max_durability * 0.1"
           },
           {
+            "items": [{"tags": "q.any_tag('minecraft:planks')"}],
+            "repair_amount": 5
+          },
+          {
             "items": [{"name": "tp:file"}],
             "repair_amount": "context.other->query.remaining_durability * 2"
           }

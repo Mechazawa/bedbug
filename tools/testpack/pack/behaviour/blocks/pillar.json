@@ -17,6 +17,8 @@
       "minecraft:destructible_by_mining": {
         "seconds_to_destroy": 1.0
       },
+      "tag:tp:sturdy": {},
+      "tag:carvable": {},
       "minecraft:connection_rule": {
         "accepts_connections_from": "all",
         "enabled_directions": ["north", "south"]

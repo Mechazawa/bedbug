@@ -1,13 +1,19 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.bedrock.behaviour.Descriptor;
 import at.ioexception.mcaddon.platform.Platform;
 import com.google.gson.JsonObject;
+import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.navigation.AmphibiousPathNavigation;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+
+import java.util.List;
 
 /**
  * What a `minecraft:navigation.*` component lets the pathfinder do, put onto the navigator Java holds.
@@ -28,6 +34,7 @@ final class Pathing {
     private final boolean opensDoors;
     private final boolean passesDoors;
     private final boolean crossesLava;
+    private final List<Descriptor> avoidedBlocks;
 
     private Pathing(JsonObject body) {
         this.swims = Goals.flag(body, "can_swim", false);
@@ -42,6 +49,7 @@ final class Pathing {
         this.passesDoors = Goals.flag(body, "can_pass_doors", true);
         this.crossesLava = Goals.flag(body, "can_path_over_lava", false)
             || Goals.flag(body, "can_walk_in_lava", false);
+        this.avoidedBlocks = Descriptor.listed(body, "blocks_to_avoid");
     }
 
     /** The allowances a navigation component states, or Bedrock's defaults where the entity has none. */
@@ -77,6 +85,20 @@ final class Pathing {
         Platform.priceWater(mob, avoidsWater);
         Platform.priceDamagingBlocks(mob, avoidsDamage);
         Platform.priceLava(mob, !crossesLava);
+    }
+
+    /**
+     * Whether a node is closed to the mob: a block the component lists fills a cell the mob's box
+     * takes there, or is the block it would stand on.
+     */
+    boolean avoids(Mob mob, BlockGetter level, int x, int y, int z) {
+        if (avoidedBlocks.isEmpty()) return false;
+
+        int across = Mth.floor(mob.getBbWidth() + 1);
+        int up = Mth.ceil(mob.getBbHeight());
+        return BlockPos.betweenClosedStream(x, y - 1, z, x + across - 1, y + up - 1, z + across - 1)
+            .map(level::getBlockState)
+            .anyMatch(state -> avoidedBlocks.stream().anyMatch(avoided -> avoided.matches(state)));
     }
 
     /**

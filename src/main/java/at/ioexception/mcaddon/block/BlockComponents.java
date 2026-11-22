@@ -764,6 +764,12 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
         return value != null && value.isJsonObject() ? value.getAsJsonObject() : new JsonObject();
     }
 
+    /**
+     * The prefix of a component that is a tag of its own, `"tag:wood": {}`, which is how packs wrote
+     * a block's tags before `minecraft:tags`.
+     */
+    public static final String TAG_COMPONENT = "tag:";
+
     /** The tags the pack asked for, in the order it wrote them. */
     public static List<String> tags(BlockDefinition definition) {
         List<String> tags = new ArrayList<>();
@@ -777,6 +783,10 @@ public record BlockComponents(VoxelShape collision, VoxelShape selection, int li
             "minecraft:precipitation_interactions", "precipitation_behavior"))) {
             tags.add(at.ioexception.mcaddon.platform.Platform.snowSupportTag());
         }
+
+        definition.components().keySet().stream()
+            .filter(name -> name.startsWith(TAG_COMPONENT))
+            .forEach(name -> tags.add(name.substring(TAG_COMPONENT.length())));
 
         JsonElement component = definition.components().get("minecraft:tags");
         if (component == null || !component.isJsonArray()) return tags;

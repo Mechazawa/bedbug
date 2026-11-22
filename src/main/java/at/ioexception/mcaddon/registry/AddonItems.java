@@ -9,7 +9,7 @@ import at.ioexception.mcaddon.convert.Names;
 import at.ioexception.mcaddon.convert.SpawnEggAppearance;
 import at.ioexception.mcaddon.item.AddonScriptedItem;
 import at.ioexception.mcaddon.item.DurabilitySensor;
-import at.ioexception.mcaddon.item.RepairAmounts;
+import at.ioexception.mcaddon.item.Repairable;
 import at.ioexception.mcaddon.item.AddonShooterItem;
 import at.ioexception.mcaddon.item.AddonThrowableItem;
 import at.ioexception.mcaddon.pack.BedrockPack;
@@ -61,7 +61,7 @@ public final class AddonItems {
     private static final Map<Item, KineticTimings> KINETIC = new LinkedHashMap<>();
     private static final Map<Item, Float> COOLDOWNS = new LinkedHashMap<>();
     private static final Map<Item, DurabilitySensor> SENSORS = new LinkedHashMap<>();
-    private static final Map<Item, RepairAmounts> REPAIRS = new LinkedHashMap<>();
+    private static final Map<Item, Repairable> REPAIRS = new LinkedHashMap<>();
     private static final Set<Item> OFF_HAND_REFUSED = new HashSet<>();
     private static final Set<Item> LIQUID_CLIPPED = new HashSet<>();
     private static final Map<Item, SwingSounds> SWINGS = new LinkedHashMap<>();
@@ -85,7 +85,7 @@ public final class AddonItems {
 
     /** How long `minecraft:cooldown` keeps a pack's own item busy, in seconds, or nothing. */
     /** The repair amounts a pack stated on this item, or null where it stated none. */
-    public static RepairAmounts repairsOf(Item item) {
+    public static Repairable repairsOf(Item item) {
         return REPAIRS.get(item);
     }
 
@@ -368,7 +368,7 @@ public final class AddonItems {
 
         DurabilitySensor sensor = DurabilitySensor.tryFrom(definition);
         if (sensor != null) SENSORS.put(item, sensor);
-        RepairAmounts repairs = RepairAmounts.tryFrom(definition);
+        Repairable repairs = Repairable.tryFrom(definition);
         if (repairs != null) REPAIRS.put(item, repairs);
 
         // The two editions disagree about the default: Java takes anything in the off hand and
@@ -505,7 +505,6 @@ public final class AddonItems {
         properties = digger(definition, properties);
         properties = enchantable(definition, properties);
         properties = cooldown(definition, properties);
-        properties = repairable(definition, properties);
         properties = dyeable(definition, properties);
         properties = piercing(definition, properties);
         properties = kinetic(definition, properties);
@@ -772,31 +771,6 @@ public final class AddonItems {
 
         //? if >=26 {
         return properties.useCooldown(seconds);
-        //?} else {
-        /*return properties;
-        *///?}
-    }
-
-    /**
-     * The items an anvil accepts for repairing this one.
-     *
-     * How much each repair gives back is Java's own rule. Before 1.21.5 the list came from the item
-     * class, and a data-driven item has no class of its own.
-     */
-    private static Item.Properties repairable(ItemDefinition definition, Item.Properties properties) {
-        List<String> names = definition.repairItems();
-        if (names.isEmpty()) return properties;
-
-        //? if >=26 {
-        List<net.minecraft.core.Holder.Reference<Item>> items = names.stream()
-            .map(AddonItems::itemNamed)
-            .filter(java.util.Objects::nonNull)
-            .map(Item::builtInRegistryHolder)
-            .toList();
-        if (items.isEmpty()) return properties;
-
-        return properties.component(net.minecraft.core.component.DataComponents.REPAIRABLE,
-            new net.minecraft.world.item.enchantment.Repairable(net.minecraft.core.HolderSet.direct(items)));
         //?} else {
         /*return properties;
         *///?}

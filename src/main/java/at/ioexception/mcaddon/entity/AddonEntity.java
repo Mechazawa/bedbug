@@ -41,6 +41,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.trading.Merchant;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 
 /**
@@ -90,6 +91,7 @@ public class AddonEntity extends PathfinderMob
     private final LookedAt lookedAt = new LookedAt(this);
     private Memories memories;
     private Projectiles flight;
+    private Pathing pathing;
     private net.minecraft.server.level.ServerBossEvent bossBar;
     private net.minecraft.world.SimpleContainer carried;
 
@@ -1003,8 +1005,14 @@ public class AddonEntity extends PathfinderMob
         PathNavigation asked = createNavigation(level());
         if (asked.getClass() != navigation.getClass()) navigation = asked;
 
-        pathing().applyTo(this, navigation, carriesNow("minecraft:annotation.open_door"));
+        pathing = pathing();
+        pathing.applyTo(this, navigation, carriesNow("minecraft:annotation.open_door"));
         applyMoveControl();
+    }
+
+    /** Whether the navigation component the entity carries closes the node at the position to it. */
+    public boolean avoidsNode(BlockGetter level, int x, int y, int z) {
+        return pathing != null && pathing.avoids(this, level, x, y, z);
     }
 
     /**

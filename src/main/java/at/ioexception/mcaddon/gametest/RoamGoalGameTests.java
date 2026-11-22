@@ -14,12 +14,16 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The fields of the goals that walk an entity somewhere, read back off where it walked.
@@ -71,6 +75,57 @@ public final class RoamGoalGameTests {
             ROAMER + " walks towards a target within four blocks and set off towards one six blocks off."));
         helper.runAfterDelay(WALK_TICKS - 10, helper::succeed);
     }
+
+    /**
+     * `blocks_to_avoid` closes every node standing on a block it names, by name or by a tag, to the
+     * pathfinder. Two corridors walled in stone each cross one such block, gold in one and
+     * `tp:pillar` (tagged `tp:sturdy`) in the other, so a wary roamer has no way through either and
+     * a plain one walks both.
+     */
+    @GameTest(structure = EMPTY, maxTicks = LANDS + 20)
+    public void aPathNeverStepsOnABlockItsNavigationAvoids(GameTestHelper helper) {
+        floor(helper);
+        for (int z : new int[] {1, 3, 4, 6}) {
+            BlockPos.betweenClosed(new BlockPos(0, 1, z), new BlockPos(7, 2, z))
+                .forEach(at -> helper.setBlock(at, Blocks.STONE));
+        }
+        Block pillar = BuiltInRegistries.BLOCK.getOptional(Platform.id("tp", "pillar")).orElse(null);
+        if (pillar == null) {
+            helper.succeed();
+            return;
+        }
+        helper.setBlock(new BlockPos(4, 0, 2), Blocks.GOLD_BLOCK);
+        helper.setBlock(new BlockPos(4, 0, 5), pillar);
+
+        Map<AddonEntity, Integer> walkers = new LinkedHashMap<>();
+        List<AddonEntity> wary = new ArrayList<>();
+        for (int z : new int[] {2, 5}) {
+            AddonEntity avoiding = roamer(helper, "tp:roamer_wary", new BlockPos(1, 1, z));
+            wary.add(avoiding);
+            walkers.put(avoiding, z);
+            walkers.put(BehaviourGameTests.spawn(helper, ROAMER, new BlockPos(0, 1, z)), z);
+        }
+        if (walkers.containsKey(null)) {
+            helper.succeed();
+            return;
+        }
+        // A ground navigator plans nothing for a mob that has not landed, and one with no AI never lands.
+        walkers.keySet().forEach(walker -> walker.setNoAi(false));
+
+        helper.runAfterDelay(LANDS, () -> {
+            walkers.forEach((walker, z) -> {
+                boolean avoids = wary.contains(walker);
+                Path path = walker.getNavigation().createPath(helper.absolutePos(new BlockPos(6, 1, z)), 0);
+                boolean through = path != null && path.canReach();
+                String who = avoids ? " avoiding " + (z == 2 ? "gold" : "tp:sturdy") : " with no list";
+                helper.assertTrue(through != avoids,
+                    ROAMER + who + (through ? " found" : " found no") + " path along the corridor.");
+            });
+            helper.succeed();
+        });
+    }
+
+    private static final int LANDS = 20;
 
     /** Less than any step a walk takes. */
     private static final double STILL = 0.5;
@@ -310,8 +365,11 @@ public final class RoamGoalGameTests {
 
     /**
      * `minecraft:behavior.move_to_block` with `target_selection_method` set to `random` takes any
-     * matching block in range rather than the nearest. Of eight roamers between a near gold block
-     * and a far one, some walk to the far one.
+     * matching block in range rather than the nearest. Of sixteen roamers between a near gold block
+     * and a far one, some plan their walk to the far one.
+     *
+     * The walk each roamer planned is read rather than where it stands, so a crowd in the way of the
+     * far block cannot hide a roamer that picked it.
      */
     @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
     public void aRandomBlockWalkTakesAnyMatchingBlockInRange(GameTestHelper helper) {
@@ -322,7 +380,7 @@ public final class RoamGoalGameTests {
         helper.setBlock(far, Blocks.GOLD_BLOCK);
         List<AddonEntity> roamers = new ArrayList<>();
         for (int i = 0; i < CHOOSERS; i++) {
-            AddonEntity roamer = roamer(helper, "tp:roamer_fickle", new BlockPos(1, RAISED + 1, 1 + i % 6));
+            AddonEntity roamer = roamer(helper, "tp:roamer_fickle", new BlockPos(i / 8, RAISED + 1, i % 8));
             if (roamer == null) {
                 helper.succeed();
                 return;
@@ -330,14 +388,15 @@ public final class RoamGoalGameTests {
             roamers.add(roamer);
         }
 
-        Vec3 gold = Vec3.atBottomCenterOf(helper.absolutePos(far));
+        BlockPos gold = helper.absolutePos(far);
         helper.succeedWhen(() -> helper.assertTrue(roamers.stream()
-                .anyMatch(roamer -> Math.hypot(roamer.getX() - gold.x, roamer.getZ() - gold.z) < 2),
-            "None of " + CHOOSERS + " roamers picking a gold block at random walked to the far one."));
+                .map(roamer -> roamer.getNavigation().getPath())
+                .anyMatch(path -> path != null && path.getTarget().distManhattan(gold) <= 1),
+            "None of " + CHOOSERS + " roamers picking a gold block at random set off for the far one."));
     }
 
-    /** Enough that all of them picking the near block by chance is one run in two hundred and fifty. */
-    private static final int CHOOSERS = 8;
+    /** Enough that all of them picking the near block by chance is one run in 65536. */
+    private static final int CHOOSERS = 16;
 
     /**
      * `minecraft:behavior.move_to_random_block` walks to blocks up to `block_distance` blocks off,

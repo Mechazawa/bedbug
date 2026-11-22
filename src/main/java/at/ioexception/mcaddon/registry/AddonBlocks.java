@@ -157,7 +157,7 @@ public final class AddonBlocks {
         if (id == null || BuiltInRegistries.BLOCK.containsKey(id)) return null;
 
         for (String component : definition.components().keySet()) {
-            if (!IMPLEMENTED.contains(component)
+            if (!IMPLEMENTED.contains(component) && !component.startsWith(BlockComponents.TAG_COMPONENT)
                 && !at.ioexception.mcaddon.bedrock.behaviour.CustomComponents.isCustom(component)) {
                 AddonEntities.unsupported(component);
             }

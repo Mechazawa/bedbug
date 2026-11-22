@@ -15,14 +15,19 @@ import java.util.List;
 import java.util.OptionalInt;
 
 /**
- * How much each entry of `minecraft:repairable` gives back, which Bedrock states as Molang.
+ * What `minecraft:repairable` accepts and how much each entry gives back, which Bedrock states as
+ * Molang. An entry's items are descriptors, so a name or a tag test.
  *
  * Mojang's vanilla items write `query.max_durability * 0.25` for a material and
  * `context.other->query.remaining_durability` for a second copy of the item. The expression is
  * answered for the item being repaired, and `context.other` refers to the item repairing it.
  */
-public final class RepairAmounts {
+public final class Repairable {
+    /** An entry's amount is null where it states none, which leaves Java's own rule. */
     private record Entry(List<Descriptor> items, MolangExpression amount) {
+        boolean names(ItemStack other) {
+            return items.stream().anyMatch(descriptor -> descriptor.matches(other));
+        }
     }
 
     /** One item stack as Molang reads it: its two durability queries and nothing more. */
@@ -41,30 +46,49 @@ public final class RepairAmounts {
 
     private final List<Entry> entries;
 
-    private RepairAmounts(List<Entry> entries) {
+    private Repairable(List<Entry> entries) {
         this.entries = entries;
     }
 
-    /** The amounts a pack stated on this item, or null where no entry states one. */
-    public static RepairAmounts tryFrom(ItemDefinition definition) {
+    /** The entries a pack stated on this item, or null where it states no repairable entry. */
+    public static Repairable tryFrom(ItemDefinition definition) {
         JsonObject repairable = definition.components().get("minecraft:repairable");
         if (repairable == null) return null;
 
         List<Entry> entries = Json.list(repairable, "repair_items").stream()
-            .filter(JsonElement::isJsonObject)
-            .map(JsonElement::getAsJsonObject)
-            .filter(entry -> entry.has("repair_amount") && entry.get("repair_amount").isJsonPrimitive())
-            .map(entry -> new Entry(Descriptor.listed(entry, "items"),
-                MolangParser.parse(entry.get("repair_amount").getAsString())))
+            .map(Repairable::entry)
+            .filter(entry -> !entry.items().isEmpty())
             .toList();
-        return entries.isEmpty() ? null : new RepairAmounts(entries);
+        return entries.isEmpty() ? null : new Repairable(entries);
     }
 
-    /** The durability `other` gives back to `repaired`, or none where no entry with an amount names it. */
+    /** An entry, or a bare descriptor written in place of one, which stands for a list of one. */
+    private static Entry entry(JsonElement written) {
+        if (!written.isJsonObject() || !written.getAsJsonObject().has("items")) {
+            Descriptor named = Descriptor.tryFrom(written);
+            return new Entry(named == null ? List.of() : List.of(named), null);
+        }
+
+        JsonObject entry = written.getAsJsonObject();
+        JsonElement amount = entry.get("repair_amount");
+        return new Entry(Descriptor.listed(entry, "items"),
+            amount != null && amount.isJsonPrimitive() ? MolangParser.parse(amount.getAsString()) : null);
+    }
+
+    /** Whether an anvil takes `other` to repair this item. */
+    public boolean accepts(ItemStack other) {
+        return entries.stream().anyMatch(entry -> entry.names(other));
+    }
+
+    /**
+     * The durability `other` gives back to `repaired`, or none where the first entry naming it
+     * states no amount or no entry names it.
+     */
     public OptionalInt amount(ItemStack repaired, ItemStack other) {
         return entries.stream()
-            .filter(entry -> entry.items().stream().anyMatch(descriptor -> descriptor.matches(other)))
+            .filter(entry -> entry.names(other))
             .findFirst()
+            .filter(entry -> entry.amount() != null)
             .map(entry -> {
                 MolangEnvironment scope = new Stack(repaired).scope();
                 scope.setContext("other", MolangValue.of(new Stack(other)));

@@ -2458,7 +2458,7 @@ stand within the distance, itself included, of the type named where one is. `get
 is the same without the entity asking, a name found in no Mojang material today. Both are listed in
 `EntityQueries.EXPERIMENTAL`, which `components.py` reads as answered on purpose. `q.get_ride`,
 `q.target` and `context.player` appear in no Mojang material and are not answered. `context.other`
-is the item repairing another in an item's `repair_amount`, which `item.RepairAmounts` answers.
+is the item repairing another in an item's `repair_amount`, which `item.Repairable` answers.
 `BehaviourGameTests.anEntityReadsThePropertiesOfTheEntitiesNearItThroughAnArrow` has `tp:herald` add
 up `tp:settled` over two wisps through `->` inside `for_each` and count them through
 `combine_entities`; `MolangTest` runs Mojang's struct examples against stub entities.
@@ -2898,6 +2898,14 @@ redirects the neighbour's `isFaceSturdy(side)` call inside a pane's `getStateFor
 `updateShape`, the only place a pane knows the side. `tp:pillar` carries the rule and
 `aConnectionRuleNamesTheSidesNeighboursReach` reads fence, bars and wall back.
 
+## Block tags
+
+A block's tags are its `minecraft:tags` list and every `tag:<name>` component, the form packs wrote
+before that list; Mojang's schemas name only the list, and the Bedrock wiki's block tag page shows
+the component. Both become Java block tags in the converted data pack, a bare name under
+`minecraft:`, so a descriptor's `q.any_tag`, the block tag queries and a filter ask Java's tag.
+`PackGameTests.aBlocksTagComponentsAreItsTags` reads `tp:pillar`'s two back.
+
 ## Recipe unlock context and priority
 
 `AlwaysUnlocked` adds a `minecraft:tick` criterion to the recipe's unlock advancement, which grants
@@ -2946,6 +2954,20 @@ publishes nothing on, decided here:
   either: skeletons "seek out shelter during the day" and drowned on land by day "seek out nearby
   water or shade", with no fire or helmet named. A helmet is named only as stopping the burn, and
   only the Legacy Console Edition waited for the fire.
+
+- `blocks_to_avoid` on any `minecraft:navigation.*` closes a node to the pathfinder where a listed
+  block fills a cell of the mob's box there or is the block it would stand on. Mojang says only that
+  the pathfinder avoids them; standing on the block counts so that the breeze's trapdoors and the
+  goat's powder snow are both kept off. Java's level caches one path type per block for every mob,
+  so `AvoidedBlockMixin` asks the list where the walk and swim evaluators work a type out for one
+  mob, and `aPathNeverStepsOnABlockItsNavigationAvoids` reads it back. A mob needs to have landed
+  for a ground navigator to plan at all, so the test lets its roamers fall first.
+
+- A test of a random choice fails by construction when every draw goes the other way, so it
+  takes enough draws to make that one run in tens of thousands.
+  `aRandomBlockWalkTakesAnyMatchingBlockInRange` had eight roamers, one failed run in 256. It has
+  sixteen and reads the walk each planned (`getPath().getTarget()`) rather than where it stands,
+  so a crowd blocking the far block counts nothing against it.
 
 **The game test world is dark.** `isBrightOutside` answered false there at a clock of 25020, so a test
 about the day runs `time set day` and a goal asks the clock.
@@ -3135,15 +3157,21 @@ first standing place; 0, the default, checks every place in one tick and picks t
   `query.all_tags` and `query.any_tag` answer. A block's tags are Java's block tags under the name
   the pack wrote; an item's go through `BedrockItemTags`. `Goals.blocks` stands a tag test for every
   block passing it when the goal is built. A `minecraft:digger` rule is built on each data load
-  from 26, against the tags that load brings. A pack block's own `tag:` components are not tags
-  here, and `navigation.*` `blocks_to_avoid` is not read.
-- `minecraft:repairable` `repair_amount` is answered by `item.RepairAmounts` for the item being
+  from 26, against the tags that load brings. A pack block's `tag:` components are its tags, and a
+  `navigation.*` `blocks_to_avoid` list is a list of descriptors.
+- `minecraft:repairable` `repair_amount` is answered by `item.Repairable` for the item being
   repaired (`query.max_durability`, `query.remaining_durability`), with `context.other` the item
   repairing it. `AnvilRepairMixin` uses it for a material in place of Java's quarter, and
   `AnvilRepairMixin` and `RepairItemRecipeMixin` for a second copy of the item in place of that
   copy's own durability. Mojang publishes no rule for combining, so Java's bonus of 12 in a hundred
   at the anvil and 5 in the grid stays on top, as both editions' wikis describe. `RepairGameTests`
-  reads `tp:file` back. Which items repair at all still comes from the entries' plain names.
+  reads `tp:file` back. Which items repair at all is the entries' descriptors, names and tag tests
+  alike, which `AnvilRepairMixin` asks in place of Java's `Repairable` component. A second copy of
+  the item still takes Java's combining branch: Mojang's own items list themselves, and in that
+  branch the copy's entry amount and the anvil's bonus are both applied. The first entry naming an
+  item decides its amount, and one stating none keeps Java's quarter.
+  `anItemNamedByATagRepairsAtTheAnvil` repairs a file with a plank through
+  `q.any_tag('minecraft:planks')`.
 
 ## Conventions
 
