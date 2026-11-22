@@ -570,10 +570,17 @@ public final class PhysicsGameTests {
         private void drain() {
             Object packet;
             while ((packet = channel.readOutbound()) != null) {
+                //? if >=26.3 {
+                /*if (packet instanceof ClientboundLevelParticlesPacket particles
+                    && particles.particle() == ParticleTypes.BUBBLE) {
+                    bubbles.add(new Vec3(particles.x(), particles.y(), particles.z()));
+                }
+                *///?} else {
                 if (packet instanceof ClientboundLevelParticlesPacket particles
                     && particles.getParticle() == ParticleTypes.BUBBLE) {
                     bubbles.add(new Vec3(particles.getX(), particles.getY(), particles.getZ()));
                 }
+                //?}
             }
         }
     }
