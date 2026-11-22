@@ -3316,3 +3316,7 @@ properties the pack named, because a test for a block asks about those and no ot
   candidate carrying `minecraft:strength` (a pack's own, or a Java llama's `getStrength`) is fled at
   `probability_per_strength` times its strength, rolled each time the goal looks, and one carrying
   none is always fled.
+- `minecraft:behavior.tempt` `tempt_sound` is made as the entity is tempted and every
+  `sound_interval` seconds while it stays so. Mojang's documentation says ticks, but its strider
+  states 2 to 5, a sound several times a second in ticks, where its cat's 0 to 100 reads as seconds
+  too; the schema gives every other sound interval in seconds, so seconds it is.

@@ -54,10 +54,6 @@ AMPHIBIOUS = ("Walking the bottom under water: a Java mob that may not float sin
               "priced at nothing unless `avoid_water` says otherwise, so nothing is left to set.")
 FROM_AIR = "Java's flying navigator starts a path from wherever the entity is, the air included."
 
-TEMPT_SOUND = ("Mojang's documentation counts the gap between tempt sounds in ticks, and its cat writes "
-               "[0, 100] where its strider writes 2 to 5, which no one unit fits; the sound is left unmade "
-               "rather than made at one of the two rates.")
-
 BOBBING = ("The shape of the rise and fall on the surface. The lift above gives a floating entity Java's own "
            "bob, and nothing in Java lets an entity choose another.")
 
@@ -217,10 +213,6 @@ REASONS = {
     },
     "minecraft:behavior.float": {
         "*": "Java's float goal swims a mob up with no chance of its own and no passengers to drop.",
-    },
-    "minecraft:behavior.tempt": {
-        "tempt_sound": TEMPT_SOUND,
-        "sound_interval": TEMPT_SOUND,
     },
     "minecraft:behavior.avoid_mob_type": {
         "river_speed_multiplier": "Documented only as the speed 'when following river', and the goal "

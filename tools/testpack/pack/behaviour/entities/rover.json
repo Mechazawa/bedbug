@@ -205,6 +205,20 @@
       },
       "tp:rover_escaped": {
         "minecraft:is_chested": {}
+      },
+      "tp:rover_tempted_aloud": {
+        "minecraft:behavior.tempt": {
+          "priority": 1,
+          "items": [
+            "minecraft:apple"
+          ],
+          "within_radius": 6,
+          "tempt_sound": "tempt",
+          "sound_interval": {
+            "range_min": 0.5,
+            "range_max": 0.5
+          }
+        }
       }
     },
     "components": {
@@ -331,6 +345,13 @@
         "add": {
           "component_groups": [
             "tp:rover_escaped"
+          ]
+        }
+      },
+      "tp:rover_make_tempted_aloud": {
+        "add": {
+          "component_groups": [
+            "tp:rover_tempted_aloud"
           ]
         }
       }

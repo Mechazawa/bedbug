@@ -206,6 +206,29 @@ public final class RoverGameTests {
         });
     }
 
+    /** `tempt_sound` is made while tempted, `sound_interval` seconds apart. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void aTemptedEntityMakesItsTemptSound(GameTestHelper helper) {
+        KeeperGoalGameTests.Listener listener = KeeperGoalGameTests.Listener.join(helper, STAND.east(3));
+        listener.player().setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+        listener.player().setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.APPLE));
+        AddonEntity rover = rover(helper, "tp:rover_make_tempted_aloud", STAND);
+        if (rover == null) {
+            listener.leave();
+            helper.succeed();
+            return;
+        }
+        rover.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).setBaseValue(0);
+        helper.succeedWhen(() -> {
+            List<Long> heard = listener.heard("tp:rover.tempt", rover);
+            helper.assertTrue(heard.size() >= 2, ROVER + " made its tempt sound " + heard.size() + " times.");
+            long gap = heard.get(1) - heard.get(0);
+            helper.assertTrue(gap >= 9 && gap <= 12, ROVER + " left " + gap + " ticks between half second sounds.");
+            listener.leave();
+        });
+    }
+
     private static boolean moved(GameTestHelper helper, AddonEntity rover, int x, int z) {
         BlockPos at = helper.absolutePos(new BlockPos(x, 0, z));
         return rover.position().distanceTo(net.minecraft.world.phys.Vec3.atBottomCenterOf(at)) > 0.5;
