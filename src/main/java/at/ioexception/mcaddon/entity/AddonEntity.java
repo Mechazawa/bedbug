@@ -19,7 +19,6 @@ import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.BreathAirGoal;
-import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsTargetGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
@@ -3174,7 +3173,7 @@ public class AddonEntity extends PathfinderMob
         double speed = Goals.number(goal, "speed_multiplier", 1);
 
         switch (behaviour) {
-            case "minecraft:behavior.float" -> goals.add(priority, new FloatGoal(this));
+            case "minecraft:behavior.float" -> goals.add(priority, new StayAfloatGoal(this, goal));
             case "minecraft:behavior.panic" -> goals.add(priority, new PanickingGoal(this, goal));
             case "minecraft:behavior.swell" ->
                 goals.add(priority, new SwellGoal(this, goal));
