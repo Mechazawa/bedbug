@@ -24,14 +24,21 @@ public final class Breath {
     private final boolean water;
     private final boolean lava;
     private final boolean solids;
+    private final boolean bubbles;
 
+    /**
+     * Mojang's documentation lists `totalSupply` beside `total_supply`, and its allay writes the
+     * former, so either spelling states the supply.
+     */
     private Breath(JsonObject component) {
-        this.supply = Math.max(0, Goals.ticks(component, "total_supply", 15));
+        double seconds = Goals.number(component, "totalSupply", 15);
+        this.supply = Math.max(0, Goals.ticks(component, "total_supply", seconds));
         this.inhale = Math.max(0, Goals.ticks(component, "inhale_time", 0));
         this.air = Goals.flag(component, "breathes_air", true);
         this.water = Goals.flag(component, "breathes_water", false);
         this.lava = Goals.flag(component, "breathes_lava", true);
         this.solids = Goals.flag(component, "breathes_solids", false);
+        this.bubbles = Goals.flag(component, "generates_bubbles", true);
     }
 
     /** Null for an entity whose pack gave it nothing to breathe, which therefore cannot drown. */
@@ -86,4 +93,19 @@ public final class Breath {
 
         return Math.min(supply, current + Math.max(1, (int) Math.ceil((double) supply / inhale)));
     }
+
+    /**
+     * Lets a bubble rise from the entity's eyes while they are under water, unless
+     * `generates_bubbles` says no. Mojang publishes no rate, so it is one every
+     * {@link #BUBBLE_TICKS} ticks.
+     */
+    void bubble(LivingEntity entity) {
+        if (!bubbles || entity.tickCount % BUBBLE_TICKS != 0 || !entity.isEyeInFluid(FluidTags.WATER)) return;
+        if (!(entity.level() instanceof net.minecraft.server.level.ServerLevel level)) return;
+
+        level.sendParticles(net.minecraft.core.particles.ParticleTypes.BUBBLE, entity.getX(), entity.getEyeY(),
+            entity.getZ(), 1, 0.1, 0.1, 0.1, 0);
+    }
+
+    static final int BUBBLE_TICKS = 10;
 }

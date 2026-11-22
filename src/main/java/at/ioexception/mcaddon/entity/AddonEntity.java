@@ -4236,6 +4236,7 @@ public class AddonEntity extends PathfinderMob
      */
     private void everyTick() {
         holdBreath();
+        if (breath != null) breath.bubble(this);
         burnFuse();
         keepTransforming();
         noticeBeingHurt();
