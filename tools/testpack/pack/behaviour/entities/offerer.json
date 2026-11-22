@@ -140,6 +140,31 @@
           "offering_distance": 4
         }
       },
+      "tp:offerer_sampling": {
+        "minecraft:behavior.drop_item_for": {
+          "priority": 0,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              }
+            }
+          ],
+          "target_range": [
+            6,
+            6,
+            6
+          ],
+          "search_range": 3,
+          "search_height": 1,
+          "search_count": 1,
+          "loot_table": "loot_tables/entities/gift.json",
+          "cooldown": 10,
+          "offering_distance": 1
+        }
+      },
       "tp:offerer_reaching": {
         "minecraft:behavior.drop_item_for": {
           "priority": 0,
@@ -296,6 +321,13 @@
         "add": {
           "component_groups": [
             "tp:offerer_apart"
+          ]
+        }
+      },
+      "tp:offerer_make_sampling": {
+        "add": {
+          "component_groups": [
+            "tp:offerer_sampling"
           ]
         }
       },

@@ -253,7 +253,9 @@ the entity's tick.
   `add_random_time_range`, by up to `turn_range` degrees.
 - **Search and dig**: finds a spot whose ground is a target block, walks there, then digs. The item
   drops `spawn_item_after_seconds` into the dig and `on_item_found` fires only when the table gave
-  an item. The cooldown starts when the goal ends.
+  an item. The cooldown starts when the goal ends. The dig takes the ground
+  `target_dig_position_offset` blocks (2.25 by default) ahead of the entity, and fails when that
+  ground is not a target block.
 - **Raid garden**: eats one crop per visit, after `initial_eat_delay`. After `max_to_eat` crops it
   waits `full_delay`.
 - **Inspect bookshelf**: looks at `search_count` places each tick.
@@ -268,11 +270,13 @@ the entity's tick.
   Java villager that has the station as its job site.
 - **Transport items**: moves items between containers, up to `max_stack_size` a stack. It learns what
   a container holds only on arrival. After `max_visited_containers` visits it rests for
-  `idle_cooldown`. It starts only on the ground.
+  `idle_cooldown`. It starts only on the ground. At each container it stands for `interaction_time`
+  (3 seconds by default) before it takes or leaves anything.
 - **Drop item for**: drops what `loot_table` rolls, or what the entity holds. It stands near
   `offering_distance` from the target and teleports when the spot is past
   `minimum_teleport_distance`. It fires `on_drop_attempt` on arrival. `time_of_day_range` uses
-  Bedrock's clock, where noon is 0.
+  Bedrock's clock, where noon is 0. With a `search_count` it draws that many random places a tick
+  and takes the first it can stand on, instead of the best of all of them.
 - **Throw sound**: on the giving goals it plays the `charge` moment unless the pack names one.
 
 ## Damage causes
@@ -314,8 +318,5 @@ A pack's `entities/player.json` can state `minecraft:player.hunger`, `player.sat
 - How often an entity is sent over the network is Java's choice.
 - `has_damage` with `fatal` works only inside a damage sensor. There it compares the damage before
   armour with the health left.
-- `target_dig_position_offset` on `random_search_and_dig`. The entity digs the spot itself.
-- `search_count` on `drop_item_for`. It checks every block in one tick.
-- `interaction_time` on `transport_items` is not waited out.
 - `minecraft:camera` (Education Edition) and `minecraft:interact_button` (touch controls).
 - `tools/census/fields.py` lists every other unread field with its reason.

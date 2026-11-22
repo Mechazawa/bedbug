@@ -2966,7 +2966,10 @@ fields and one-line descriptions. The rest is decided here:
 - The search fails when the spot's ground stops being a target block or the path is lost. The dig
   fails when its ground stops being a target block. Either also fails when another goal takes over.
   `cooldown_range` starts when the goal ends, whatever the outcome.
-- `target_dig_position_offset` is not read: the spot itself is dug.
+- `target_dig_position_offset` (default 2.25) is the distance ahead of the entity's feet, along its
+  body yaw, whose ground block is the one dug. It is asked every dig tick, so the dig fails when
+  that ground is not a target block. The search still draws spots by their own ground. The test
+  pack's groups state 0 where a test wants the dig at the entity's feet.
 
 `minecraft:behavior.raid_garden` eats one crop per visit, `initial_eat_delay` seconds after
 arriving. It looks for the next crop `eat_delay` seconds later. After `max_to_eat` crops (no limit
@@ -3020,8 +3023,9 @@ what a container holds is learnt only on arriving at it; a container that gave n
 nothing is visited, and the goal rests for `idle_cooldown` and forgets its visits once it has
 visited `max_visited_containers` or finds nothing left to look at; a stack is taken whole up to
 `max_stack_size` from the first slot holding one, and put down by filling matching stacks and
-empty slots in slot order; `initial_cooldown` counts from the goal's first check. The 3 second
-`interaction_time` is not waited out. The goal starts only on the ground, because Java plans no path
+empty slots in slot order; `initial_cooldown` counts from the goal's first check. `interaction_time` (3
+seconds) is waited out at the container, counted on the game clock from arrival, before anything is
+taken or left. The goal starts only on the ground, because Java plans no path
 from the air and the first container would read as out of reach. A path ends a block short of the
 spot beside the container, so the last of the way is stepped straight in both goals.
 
@@ -3035,8 +3039,9 @@ column counts. A spot further than `minimum_teleport_distance` is teleported to,
 `teleport_offset` over it, once per run, so an offset larger than the distance cannot loop. On arrival
 `on_drop_attempt` is raised, the drop rolled at `drop_item_chance`, and the gift thrown along the
 look at the target, whose height is capped at `max_head_look_at_height` over the entity's feet. A
-goal naming no `loot_table` drops what the entity holds. `search_count` is not read: every block
-is checked in one tick, which is its default.
+goal naming no `loot_table` drops what the entity holds. `search_count` draws that many random
+places in the search box a tick (for every tick since the last look, at most two) and takes the
+first standing place; 0, the default, checks every place in one tick and picks the best.
 
 ## Conventions
 

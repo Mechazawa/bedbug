@@ -234,6 +234,43 @@ public final class DigGoalGameTests {
         });
     }
 
+    /**
+     * A dig takes the ground `target_dig_position_offset` ahead of the entity, not the ground it
+     * stands on. The one gold block is the spot it walks to, so the ground two blocks ahead is stone.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void aDigTakesTheGroundAheadOfTheEntity(GameTestHelper helper) {
+        floor(helper, Blocks.STONE);
+        helper.setBlock(new BlockPos(5, FLOOR, 3), Blocks.GOLD_BLOCK);
+        AddonEntity digger = digger(helper, "tp:digger_make_reaching", new BlockPos(3, STAND_Y, 3));
+        if (digger == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            helper.assertTrue(on(digger, "tp:dug"), DIGGER + " never reached its spot.");
+            helper.assertTrue(on(digger, "tp:dig_failed"),
+                DIGGER + " dug the ground it stood on instead of the ground two blocks ahead.");
+            helper.assertFalse(on(digger, "tp:succeeded"), DIGGER + " finished a dig ahead of it with no gold.");
+        });
+    }
+
+    /** The same dig over gold all the way ahead finishes. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void aDigAheadFinishesOverTargetGround(GameTestHelper helper) {
+        BlockPos.betweenClosed(new BlockPos(0, FLOOR, 0), new BlockPos(13, FLOOR, 13))
+            .forEach(at -> helper.setBlock(at, Blocks.GOLD_BLOCK));
+        AddonEntity digger = digger(helper, "tp:digger_make_reaching", new BlockPos(6, STAND_Y, 6));
+        if (digger == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.succeedWhen(() -> helper.assertTrue(on(digger, "tp:succeeded"),
+            DIGGER + " did not finish a dig over gold."));
+    }
+
     private static void clearGoldOnceSet(GameTestHelper helper, AddonEntity digger, String property) {
         boolean[] cleared = {false};
         helper.onEachTick(() -> {

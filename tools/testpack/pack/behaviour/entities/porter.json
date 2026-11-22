@@ -11,6 +11,7 @@
       "tp:porter_carrying": {
         "minecraft:behavior.transport_items": {
           "priority": 0,
+          "interaction_time": 0,
           "source_container_types": [
             {
               "name": "minecraft:barrel"
@@ -32,6 +33,7 @@
       "tp:porter_choosy": {
         "minecraft:behavior.transport_items": {
           "priority": 0,
+          "interaction_time": 0,
           "source_container_types": [
             {
               "name": "minecraft:barrel"
@@ -53,6 +55,28 @@
       "tp:porter_nearest": {
         "minecraft:behavior.transport_items": {
           "priority": 0,
+          "interaction_time": 0,
+          "source_container_types": [
+            {
+              "name": "minecraft:barrel"
+            }
+          ],
+          "destination_container_types": [
+            {
+              "name": "minecraft:chest"
+            }
+          ],
+          "search_strategy": "nearest",
+          "search_distance": [
+            6,
+            3
+          ]
+        }
+      },
+      "tp:porter_lingering": {
+        "minecraft:behavior.transport_items": {
+          "priority": 0,
+          "interaction_time": 2,
           "source_container_types": [
             {
               "name": "minecraft:barrel"
@@ -73,6 +97,7 @@
       "tp:porter_short": {
         "minecraft:behavior.transport_items": {
           "priority": 0,
+          "interaction_time": 0,
           "source_container_types": [
             {
               "name": "minecraft:barrel"
@@ -93,6 +118,7 @@
       "tp:porter_forgetful": {
         "minecraft:behavior.transport_items": {
           "priority": 0,
+          "interaction_time": 0,
           "source_container_types": [
             {
               "name": "minecraft:barrel"
@@ -115,6 +141,7 @@
       "tp:porter_restless": {
         "minecraft:behavior.transport_items": {
           "priority": 0,
+          "interaction_time": 0,
           "source_container_types": [
             {
               "name": "minecraft:barrel"
@@ -136,6 +163,7 @@
       "tp:porter_late": {
         "minecraft:behavior.transport_items": {
           "priority": 0,
+          "interaction_time": 0,
           "source_container_types": [
             {
               "name": "minecraft:barrel"
@@ -197,6 +225,13 @@
         "add": {
           "component_groups": [
             "tp:porter_nearest"
+          ]
+        }
+      },
+      "tp:porter_make_lingering": {
+        "add": {
+          "component_groups": [
+            "tp:porter_lingering"
           ]
         }
       },
