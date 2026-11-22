@@ -246,6 +246,28 @@
         }
       ]
     },
+    "tp:rover.retreat": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.6,
+          "pitch": 0.8,
+          "weight": 1
+        }
+      ]
+    },
+    "tp:rover.tempt": {
+      "category": "neutral",
+      "sounds": [
+        {
+          "name": "sounds/tp/chime",
+          "volume": 0.6,
+          "pitch": 0.8,
+          "weight": 1
+        }
+      ]
+    },
     "tp:keeper.thrown": {
       "category": "neutral",
       "sounds": [

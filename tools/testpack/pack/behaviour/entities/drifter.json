@@ -15,7 +15,9 @@
     },
     "component_groups": {
       "tp:drifter_homebound": {
-        "minecraft:navigation.fly": {},
+        "minecraft:navigation.fly": {
+          "can_path_from_air": true
+        },
         "minecraft:movement.hover": {},
         "minecraft:home": {
           "restriction_type": "random_movement",
@@ -29,7 +31,9 @@
         }
       },
       "tp:drifter_roaming": {
-        "minecraft:navigation.fly": {},
+        "minecraft:navigation.fly": {
+          "can_path_from_air": true
+        },
         "minecraft:movement.hover": {},
         "minecraft:home": {
           "restriction_type": "random_movement",
@@ -43,7 +47,9 @@
         }
       },
       "tp:drifter_reaching": {
-        "minecraft:navigation.fly": {},
+        "minecraft:navigation.fly": {
+          "can_path_from_air": true
+        },
         "minecraft:movement.hover": {},
         "minecraft:behavior.float_wander": {
           "priority": 0,
@@ -53,7 +59,9 @@
         }
       },
       "tp:drifter_hugging": {
-        "minecraft:navigation.fly": {},
+        "minecraft:navigation.fly": {
+          "can_path_from_air": true
+        },
         "minecraft:movement.hover": {},
         "minecraft:behavior.float_wander": {
           "priority": 0,
@@ -65,7 +73,9 @@
         }
       },
       "tp:drifter_dry": {
-        "minecraft:navigation.fly": {},
+        "minecraft:navigation.fly": {
+          "can_path_from_air": true
+        },
         "minecraft:movement.hover": {},
         "minecraft:behavior.float_wander": {
           "priority": 0,
@@ -75,7 +85,9 @@
         }
       },
       "tp:drifter_wary": {
-        "minecraft:navigation.fly": {},
+        "minecraft:navigation.fly": {
+          "can_path_from_air": true
+        },
         "minecraft:movement.hover": {},
         "minecraft:behavior.float_wander": {
           "priority": 0,
@@ -85,7 +97,9 @@
         }
       },
       "tp:drifter_free": {
-        "minecraft:navigation.fly": {},
+        "minecraft:navigation.fly": {
+          "can_path_from_air": true
+        },
         "minecraft:movement.hover": {},
         "minecraft:behavior.float_wander": {
           "priority": 0,
@@ -95,7 +109,9 @@
         }
       },
       "tp:drifter_tempted": {
-        "minecraft:navigation.fly": {},
+        "minecraft:navigation.fly": {
+          "can_path_from_air": true
+        },
         "minecraft:movement.fly": {},
         "minecraft:behavior.float_tempt": {
           "priority": 0,
@@ -111,7 +127,9 @@
         }
       },
       "tp:drifter_perching": {
-        "minecraft:navigation.fly": {},
+        "minecraft:navigation.fly": {
+          "can_path_from_air": true
+        },
         "minecraft:movement.hover": {},
         "minecraft:behavior.random_fly": {
           "priority": 0,
@@ -121,7 +139,9 @@
         }
       },
       "tp:drifter_careful": {
-        "minecraft:navigation.fly": {},
+        "minecraft:navigation.fly": {
+          "can_path_from_air": true
+        },
         "minecraft:movement.hover": {},
         "minecraft:behavior.random_fly": {
           "priority": 0,
@@ -218,7 +238,9 @@
         }
       },
       "tp:drifter_circling": {
-        "minecraft:navigation.fly": {},
+        "minecraft:navigation.fly": {
+          "can_path_from_air": true
+        },
         "minecraft:movement.fly": {},
         "minecraft:behavior.circle_around_anchor": {
           "priority": 0,

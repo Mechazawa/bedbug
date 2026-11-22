@@ -1,0 +1,57 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:foal",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_foal", "mob"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.5,
+        "height": 0.75
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {},
+      "minecraft:breedable": {
+        "require_tame": false,
+        "breed_items": ["minecraft:wheat"],
+        "breeds_with": {
+          "mate_type": "tp:foal",
+          "baby_type": "tp:foal"
+        }
+      },
+      "minecraft:behavior.breed": {
+        "priority": 0
+      }
+    },
+    "component_groups": {
+      "tp:foal_unblended": {
+        "minecraft:offspring": {
+          "blend_attributes": false,
+          "parent_centric_attribute_blending": ["minecraft:health"]
+        }
+      }
+    },
+    "events": {
+      "tp:foal_unblend": {
+        "add": {
+          "component_groups": ["tp:foal_unblended"]
+        }
+      }
+    }
+  }
+}

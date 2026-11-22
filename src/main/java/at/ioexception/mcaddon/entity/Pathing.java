@@ -7,6 +7,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.navigation.AmphibiousPathNavigation;
+import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
@@ -34,7 +35,12 @@ final class Pathing {
     private final boolean opensDoors;
     private final boolean passesDoors;
     private final boolean crossesLava;
+    private final boolean jumps;
+    private final boolean amphibious;
+    private final boolean avoidsPortals;
     private final List<Descriptor> avoidedBlocks;
+    private final boolean startsInAir;
+    private final boolean followsDoorAnnotations;
 
     private Pathing(JsonObject body) {
         this.swims = Goals.flag(body, "can_swim", false);
@@ -49,7 +55,12 @@ final class Pathing {
         this.passesDoors = Goals.flag(body, "can_pass_doors", true);
         this.crossesLava = Goals.flag(body, "can_path_over_lava", false)
             || Goals.flag(body, "can_walk_in_lava", false);
+        this.jumps = Goals.flag(body, "can_jump", true);
+        this.amphibious = Goals.flag(body, "is_amphibious", false);
+        this.avoidsPortals = Goals.flag(body, "avoid_portals", false);
         this.avoidedBlocks = Descriptor.listed(body, "blocks_to_avoid");
+        this.startsInAir = Goals.flag(body, "can_path_from_air", false);
+        this.followsDoorAnnotations = Goals.flag(body, "using_door_annotation", true);
     }
 
     /** The allowances a navigation component states, or Bedrock's defaults where the entity has none. */
@@ -74,13 +85,19 @@ final class Pathing {
      * Puts the allowances on the navigator and the prices on the mob.
      *
      * A closed door a mob may break is one its path may run through, which is how Java's own zombie
-     * is told it can reach a villager behind one.
+     * is told it can reach a villager behind one. Under `using_door_annotation`, which every vanilla
+     * entity writes as true, a door annotation the entity carries lets its path through a closed door
+     * as well.
      */
-    void applyTo(Mob mob, PathNavigation navigation, boolean opensDoorsByAnnotation) {
-        navigation.getNodeEvaluator().setCanOpenDoors(opensDoors || opensDoorsByAnnotation);
+    void applyTo(Mob mob, PathNavigation navigation, boolean annotatedForDoors) {
+        navigation.getNodeEvaluator().setCanOpenDoors(opensDoors || followsDoorAnnotations && annotatedForDoors);
         navigation.getNodeEvaluator().setCanPassDoors(passesDoors);
         navigation.setCanFloat(floats);
         if (navigation instanceof GroundPathNavigation ground) ground.setAvoidSun(avoidsSun);
+        if (navigation instanceof WalkingNavigation walking) {
+            walking.plan(avoidsPortals, jumps, amphibious);
+        }
+        if (navigation instanceof AirNavigation air) air.startsInAir = startsInAir;
 
         Platform.priceWater(mob, avoidsWater);
         Platform.priceDamagingBlocks(mob, avoidsDamage);
@@ -99,6 +116,24 @@ final class Pathing {
         return BlockPos.betweenClosedStream(x, y - 1, z, x + across - 1, y + up - 1, z + across - 1)
             .map(level::getBlockState)
             .anyMatch(state -> avoidedBlocks.stream().anyMatch(avoided -> avoided.matches(state)));
+    }
+
+    /**
+     * Java's flying navigator for `minecraft:navigation.fly` and `hover`, which plans from the air
+     * only under `can_path_from_air` and otherwise waits for the ground or a liquid, as Java's ground
+     * navigator does.
+     */
+    static final class AirNavigation extends FlyingPathNavigation {
+        private boolean startsInAir;
+
+        AirNavigation(Mob mob, Level level) {
+            super(mob, level);
+        }
+
+        @Override
+        protected boolean canUpdatePath() {
+            return super.canUpdatePath() && (startsInAir || mob.onGround() || mob.isInLiquid());
+        }
     }
 
     /**

@@ -19,7 +19,6 @@ import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.BreathAirGoal;
-import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
 import net.minecraft.world.entity.ai.goal.MoveTowardsTargetGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
@@ -82,6 +81,9 @@ public class AddonEntity extends PathfinderMob
     /** The table the offers on the screen were built out of, so a group naming another rebuilds them. */
     private TradeTable offered;
     private boolean offersOverridden;
+    /** Offers `persist_trades` carried here, kept until the entity next trades by a table of its own. */
+    private boolean offersKept;
+    private final CureGossip cured = new CureGossip();
     private int tradeExperience;
     private Identifier lootTable;
     private Age age;
@@ -604,6 +606,8 @@ public class AddonEntity extends PathfinderMob
         refreshStep();
 
         refreshBreath();
+        refreshPhysics();
+        refreshBuoyancy();
         refreshFuse();
         refreshHome();
         refreshContainer();
@@ -652,6 +656,34 @@ public class AddonEntity extends PathfinderMob
     }
 
     private Breath breath;
+
+    /**
+     * What `minecraft:physics` says moves the entity. Collision is Java's `noPhysics`, which also
+     * keeps other entities from pushing it.
+     */
+    private void refreshPhysics() {
+        com.google.gson.JsonObject physics = liveComponent("minecraft:physics");
+        weightless = !Goals.flag(physics, "has_gravity", true);
+        pushedOutOfBlocks = Goals.flag(physics, "push_towards_closest_space", false);
+        if (flight == null) noPhysics = !Goals.flag(physics, "has_collision", true);
+    }
+
+    private boolean weightless;
+
+    private boolean pushedOutOfBlocks;
+
+    @Override
+    public boolean isNoGravity() {
+        return super.isNoGravity() || weightless || buoyancy != null && buoyancy.weightless(this);
+    }
+
+    /** Moves the entity towards open air while its box is inside a block, the way Java moves an item. */
+    private void pushOutOfBlocks() {
+        if (!pushedOutOfBlocks || noPhysics) return;
+        if (level().noCollision(this, getBoundingBox().deflate(1.0E-7))) return;
+
+        moveTowardsClosestSpace(getX(), (getBoundingBox().minY + getBoundingBox().maxY) / 2, getZ());
+    }
 
     /**
      * Lights the fuse of a `minecraft:explode` that arrives with `fuse_lit`, and puts it out again
@@ -764,8 +796,8 @@ public class AddonEntity extends PathfinderMob
         // holding the entity to it: Mojang writes an empty `minecraft:home` on entities whose events
         // only need somewhere to remember.
         if (component != null && component.equals("minecraft:home")
-            && "none".equals(at.ioexception.mcaddon.util.Json.text(
-                liveComponent("minecraft:home"), "restriction_type", "none"))) {
+            && ("none".equals(at.ioexception.mcaddon.util.Json.text(
+                liveComponent("minecraft:home"), "restriction_type", "none")) || !homeBlockStands())) {
             component = null;
         }
         if (component == null) {
@@ -774,8 +806,38 @@ public class AddonEntity extends PathfinderMob
         }
         if (Platform.hasHome(this)) return;
 
-        Platform.setHome(this, blockPosition(),
-            Math.max(1, (int) liveNumber(component, "restriction_radius", 16)));
+        net.minecraft.core.BlockPos centre = component.equals("minecraft:home") ? homePosition() : blockPosition();
+        Platform.setHome(this, centre, Math.max(1, (int) liveNumber(component, "restriction_radius", 16)));
+    }
+
+    /**
+     * Whether a block `home_block_list` names stands at the home, which holds whenever the list is
+     * empty. The home restricts the entity only while one does.
+     */
+    private boolean homeBlockStands() {
+        java.util.Set<net.minecraft.world.level.block.Block> homes =
+            Goals.blocks(liveComponent("minecraft:home"), "home_block_list");
+        return homes.isEmpty() || homes.contains(level().getBlockState(homePosition()).getBlock());
+    }
+
+    /**
+     * The box a sleeping entity takes, which `minecraft:behavior.sleep` states.
+     *
+     * Java answers the sleeping pose with a fixed fifth of a block in the final
+     * `LivingEntity.getDimensions`, so the box is made here instead: `sleep_collider_width` across,
+     * `sleep_collider_height` high, its bottom `sleep_y_offset` above the floor of the bed's block.
+     */
+    @Override
+    protected net.minecraft.world.phys.AABB makeBoundingBox(net.minecraft.world.phys.Vec3 at) {
+        com.google.gson.JsonObject sleep = definition == null || getPose() != net.minecraft.world.entity.Pose.SLEEPING
+            ? null : liveComponent("minecraft:behavior.sleep");
+        if (sleep == null) return super.makeBoundingBox(at);
+
+        double half = Goals.number(sleep, "sleep_collider_width", 1) / 2;
+        double bottom = getSleepingPos()
+            .map(bed -> bed.getY() + Goals.number(sleep, "sleep_y_offset", 1)).orElse(at.y);
+        return new net.minecraft.world.phys.AABB(at.x - half, bottom, at.z - half,
+            at.x + half, bottom + Goals.number(sleep, "sleep_collider_height", 1), at.z + half);
     }
 
     /** The value the home `minecraft:home` saves is kept under, which a chunk written out keeps. */
@@ -794,18 +856,24 @@ public class AddonEntity extends PathfinderMob
      * The container the entity carries, sized by whichever component asks for one at this moment.
      *
      * `minecraft:inventory` states the number of slots outright and `minecraft:strength` states how
-     * much the entity can carry, three slots per point in both editions. Either arrives with the
+     * much the entity can carry, three slots per point in both editions. With both, the inventory's
+     * `additional_slots_per_strength` gives the slots per point, up to its `inventory_size`. Either arrives with the
      * group that gives the entity something to carry things for, so the container is built again
      * whenever the number of slots the pack asks for has moved. What was in it is carried across,
      * because the items belong to the entity rather than to the group that asked for the room.
      */
     private void refreshContainer() {
         int slots = 0;
+        int strength = (int) Math.min(liveNumber("minecraft:strength", "value", 1),
+            liveNumber("minecraft:strength", "max", 5));
+        int perStrength = (int) liveNumber("minecraft:inventory", "additional_slots_per_strength", 0);
         if (declaresNow("minecraft:inventory")) {
             slots = Math.max(1, (int) liveNumber("minecraft:inventory", "inventory_size", 5));
+            if (perStrength > 0 && declaresNow("minecraft:strength")) {
+                slots = Math.max(1, Math.min(slots, perStrength * strength));
+            }
         } else if (declaresNow("minecraft:strength")) {
-            slots = Math.max(1, (int) Math.min(liveNumber("minecraft:strength", "value", 1),
-                liveNumber("minecraft:strength", "max", 5)) * 3);
+            slots = Math.max(1, strength * 3);
         }
         if (slots == 0 || (carried != null && carried.getContainerSize() == slots)) return;
 
@@ -877,6 +945,17 @@ public class AddonEntity extends PathfinderMob
         if (table == null) table = liveText("minecraft:economy_trade_table", "table");
 
         return AddonEntities.tradeTable(getType(), table);
+    }
+
+    /**
+     * The title of the trading screen: the `display_name` of the table the entity trades by, a key
+     * of the pack's own text, or the entity's own name where that table states none.
+     */
+    private net.minecraft.network.chat.Component tradeTitle() {
+        String named = liveText("minecraft:trade_table", "table") != null
+            ? liveText("minecraft:trade_table", "display_name")
+            : liveText("minecraft:economy_trade_table", "display_name");
+        return named == null ? getDisplayName() : net.minecraft.network.chat.Component.translatable(named);
     }
 
     /**
@@ -979,8 +1058,10 @@ public class AddonEntity extends PathfinderMob
      */
     @Override
     protected PathNavigation createNavigation(Level level) {
-        if (carriesNow("minecraft:navigation.fly") || carriesNow("minecraft:navigation.hover")
-            || carriesNow("minecraft:navigation.float") || carriesNow("minecraft:can_fly")) {
+        if (carriesNow("minecraft:navigation.fly") || carriesNow("minecraft:navigation.hover")) {
+            return new Pathing.AirNavigation(this, level);
+        }
+        if (carriesNow("minecraft:navigation.float") || carriesNow("minecraft:can_fly")) {
             return new FlyingPathNavigation(this, level);
         }
         if (carriesNow("minecraft:navigation.swim")) {
@@ -991,7 +1072,7 @@ public class AddonEntity extends PathfinderMob
             return new WallClimberNavigation(this, level);
         }
         PathNavigation swimming = pathing().navigatorFor(this, level);
-        return swimming != null ? swimming : super.createNavigation(level);
+        return swimming != null ? swimming : new WalkingNavigation(this, level);
     }
 
     /**
@@ -1006,13 +1087,38 @@ public class AddonEntity extends PathfinderMob
         if (asked.getClass() != navigation.getClass()) navigation = asked;
 
         pathing = pathing();
-        pathing.applyTo(this, navigation, carriesNow("minecraft:annotation.open_door"));
+        pathing.applyTo(this, navigation, carriesNow("minecraft:annotation.open_door")
+            || carriesNow("minecraft:annotation.break_door"));
+        if (navigation instanceof WalkingNavigation walking) priceBlocks(walking);
         applyMoveControl();
     }
 
     /** Whether the navigation component the entity carries closes the node at the position to it. */
     public boolean avoidsNode(BlockGetter level, int x, int y, int z) {
         return pathing != null && pathing.avoids(this, level, x, y, z);
+    }
+
+    /**
+     * What `minecraft:preferred_path` charges for standing on each block and for a step up, on top of
+     * Java's own price for the kind of ground, the larger of the two counting. A block in no list
+     * costs `default_block_cost`.
+     */
+    private void priceBlocks(WalkingNavigation walking) {
+        com.google.gson.JsonObject path = definition == null ? null : liveComponent("minecraft:preferred_path");
+        if (path == null) {
+            walking.price(null, 0);
+            return;
+        }
+
+        java.util.Map<net.minecraft.world.level.block.Block, Double> costs = new java.util.HashMap<>();
+        for (com.google.gson.JsonElement set : at.ioexception.mcaddon.util.Json.list(path, "preferred_path_blocks")) {
+            if (!set.isJsonObject()) continue;
+
+            double cost = Goals.number(set.getAsJsonObject(), "cost", 0);
+            Goals.blocks(set.getAsJsonObject(), "blocks").forEach(block -> costs.putIfAbsent(block, cost));
+        }
+        double otherwise = Goals.number(path, "default_block_cost", 0);
+        walking.price(state -> costs.getOrDefault(state.getBlock(), otherwise), Goals.number(path, "jump_cost", 0));
     }
 
     /**
@@ -1054,8 +1160,9 @@ public class AddonEntity extends PathfinderMob
         if (carriesNow("minecraft:movement.hover")) return "hover";
         if (carriesNow("minecraft:movement.glide")) return "glide";
         if (carriesNow("minecraft:movement.fly")) return "fly";
-        // Swimming that banks into its turns, which is what Bedrock's dolphin and its sway both are.
-        if (carriesNow("minecraft:movement.dolphin") || carriesNow("minecraft:movement.sway")) return "swim";
+        if (carriesNow("minecraft:movement.sway")) return "sway";
+        // Swimming that banks into its turns, which is what Bedrock's dolphin is.
+        if (carriesNow("minecraft:movement.dolphin")) return "swim";
         if (carriesNow("minecraft:movement.jump") || carriesNow("minecraft:movement.skip")) return "hop";
 
         return "walk";
@@ -1089,6 +1196,7 @@ public class AddonEntity extends PathfinderMob
             case "glide" -> new GlideMoveControl(this, liveComponent("minecraft:movement.glide"));
             case "swim" -> new net.minecraft.world.entity.ai.control.SmoothSwimmingMoveControl(
                 this, 85, 10, 0.02f, 0.1f, true);
+            case "sway" -> new SwayMoveControl(this, liveComponent("minecraft:movement.sway"));
             case "hop" -> new HopMoveControl(this);
             default -> new net.minecraft.world.entity.ai.control.MoveControl(this);
         };
@@ -2032,31 +2140,6 @@ public class AddonEntity extends PathfinderMob
         }
     }
 
-    /**
-     * Drinking a potion, which `minecraft:behavior.drink_potion` picks. Milk is {@link DrinkMilkGoal}.
-     *
-     * Each of its `potions` names a Bedrock potion by number, the conditions it is drunk under and a
-     * chance a tick; the first whose conditions hold and whose chance comes up is drunk, and the
-     * entity takes that potion's effects, the way Java's witch takes its own.
-     */
-    private void drink() {
-        Filter.Context context = new Filter.Context(this, this, getTarget(), ServerHooks.state());
-        com.google.gson.JsonObject drinking = liveComponent("minecraft:behavior.drink_potion");
-        if (drinking == null) return;
-
-        at.ioexception.mcaddon.util.Json.list(drinking, "potions").stream()
-            .filter(com.google.gson.JsonElement::isJsonObject)
-            .map(com.google.gson.JsonElement::getAsJsonObject)
-            .filter(potion -> Goals.filter(potion, "filters").matches(context))
-            .filter(potion -> random.nextDouble() < at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits
-                .chanceOverTicks(Goals.number(potion, "chance", 1), Sensors.INTERVAL_TICKS))
-            .findFirst()
-            .flatMap(potion -> at.ioexception.mcaddon.bedrock.behaviour.BedrockPotions.numbered(
-                (int) Goals.number(potion, "id", -1)))
-            .ifPresent(potion -> potion.getEffects()
-                .forEach(effect -> addEffect(new net.minecraft.world.effect.MobEffectInstance(effect))));
-    }
-
     /** Whether the raid underfoot was already won last time the entity looked. */
     private boolean sawRaidWon;
 
@@ -2283,6 +2366,65 @@ public class AddonEntity extends PathfinderMob
         tradeExperience = before.tradeExperience;
     }
 
+    /**
+     * What a trader takes of the one it was before a transformation, and of whoever caused it.
+     *
+     * Offers the old one's table marked `persist_trades`, or carried here already, stay whole and wait
+     * for a table to trade by. A `convert_trades_economy` table hands an `economy_trade_table` its
+     * fresh offers with the result components of the old trade for the same items. A player who
+     * caused the transformation cured this trader.
+     */
+    public void inheritTrades(AddonEntity before, net.minecraft.world.entity.Entity cause) {
+        boolean persists = before.offersKept
+            || Goals.flag(before.liveComponent("minecraft:trade_table"), "persist_trades", false)
+            || Goals.flag(before.liveComponent("minecraft:economy_trade_table"), "persist_trades", false);
+        boolean converts = Goals.flag(before.liveComponent("minecraft:trade_table"), "convert_trades_economy", false)
+            && liveComponent("minecraft:economy_trade_table") != null;
+        MerchantOffers old = (persists || converts) && before.trades() != null ? before.getOffers() : before.offers;
+
+        if (persists && old != null) {
+            offers = old;
+            shown = before.shown;
+            TradeTable table = trades();
+            offersKept = table == null;
+            offered = table;
+            offeredTiers = table == null ? -1 : table.reached(tradeExperience);
+        } else if (converts && old != null) {
+            getOffers().forEach(fresh -> old.stream()
+                .filter(was -> sameTrade(was, fresh))
+                .findFirst()
+                .ifPresent(was -> fresh.getResult().applyComponents(was.getResult().getComponentsPatch())));
+        }
+        if (cause instanceof Player player) curedBy(player);
+        if (trades() != null) getOffers();
+        saveTrading();
+    }
+
+    private static boolean sameTrade(net.minecraft.world.item.trading.MerchantOffer one,
+        net.minecraft.world.item.trading.MerchantOffer other) {
+        return one.getBaseCostA().getItem() == other.getBaseCostA().getItem()
+            && one.getCostB().getItem() == other.getCostB().getItem()
+            && one.getResult().getItem() == other.getResult().getItem();
+    }
+
+    /** The player cured this trader, which `cured_discount` turns into gossip a later trade prices by. */
+    private void curedBy(Player player) {
+        com.google.gson.JsonObject economy = liveComponent("minecraft:economy_trade_table");
+        if (economy != null) cured.cure(player.getUUID(), economy, level().getGameTime());
+    }
+
+    /**
+     * Prices the offers for the player about to trade, as Java's villager does for its reputation:
+     * each offer moves by the reputation times its price multiplier.
+     */
+    private void priceFor(Player player) {
+        int reputation = cured.reputation(player.getUUID());
+        if (reputation == 0) return;
+
+        getOffers().forEach(offer -> offer.addToSpecialPriceDiff(
+            -net.minecraft.util.Mth.floor(reputation * offer.getPriceMultiplier())));
+    }
+
     /** Leaves what the entity carries in its inventory on the ground where it stands. */
     public void dropInventory() {
         if (carried == null) return;
@@ -2303,13 +2445,15 @@ public class AddonEntity extends PathfinderMob
      * `begin_transform_sound` is made as it starts. The wait ends with the transformation unless the
      * group carrying the component has gone by then, which is how a cure is called off.
      */
-    public boolean startTransforming(com.google.gson.JsonObject body) {
+    public boolean startTransforming(com.google.gson.JsonObject body, net.minecraft.world.entity.Entity cause) {
         makeNoise(at.ioexception.mcaddon.util.Json.text(body, "begin_transform_sound", null));
         transforming = Transformation.tryFrom(body, this);
+        transformedBy = cause == null ? null : cause.getUUID();
         return transforming != null;
     }
 
     private Transformation transforming;
+    private java.util.UUID transformedBy;
 
     private void keepTransforming() {
         if (transforming == null) return;
@@ -2321,7 +2465,10 @@ public class AddonEntity extends PathfinderMob
 
         com.google.gson.JsonObject body = transforming.body();
         transforming = null;
-        EntityEvents.transform(this, body, ServerHooks.state());
+        net.minecraft.world.entity.Entity cause = transformedBy == null
+            || !(level() instanceof net.minecraft.server.level.ServerLevel level)
+            ? null : level.getEntity(transformedBy);
+        EntityEvents.transform(this, body, cause, ServerHooks.state());
     }
 
     /** The owner's id, or null while nobody owns this entity. */
@@ -2597,8 +2744,10 @@ public class AddonEntity extends PathfinderMob
                 nearby -> nearby != this
                     && filter.matches(new Filter.Context(this, nearby, nearby, ServerHooks.state())));
         net.minecraft.world.damagesource.DamageSource blow = damageSources().mobAttack(this);
-        net.minecraft.world.damagesource.DamageSource dealt = Goals.flag(attack, "use_self_as_damage_source", true)
-            ? blow : new net.minecraft.world.damagesource.DamageSource(blow.typeHolder());
+        net.minecraft.world.damagesource.DamageSource dealt = WordedDamageSource.worded(
+            Goals.flag(attack, "use_self_as_damage_source", true)
+                ? blow : new net.minecraft.world.damagesource.DamageSource(blow.typeHolder()),
+            Goals.text(attack, "death_message_override"));
         struck.forEach(nearby -> Platform.hurt(nearby, level, dealt, damage));
         if (!struck.isEmpty()) areaAttackReadyAt = tickCount + Goals.ticks(attack, "damage_cooldown", 0);
     }
@@ -2680,35 +2829,38 @@ public class AddonEntity extends PathfinderMob
         heal(1);
     }
 
-    /** Rises through the liquid it is in, which is the whole of what a buoyant entity does. */
+    /**
+     * Rises through the liquid it is in. `minecraft:floats_in_liquid` floats in any liquid at the
+     * lift of a `base_buoyancy` of one, and `minecraft:buoyant` in the liquids it names.
+     */
     private void rideLiquid() {
-        com.google.gson.JsonObject buoyant = liveComponent("minecraft:buoyant");
-        boolean floating = declaresNow("minecraft:floats_in_liquid") ? isInWater() || isInLava()
-            : buoyant != null
-                && ((isInWater() && floatsOn(buoyant, "water")) || (isInLava() && floatsOn(buoyant, "lava")));
-        if (!floating) return;
-
-        double lift = Goals.number(buoyant, "base_buoyancy", 1) * BUOYANT_LIFT;
-        setDeltaMovement(getDeltaMovement().add(0, lift, 0));
+        if (buoyancy != null && buoyancy.floats(this)) {
+            buoyancy.ride(this);
+        } else if (declaresNow("minecraft:floats_in_liquid") && (isInWater() || isInLava())) {
+            setDeltaMovement(getDeltaMovement().add(0, Buoyancy.LIFT, 0));
+        } else {
+            return;
+        }
         fallDistance = 0;
     }
 
-    /** The lift a `base_buoyancy` of one gives each tick, in blocks a tick each tick. */
-    private static final double BUOYANT_LIFT = 0.03;
-
     /**
-     * Whether `liquid_blocks` names the liquid, still or flowing. A component naming none floats in
-     * water, which is where Java floats every mob that floats.
+     * The `minecraft:buoyant` the entity carries, read again as its groups change. Losing it while
+     * afloat pulls the entity down by `drag_down_on_buoyancy_removed`; an entity read back from
+     * storage carried none before and is pulled nowhere.
      */
-    private static boolean floatsOn(com.google.gson.JsonObject buoyant, String liquid) {
-        java.util.List<com.google.gson.JsonElement> named =
-            at.ioexception.mcaddon.util.Json.list(buoyant, "liquid_blocks");
-        if (named.isEmpty()) return liquid.equals("water");
+    private void refreshBuoyancy() {
+        Buoyancy before = buoyancy;
+        buoyancy = Buoyancy.tryFrom(liveComponent("minecraft:buoyant"));
+        if (before != null && buoyancy == null) before.dragDown(this);
+    }
 
-        return named.stream()
-            .filter(com.google.gson.JsonElement::isJsonPrimitive)
-            .map(block -> block.getAsString().replace("minecraft:", "").replace("flowing_", ""))
-            .anyMatch(liquid::equals);
+    private Buoyancy buoyancy;
+
+    @Override
+    public void travel(net.minecraft.world.phys.Vec3 input) {
+        super.travel(input);
+        if (buoyancy != null) buoyancy.holdOffTheBank(this);
     }
 
     /** Ticks of the entity's own age at which something last hurt it, for the components that wait. */
@@ -2945,6 +3097,8 @@ public class AddonEntity extends PathfinderMob
         // The first of `projectiles` whose filters hold stands in for the shooter's own `def` and
         // `aux_val`, and may drop the target once it is thrown, as a witch's healing potion does.
         com.google.gson.JsonObject shooter = liveComponent("minecraft:shooter");
+        // A magic shot waits out a drink, as Java's witch throws nothing while it drinks.
+        if (Goals.flag(shooter, "magic", false) && isUsingItem()) return;
         Filter.Context context = new Filter.Context(this, target, target, ServerHooks.state());
         com.google.gson.JsonObject chosen = at.ioexception.mcaddon.util.Json.list(shooter, "projectiles").stream()
             .filter(com.google.gson.JsonElement::isJsonObject)
@@ -3154,7 +3308,7 @@ public class AddonEntity extends PathfinderMob
         double speed = Goals.number(goal, "speed_multiplier", 1);
 
         switch (behaviour) {
-            case "minecraft:behavior.float" -> goals.add(priority, new FloatGoal(this));
+            case "minecraft:behavior.float" -> goals.add(priority, new StayAfloatGoal(this, goal));
             case "minecraft:behavior.panic" -> goals.add(priority, new PanickingGoal(this, goal));
             case "minecraft:behavior.swell" ->
                 goals.add(priority, new SwellGoal(this, goal));
@@ -3210,6 +3364,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.mingle" -> goals.add(priority, new MingleGoal(this, goal));
             case "minecraft:behavior.sleep" -> goals.add(priority, new SleepGoal(this, goal));
             case "minecraft:behavior.drink_milk" -> goals.add(priority, new DrinkMilkGoal(this, goal));
+            case "minecraft:behavior.drink_potion" -> goals.add(priority, new DrinkPotionGoal(this, goal));
             // `within_radius` is how near the target has to be for the walk towards it, as Java's
             // golem states the same 32 Mojang's iron golem does.
             case "minecraft:behavior.move_towards_target" ->
@@ -3250,10 +3405,8 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, new StrollTowardsVillageGoal(this, goal));
             case "minecraft:behavior.follow_owner" ->
                 goals.add(priority, new FollowOwnerGoal(this, goal));
-            // Java steers a mount from its rider: a mob riding another plans with the mount's
-            // navigator and switches the mount's own movement goals off, so the chase a rider's
-            // attack goal runs is the mount's, at the reach that goal keeps.
-            case "minecraft:behavior.mount_pathing" -> { }
+            case "minecraft:behavior.mount_pathing" ->
+                goals.add(priority, new MountPathingGoal(this, goal, speed));
 
             case "minecraft:behavior.pickup_items" ->
                 goals.add(priority, new PickupItemsGoal(this, goal));
@@ -3708,7 +3861,9 @@ public class AddonEntity extends PathfinderMob
         mountJump.tick();
         if (definition == null || !(level() instanceof net.minecraft.server.level.ServerLevel)) return;
 
+        if (cured.age(level().getGameTime())) saveTrading();
         stepOutOfWalls();
+        pushOutOfBlocks();
         turnRiders();
         animateState();
         everyTick();
@@ -3722,17 +3877,18 @@ public class AddonEntity extends PathfinderMob
             rememberSomethingNearby();
             resupply();
             teleportAbout();
-            drink();
             leashChanged(isLeashed());
             noticeRaidWon();
             rise();
             manageAsTrader();
+            dwell();
             despawn();
             expireSummons();
             burnInDaylight();
             hurtOverTime();
             breakBlocks();
             giveEffect();
+            refreshHome();
             attackAround();
             leaveTrail();
             growCrops();
@@ -4140,7 +4296,12 @@ public class AddonEntity extends PathfinderMob
      * pack declared the sensor at all; with none the whole feed costs a set lookup.
      */
     public static void rememberGameEvent(net.minecraft.server.level.ServerLevel level,
-        net.minecraft.world.phys.Vec3 where) {
+        net.minecraft.world.phys.Vec3 where, boolean noteBlock) {
+        if (noteBlock) {
+            level.getEntitiesOfClass(AddonEntity.class, net.minecraft.world.phys.AABB.ofSize(where,
+                    NOTE_EARSHOT * 2, NOTE_EARSHOT * 2, NOTE_EARSHOT * 2))
+                .forEach(heard -> heard.heardNoteAt = heard.tickCount);
+        }
         if (!AddonEntities.anyoneDeclares("minecraft:memory_sensor.game_event")) return;
 
         net.minecraft.world.phys.AABB earshot = net.minecraft.world.phys.AABB.ofSize(where,
@@ -4155,6 +4316,17 @@ public class AddonEntity extends PathfinderMob
 
     /** How far a game event carries, which is the range Java gives its own sculk sensor. */
     private static final double GAME_EVENT_EARSHOT = 16;
+
+    /** How far a played note block is heard, the range Java's allay listens over. */
+    private static final double NOTE_EARSHOT = 16;
+
+    /** The entity's own age at which it last heard a note block play, or negative while it has not. */
+    private int heardNoteAt = -1;
+
+    /** Ticks since a note block was last heard playing, or a huge number while none has been. */
+    public int sinceNoteBlock() {
+        return heardNoteAt < 0 ? Integer.MAX_VALUE : tickCount - heardNoteAt;
+    }
 
     /** The entity's own age at which it last heard something, or negative while it has heard nothing. */
     private int heardAt = -1;
@@ -4210,6 +4382,7 @@ public class AddonEntity extends PathfinderMob
      */
     private void everyTick() {
         holdBreath();
+        if (breath != null) breath.bubble(this);
         burnFuse();
         keepTransforming();
         noticeBeingHurt();
@@ -5226,6 +5399,18 @@ public class AddonEntity extends PathfinderMob
     public void remove(net.minecraft.world.entity.Entity.RemovalReason reason) {
         super.remove(reason);
         if (bossBar != null) bossBar.removeAllPlayers();
+        if (reason.shouldDestroy()) Dwelling.release(this);
+    }
+
+    /** The game tick of the next look round the dwelling `minecraft:dweller` names. */
+    private int dwellAt;
+
+    private void dwell() {
+        Dwelling dwelling = Dwelling.tryFrom(liveComponent("minecraft:dweller"));
+        if (dwelling == null || tickCount < dwellAt) return;
+
+        dwellAt = tickCount + dwelling.interval(getRandom());
+        dwelling.claim(this);
     }
 
     /** Shows a pack's boss its bar, to everybody inside the range the component named. */
@@ -6260,6 +6445,7 @@ public class AddonEntity extends PathfinderMob
             && player.getVehicle() == this) {
             return InteractionResult.PASS;
         }
+        if (!isClientSide() && openedBy(player)) return InteractionResult.SUCCESS;
         // `crouching_skip_interact` is a rideable entity asking to be mounted rather than used when
         // the player is crouching, which is the opposite of what Java does for its own mounts.
         com.google.gson.JsonObject rideable = definition == null
@@ -6293,8 +6479,51 @@ public class AddonEntity extends PathfinderMob
         if (getTradingPlayer() != null) return super.mobInteract(player, hand);
 
         setTradingPlayer(player);
-        openTradingScreen(player, getDisplayName(), 1);
+        priceFor(player);
+        openTradingScreen(player, tradeTitle(), 1);
         return InteractionResult.SUCCESS;
+    }
+
+    /**
+     * Opens the entity's slots to the player where its `container_type` lets a player open them: a
+     * chest kind on any use, and a horse's saddlebags while the player crouches, as Bedrock's horse
+     * opens them. True as well when the player already has them open, so the other hand's use does
+     * not open them a second time.
+     */
+    private boolean openedBy(Player player) {
+        String type = Goals.text(liveComponent("minecraft:inventory"), "container_type");
+        if (carried == null || type == null) return false;
+        boolean opens = switch (type) {
+            case "horse" -> player.isCrouching();
+            case "container", "minecart_chest", "chest_boat", "hopper", "minecart_hopper" -> true;
+            default -> false;
+        };
+        if (!opens) return false;
+
+        showStock(player);
+        return true;
+    }
+
+    /**
+     * Whether the inventory key of a player riding the entity opens its slots, as it opens a tamed
+     * horse's in Bedrock. Both sides answer it, the client from the groups the server sent it.
+     */
+    public boolean opensToRider() {
+        return "horse".equals(Goals.text(liveComponent("minecraft:inventory"), "container_type"));
+    }
+
+    /** Opens the entity's slots to a player riding it, where {@link #opensToRider} says they open. */
+    public boolean openedByRider(Player player) {
+        if (carried == null || !hasPassenger(player) || !opensToRider()) return false;
+
+        showStock(player);
+        return true;
+    }
+
+    private void showStock(Player player) {
+        if (!(player.containerMenu instanceof StockMenu open && open.belongsTo(this))) {
+            player.openMenu(StockMenu.of(this, carried));
+        }
     }
 
     /**
@@ -6373,6 +6602,9 @@ public class AddonEntity extends PathfinderMob
     @Override
     public void setTradingPlayer(Player player) {
         tradingPlayer = player;
+        if (player == null && offers != null) {
+            offers.forEach(net.minecraft.world.item.trading.MerchantOffer::resetSpecialPriceDiff);
+        }
     }
 
     @Override
@@ -6391,6 +6623,11 @@ public class AddonEntity extends PathfinderMob
     public MerchantOffers getOffers() {
         TradeTable trades = trades();
         int reached = trades == null ? 0 : trades.reached(tradeExperience);
+        if (offersKept && trades != null) {
+            offersKept = false;
+            offered = trades;
+            offeredTiers = reached;
+        }
         if (offers != null && (offersOverridden || reached == offeredTiers && trades == offered)) {
             return offers;
         }
@@ -6456,6 +6693,8 @@ public class AddonEntity extends PathfinderMob
             stock.add(entry);
         }
         saved.add("inventory", stock);
+        saved.addProperty("kept", offersKept);
+        cured.writeTo(saved);
         ServerHooks.state().setTrading(getUUID(), saved);
     }
 
@@ -6465,6 +6704,8 @@ public class AddonEntity extends PathfinderMob
 
         var ops = level().registryAccess().createSerializationContext(com.mojang.serialization.JsonOps.INSTANCE);
         tradeExperience = (int) at.ioexception.mcaddon.util.Json.number(saved, "experience", 0);
+        offersKept = saved.has("kept") && saved.get("kept").getAsBoolean();
+        cured.readFrom(saved);
         spent.clear();
         at.ioexception.mcaddon.util.Json.list(saved, "spent").forEach(key -> spent.add(key.getAsString()));
 

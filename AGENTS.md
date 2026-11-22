@@ -1347,8 +1347,7 @@ the weight. `FogClientGameTest.media` reads each back off the frame's `FogData`.
   python3 tools/showcase/build.py --version 26.2
   ```
 
-  The lumen moth states `has_gravity` false, which this mod leaves alone, so a moth summoned in the
-  air falls unless the summon adds `{NoGravity:1b}`.
+  The lumen moth states `has_gravity` false, so a moth summoned in the air hangs where it is put.
 - **`tools/verify/verify.py`** does those game runs without a human watching the log. It starts the
   game, reads the output back for the failures that only appear at runtime, writes
   `build/verify/verdict.json` and a log per run under `build/verify/`, and exits non-zero when
@@ -1788,6 +1787,9 @@ the weight. `FogClientGameTest.media` reads each back off the frame's `FogData`.
   **The census sees a method only by its modifier.** A reader written as a package-private method
   with no `public`, `private`, `static` or `final` in front of it is not found, so the fields it reads
   are credited to nothing and a field read there can fail `--strict`. Give such a method a modifier.
+  A constructor with a modifier is a reader like any method. A field read by walking an enum's
+  `values()`, whose constants are written `NAME("field", ...)`, counts as read, which is how
+  `PlayerDefinition.Action` names the `minecraft:exhaustion_values` prices.
 
   With no `scratchpad/bedrock/bedrock-samples` checkout it reports that there is nothing to measure
   and passes, the way the rest of the harness does with no add-on present.
@@ -3441,3 +3443,264 @@ value or a named state picks a member of. A Bedrock id may be a Java block in a 
 the way back starts from a `BlockState`: a lit furnace reports itself as `minecraft:lit_furnace`. A
 command line is translated through `BedrockBlockNames.Resolved.command`, which writes only the
 properties the pack named, because a test for a block asks about those and no others.
+
+## Census reasons: misc
+
+- `minecraft:area_attack` `death_message_override` deals the blow through `entity.WordedDamageSource`,
+  a `DamageSource` whose `getLocalizedDeathMessage` answers the pack's key. Mojang publishes no
+  arguments for the key, so it takes Bedrock's death message order: the victim, then the killer when
+  the blow names one. `DeathMessageGameTests` reads the key off a pig's `CombatTracker`.
+
+## Census reasons: nav
+
+`entity/WalkingNavigation` is the ground navigator of every add-on entity that walks. Its evaluator
+is Java's `WalkNodeEvaluator` with three refusals and one price laid over the nodes Java places;
+`blocks_to_avoid` is answered by `AvoidedBlockMixin` on every evaluator, as described above.
+`tp:wayfarer` carries one group per field and `PathingGameTests` reads each back off a planned path.
+Mojang publishes the fields and one line each, so these rules are decided here:
+
+- `avoid_portals` refuses a node whose own block or the block under it is in Java's
+  `minecraft:portals` tag.
+- `can_jump` false plans no step up a block: the evaluator is given a jump size of nothing.
+- `is_amphibious` false refuses a node on the bottom with water over its head, for a mob that does
+  not float. A mob already in water may still plan through such nodes, so it can walk out.
+- `using_door_annotation` is in no schema or document. All 43 vanilla entities writing it write
+  true. It is read as: true, the default, lets a carried `minecraft:annotation.open_door` or
+  `annotation.break_door` open the path through a closed wooden door; false leaves doors to
+  `can_open_doors` and `can_break_doors`. Mojang's vindicator states the break door annotation and
+  no `can_break_doors`, so without this its break door goal never found a door on its path.
+- `can_path_from_air` (default false, as documented) lets `minecraft:navigation.fly` and `hover`
+  plan from the air through `Pathing.AirNavigation`; without it they plan only on the ground or in
+  a liquid. Every vanilla fly and hover entity states it true. `navigation.float` keeps Java's
+  flying navigator, which plans from anywhere.
+- `minecraft:preferred_path` prices a node at its ground block's cost (`default_block_cost` for a
+  block in no list) plus `jump_cost` for a step up, and the node costs the larger of that and Java's
+  own price for its kind of ground. Java gives a node one price whichever neighbour reaches it, so a
+  node first reached by a step up keeps the jump cost for that search.
+
+Java's search stops at a walked distance of the follow range and counts a node's walk from the last
+neighbour that looked at it, so a priced search can fall short where an unpriced one reaches.
+`aJumpCostSendsAWalkRoundARidge` gives its wayfarer a follow range of 64 for that reason.
+
+## Census reasons: physics
+
+`tp:bobber` carries one group per field of `minecraft:physics`, `minecraft:buoyant`,
+`minecraft:behavior.float`, `minecraft:movement.sway` and `minecraft:breathable`, and `tp:shoaler`
+one per new `minecraft:flocking` field. `PhysicsGameTests` reads each back. Java moves a mob only
+while its AI runs (`LivingEntity.aiStep` calls `travel` behind `isEffectiveAi`), so these tests turn
+the AI on, and the test structure may be turned, so a test measures along the way between two of its
+own blocks (`along`).
+
+- `has_gravity` false is answered by `AddonEntity.isNoGravity`, so it is never written into the
+  entity's saved `NoGravity`. `has_collision` false sets `noPhysics`. Mojang's fish declare gravity
+  off and still fall when out of water; that is their own class in Bedrock, and a pack entity
+  without one floats, which is what the Bedrock wiki's dummy entities rely on.
+  `push_towards_closest_space` calls `Entity.moveTowardsClosestSpace` while the box is inside a
+  block, as Java's item does.
+- `minecraft:buoyant` is `entity/Buoyancy`. Mojang publishes no arithmetic, so: each tick in a named
+  liquid lifts by `base_buoyancy` times 0.03; `bobbing` lets gravity pull the entity back once it is
+  out; `none` stops the lift once its eyes are out, so it holds at the surface; `waves` (the default)
+  bobs and, at `big_wave_probability` a tick, adds `big_wave_speed` times the lift; `apply_gravity`
+  false takes gravity away while afloat; `can_auto_step_from_liquid` false undoes Java's 0.3 step
+  out onto a bank (`LivingEntity.jumpOutOfFluid`, which every Java mob takes); and
+  `drag_down_on_buoyancy_removed` is taken off the vertical speed, in blocks a tick, as the
+  component leaves an entity afloat.
+- `minecraft:behavior.float` is `StayAfloatGoal`. It holds the controls `control_flags` names, none
+  by default as the schema says, so a rider controlling the vehicle does not stop it the way Java's
+  JUMP flag would. With `sink_with_passengers` it makes no stroke while it carries anyone.
+  Passengers are put off once the head has been under water for longer than
+  `time_under_water_to_dismount_passengers`, at once by default, as the documentation says.
+- `minecraft:movement.sway` is `SwayMoveControl`: Java's smooth swimming, pushed across the way to
+  its target by `sway_amplitude` blocks a tick at the peak of a sine whose phase moves
+  `sway_frequency` radians a tick. Mojang publishes no formula.
+- `low_flock_limit`: a flock that with the entity numbers fewer does not steer it.
+  `use_center_of_mass` false (the default) pulls towards the nearest flockmate; true towards the
+  middle of the flock.
+- `totalSupply` and `suffocateTime` are spellings Microsoft Learn still lists beside `total_supply`
+  and `suffocate_time`, and Mojang's allay writes them, so `totalSupply` is read.
+  `generates_bubbles` (default true) lets one bubble rise from the eyes every ten ticks while they
+  are under water; Mojang publishes no rate.
+- `suffocate_time` stays unread. The Minecraft Wiki's damage page names one drowning rate and no
+  edition difference: a hit of 2 when the air reaches -20, then back to 0, a mob's first hit sixteen
+  seconds under water. Every vanilla mob writes 0 and the player -1, and 0 read as the floor of the
+  air count in seconds or in ticks would hit a pig at fifteen seconds and then every tick, so the
+  value sets no rate a pack sees and Java's `shouldTakeDrowningDamage` stands.
+
+## Census reasons: trade
+
+`tp:haggler` (`HagglerGameTests`), `tp:packer` (`PackerGameTests`), `tp:foal` (`FoalGameTests`) and
+`tp:settler` (`SettlerGameTests`) carry the fields below, one group each. Decided where Mojang
+publishes nothing:
+
+- **A trade table's `display_name` is a key of the pack's text**, as Mojang's `entity.villager.armor`
+  is, so the trading screen's title is `Component.translatable` of it. With both trade components
+  on, `minecraft:trade_table` is the one traded by and titles the screen.
+- **`behavior.trade_interest`** holds up the results of the offers whose cost is the item the
+  customer holds, in table order, turning to the next every `carried_item_switch_time`, and puts the
+  ware away once the customer has held nothing it buys for `remove_item_time`.
+- **`persist_trades`** keeps the offers whole, uses included, through a transformation into an
+  entity with no table, and that entity hands them on until one with a table trades by them.
+  **`convert_trades_economy`** gives an `economy_trade_table` its fresh offers, and each takes the
+  result components (enchantments, custom data) of the old offer with the same cost and result
+  items; uses are not carried.
+- **A cure is the transformation a player started.** The player who raised the event adding the
+  transformation's group cured the trader, delayed or not. `cured_discount` adds Bedrock's minor and
+  major gossip for that player, capped at `max_cured_discount`; both default to `[-25, -20]`, which
+  are Java's own cure gossip and ceilings (`GossipType` `MINOR_POSITIVE` and `MAJOR_POSITIVE`). The
+  price is Java's `Villager.updateSpecialPrices`: a reputation of minor plus five times major moves
+  each offer by the reputation times its price multiplier, for that player only, until the screen
+  closes. The gossip decays as Java's does (see `## Census gap: cure-decay`). `use_legacy_price_formula` and the nearby cure fields are not read.
+- **`container_type`** opens Java's chest grid in whole rows (at most six) over the slots, the cells
+  past the last slot shut: `container`, `minecart_chest`, `chest_boat`, `hopper` and
+  `minecart_hopper` on any use, `horse` only to a crouching player, `inventory` never. Java's horse,
+  hopper and minecart menus belong to their own entity classes. A player riding a `horse` one opens
+  it with the inventory key as well, as the next section says.
+- **`can_be_siphoned_from`** decides the entity's class at registration: a type any of whose
+  inventories may be siphoned is built as `SiphonedEntity`, a Java `Container`, because Java's hopper
+  and Lithium's both find entity containers by class. Its slots face a hopper only while the live
+  inventory says so, both ways, as Bedrock's chest minecart does; otherwise it is a container of no
+  slots, which also stops a hopper under it picking up dropped items.
+- **`additional_slots_per_strength`** with `minecraft:strength` gives that many slots per point of
+  strength, at most `inventory_size`.
+- **`blend_attributes`** false turns off the blending `parent_centric_attribute_blending` asks for.
+- **`minecraft:dweller`** is `entity/Dwelling`. An `inhabitant` (the role Mojang's villager has and
+  the Bedrock wiki says claims a bed and a bell) that `can_find_poi` takes a ticket on the nearest
+  free bed, bell and job site within 48 blocks, Java's `AcquirePoi` range, every
+  `update_interval_base` plus up to `update_interval_variant` ticks (60 and 40 where unstated, as
+  every vanilla dweller writes them), and gives them back when it dies or is discarded. The other
+  roles claim nothing. What each counts for is under `## Census gap: dweller-roles`.
+  `preferred_profession` narrows the job site to that Java profession's (`stone_mason` is `mason`,
+  the other names lose their underscores). `SleepGoal` and `WorkGoal` go
+  to the claimed bed and job site first.
+
+## Census reasons: goals
+
+`tp:rover` carries one group per field and `RoverGameTests` reads each back.
+
+- `minecraft:behavior.mount_pathing` is `MountPathingGoal`, on the mount. Java moves a mob-ridden
+  mount only through a goal of the rider's that walks (`Mob.getNavigation` hands the rider the
+  mount's navigator), and `Mob.updateControlFlags` switches the mount's own moving goals off, so a
+  rider with a target and no walking goal of its own left the mount standing. The goal holds the
+  controls `control_flags` names (none by default), walks to the controlling rider's target at the
+  mount's `speed_multiplier`, sets that speed every tick ahead of the rider's goals, and stops inside
+  `target_dist`. Mojang publishes nothing on `track_target` false beyond the one line, so such a
+  walk goes to where the target stood as it began and ends there.
+- `minecraft:home` `home_block_list`: Mojang documents that the home restriction is removed once no
+  listed block stands at the home position. Here the home restricts the entity only while a listed
+  block stands at `homePosition()`, the block the entity's feet were in as the component arrived,
+  asked as the component arrives and on every sensor pass, so a broken block lets go within ten
+  ticks and one put back holds the entity again. An entity spawned in the open has no listed block
+  at its home and is not held, which is what a bee summoned away from a hive is.
+- `minecraft:behavior.avoid_mob_type` is `AvoidMobsGoal`, which takes only the spot finding from
+  Java's `AvoidEntityGoal`. Without `ignore_visibility` a candidate has to be in line of sight. The
+  flight lasts until the entity is `max_flee` blocks from what it fled, planning a new spot within
+  `avoid_target_xz` and `avoid_target_y` each time it arrives, and runs at the sprint speed inside
+  `sprint_distance`. `remove_target` clears the target as the flight starts, `avoid_mob_sound` is
+  made then and every `sound_interval` seconds (the schema's unit), and `on_escape_event` is raised
+  when the flight ends at `max_flee`, its `target` naming the fleeing entity (`self`) or what it fled.
+  Mojang documents `probability_per_strength` only as a chance to stop avoiding "based on that
+  entity's strength". Decided here, after Java's wolf, which flees a stronger llama more often: a
+  candidate carrying `minecraft:strength` (a pack's own, or a Java llama's `getStrength`) is fled at
+  `probability_per_strength` times its strength, rolled each time the goal looks, and one carrying
+  none is always fled.
+- `minecraft:behavior.tempt` `tempt_sound` is made as the entity is tempted and every
+  `sound_interval` seconds while it stays so. Mojang's documentation says ticks, but its strider
+  states 2 to 5, a sound several times a second in ticks, where its cat's 0 to 100 reads as seconds
+  too. The schema gives every other sound interval in seconds, so seconds it is.
+- `minecraft:behavior.follow_owner` `ignore_vibration` false holds the follower back for 600 ticks
+  after it hears a note block play within 16 blocks (`AddonEntity.sinceNoteBlock`, fed from
+  `ServerLevelGameEventMixin` by `GameEvent.NOTE_BLOCK_PLAY`). Mojang does not say what vibration
+  counts. The allay is the one vanilla entity stating false, and Java's allay listens for note
+  blocks alone, over 16 blocks, and keeps a liked note block for 600 ticks (`AllayAi.hearNoteblock`).
+  A movement vibration would hold an allay back whenever its owner walked.
+- `minecraft:behavior.drink_potion` is `DrinkPotionGoal`, Java's wandering trader's `UseItemGoal`
+  shape: the potion is put in the main hand and used for its use duration, its effects land through
+  `LivingEntity.completeUsingItem`, and what the hand held before comes back. `speed_modifier` is
+  added to the movement speed while drinking (`Platform.drinkingSlowdown`), as Java's witch adds
+  -0.25 while it drinks, and Mojang's witch states the same -0.25. The goal holds only the controls
+  `control_flags` names, as `drink_milk` does. A per tick `chance` is weighed over the two ticks the
+  selector waits between asks.
+- `minecraft:shooter` `magic` stops a ranged attack while the entity is drinking, as Java's witch
+  throws nothing while `isDrinkingPotion`.
+- `minecraft:behavior.sleep` `sleep_collider_width`, `sleep_collider_height` and `sleep_y_offset`
+  shape the box while the entity sleeps. `LivingEntity.getDimensions` is final and answers the
+  sleeping pose with a fixed fifth of a block, so `AddonEntity` overrides `Entity.makeBoundingBox`.
+  Mojang does not say what the offset is measured from. Here it is the floor of the bed's block,
+  because Java places a sleeper 0.6875 above that floor and Mojang's villager states 0.6 with a
+  height of 0.3, which then rests on the mattress.
+
+## Census gap: ride-inventory
+
+The inventory key of a player riding an add-on mount opens the mount's slots (`StockMenu`) while its
+live `minecraft:inventory` has `container_type` `horse`, and the player's own inventory otherwise.
+Java decides this on both sides by the vehicle's class (`HasCustomInventoryScreen`): the client's
+`MultiPlayerGameMode.isServerControlledInventory` sends `OPEN_INVENTORY` instead of opening
+`InventoryScreen`, and `ServerGamePacketListenerImpl.handlePlayerCommand` opens the vehicle's screen.
+Mojang states the horse inventory inside the tamed group (`horse_tamed`, `donkey_tamed`,
+`llama_tamed`, `camel_adult`), so a class chosen at registration would answer for an untamed mount
+too. `RiderInventoryKeyMixin` answers the client's question with `AddonEntity.opensToRider`, read off
+the groups the server mirrors to it, and `RiderInventoryMixin` opens the slots on the server through
+`openedByRider`. Mojang's docs and the Bedrock wiki say only that `horse` is a container type; the
+Minecraft Wiki's horse page says a player opens a horse's inventory by riding it and pressing the
+inventory key, or by crouching and using it. Nothing published says what the key does on a mount
+with no horse inventory, so it opens the player's own, which is what Java does on any vehicle that
+has no screen. `restrict_to_owner` is not read on this path, as on the crouching one.
+`RiderInventoryClientGameTest` rides `tp:saddler` with no inventory, a horse one and a chest one and
+reads which screen the key opened.
+
+## Census gap: cure-decay
+
+`entity/CureGossip` holds a cured trader's gossip per player and decays it by Java's rule, read off
+26.2's `Villager.maybeDecayGossip` and `GossipContainer`: once the game time (not the time of day)
+is a day of 24000 ticks past the last decay, each value shrinks by its `GossipType.decayPerDay`, one
+for minor positive and none for major positive, and a value under two is forgotten. A pack writes
+Bedrock's values as negative discounts, so the size shrinks and the sign stays. Mojang's
+`cured_discount` documentation says the pair is the minor and major positive gossip and says
+nothing on decay, and the Minecraft Wiki gives no Bedrock rule of its own, so Java's rule stands.
+The clock starts at the cure, which lands on the entity the transformation just made, as Java's
+cured villager starts its clock on its first tick; a saved trader with no clock starts one on its
+next tick without decaying. The last decay is saved as `cure_decayed` beside `cured` in the trader's
+`AddonState.trading` entry. `CureDecayGameTests` puts that time a day back and reads the entry in
+again on each of thirty ticks, and the curer's bread goes from two emeralds to three.
+
+## Census gap: dweller-roles
+
+`tp:townsfolk` carries a `defender` and a `passive` group and `DwellerRoleGameTests` reads each back.
+Mojang documents the four roles by name only. Its own files decide the rest:
+
+- **`defender`** is the role of the iron golem a village made (only Mojang's `minecraft:village_created`
+  group carries the dweller), and Bedrock lets a village make a golem only while it holds fewer
+  than its villagers call for. Java's villager wants no golem while `GolemSensor` has seen one, so
+  `GolemSensorMixin` counts a defender among what the villager sees as a golem.
+- **`passive`** is the cat's role, and Bedrock caps a village's cats by its beds. Java's
+  `CatSpawner.spawnInVillage` adds a cat while fewer than five stand within 48 blocks across and 8
+  up or down, and `CatSpawnerMixin` counts the passive dwellers in the same box among them.
+- **`hostile`** is the role of a raid's raiders. Java's `Raid` holds only `Raider`, so it changes
+  nothing here. The reason is in `REASONS` in `tools/census/fields.py`.
+
+## Census gap: avoid-entries
+
+Each `entity_types` entry of `minecraft:behavior.avoid_mob_type` is a mob descriptor
+(`MobDescriptor.json`), and `AvoidMobsGoal.Entry` reads all of its fields: `max_dist`, `max_flee`,
+`max_height`, `walk_speed_multiplier`, `sprint_speed_multiplier`, `must_see`,
+`must_see_forget_duration`, `check_if_outnumbered`, `cooldown`, `reevaluate_description` and
+`priority`. A flight runs on the entry that chose what is fled. `ShirkerGameTests` reads each back
+through `tp:shirker`. Mojang publishes the fields and not how they meet the goal's own, so:
+
+- **Reach.** The goal's schema gives its `max_dist` a default of 3 and the descriptor's a default of
+  16. No vanilla entity relies on the 3: of the 28 that declare the goal, every entry but three
+  states its own `max_dist`, and of those three the phantom and the wandering trader state one at the
+  top (16 and 6). A cap of 3 at the top would hold every vanilla mob to 3 blocks, which their
+  entries of 6 to 24 contradict. So an entry's field comes from the entry, then from the same field
+  at the top, then from the descriptor's default of 16; the goal's 3 is never used. The same chain
+  holds for `max_flee` and the two speeds.
+- **Sight.** An entry stating `must_see` decides for itself; one stating none sees through walls
+  only under the goal's `ignore_visibility`. `must_see_forget_duration` ends a flight from something
+  out of sight that long, and only under an entry stating `must_see` true, as the descriptor says.
+- **`check_if_outnumbered`** flees only while more entities within the entry's reach answer its
+  filters than there are of the entity's own type there, itself included, which is Java's
+  `piglinsOutnumberHoglins` and `hoglinsOutnumberPiglins` rule.
+- **`cooldown`** counts from the end of a flight the entry chose, and holds that entry alone.
+- **`priority`** orders entries the way a goal priority does: the lowest wins, then the nearest
+  candidate. **`max_height`** below nothing leaves the height unbounded.
+- **`reevaluate_description`** ends a flight once what is fled stops answering the entry's filters.

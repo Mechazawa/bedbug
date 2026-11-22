@@ -1,0 +1,376 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:bobber",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "component_groups": {
+      "tp:bobber_weightless": {
+        "minecraft:physics": {
+          "has_gravity": false
+        }
+      },
+      "tp:bobber_ghostly": {
+        "minecraft:physics": {
+          "has_gravity": false,
+          "has_collision": false
+        }
+      },
+      "tp:bobber_squeezing": {
+        "minecraft:physics": {
+          "push_towards_closest_space": true
+        }
+      },
+      "tp:bobber_bobbing": {
+        "minecraft:buoyant": {
+          "movement_type": "bobbing",
+          "liquid_blocks": [
+            "minecraft:water"
+          ]
+        }
+      },
+      "tp:bobber_steady": {
+        "minecraft:buoyant": {
+          "movement_type": "none",
+          "liquid_blocks": [
+            "minecraft:water"
+          ]
+        }
+      },
+      "tp:bobber_wavy": {
+        "minecraft:buoyant": {
+          "movement_type": "waves",
+          "big_wave_probability": 1,
+          "big_wave_speed": 10,
+          "liquid_blocks": [
+            "minecraft:water"
+          ]
+        }
+      },
+      "tp:bobber_calm": {
+        "minecraft:buoyant": {
+          "movement_type": "waves",
+          "big_wave_probability": 0,
+          "liquid_blocks": [
+            "minecraft:water"
+          ]
+        }
+      },
+      "tp:bobber_heavy": {
+        "minecraft:buoyant": {
+          "base_buoyancy": 0.1,
+          "movement_type": "bobbing",
+          "liquid_blocks": [
+            "minecraft:water"
+          ]
+        }
+      },
+      "tp:bobber_light": {
+        "minecraft:buoyant": {
+          "base_buoyancy": 0.1,
+          "apply_gravity": false,
+          "movement_type": "bobbing",
+          "liquid_blocks": [
+            "minecraft:water"
+          ]
+        }
+      },
+      "tp:bobber_climbing": {
+        "minecraft:buoyant": {
+          "can_auto_step_from_liquid": true,
+          "movement_type": "bobbing",
+          "liquid_blocks": [
+            "minecraft:water"
+          ]
+        }
+      },
+      "tp:bobber_stranded": {
+        "minecraft:buoyant": {
+          "movement_type": "bobbing",
+          "liquid_blocks": [
+            "minecraft:water"
+          ]
+        }
+      },
+      "tp:bobber_anchored": {
+        "minecraft:buoyant": {
+          "movement_type": "bobbing",
+          "drag_down_on_buoyancy_removed": 0.7,
+          "liquid_blocks": [
+            "minecraft:water"
+          ]
+        }
+      },
+      "tp:bobber_eager": {
+        "minecraft:behavior.float": {
+          "priority": 0,
+          "chance_per_tick_to_float": 1
+        }
+      },
+      "tp:bobber_idle": {
+        "minecraft:behavior.float": {
+          "priority": 0,
+          "chance_per_tick_to_float": 0
+        }
+      },
+      "tp:bobber_laden": {
+        "minecraft:behavior.float": {
+          "priority": 0,
+          "chance_per_tick_to_float": 1,
+          "sink_with_passengers": true,
+          "time_under_water_to_dismount_passengers": 10
+        },
+        "minecraft:rideable": {
+          "seat_count": 1,
+          "family_types": [
+            "pig"
+          ],
+          "seats": {
+            "position": [
+              0,
+              0.6,
+              0
+            ]
+          }
+        }
+      },
+      "tp:bobber_ferry": {
+        "minecraft:behavior.float": {
+          "priority": 0,
+          "chance_per_tick_to_float": 0,
+          "time_under_water_to_dismount_passengers": 1
+        },
+        "minecraft:rideable": {
+          "seat_count": 1,
+          "family_types": [
+            "pig"
+          ],
+          "seats": {
+            "position": [
+              0,
+              0.6,
+              0
+            ]
+          }
+        }
+      },
+      "tp:bobber_swaying": {
+        "minecraft:movement.sway": {
+          "sway_amplitude": 0.2
+        },
+        "minecraft:navigation.generic": {
+          "can_swim": true,
+          "can_walk": false
+        }
+      },
+      "tp:bobber_straight": {
+        "minecraft:movement.sway": {
+          "sway_amplitude": 0
+        },
+        "minecraft:navigation.generic": {
+          "can_swim": true,
+          "can_walk": false
+        }
+      },
+      "tp:bobber_gasping": {
+        "minecraft:breathable": {
+          "totalSupply": 2,
+          "suffocateTime": 0
+        }
+      },
+      "tp:bobber_bubbling": {
+        "minecraft:breathable": {
+          "total_supply": 15
+        }
+      },
+      "tp:bobber_quiet": {
+        "minecraft:breathable": {
+          "total_supply": 15,
+          "generates_bubbles": false
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_bobber",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 0.6
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:bobber_make_weightless": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_weightless"
+          ]
+        }
+      },
+      "tp:bobber_make_ghostly": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_ghostly"
+          ]
+        }
+      },
+      "tp:bobber_make_squeezing": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_squeezing"
+          ]
+        }
+      },
+      "tp:bobber_make_bobbing": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_bobbing"
+          ]
+        }
+      },
+      "tp:bobber_make_steady": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_steady"
+          ]
+        }
+      },
+      "tp:bobber_make_wavy": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_wavy"
+          ]
+        }
+      },
+      "tp:bobber_make_calm": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_calm"
+          ]
+        }
+      },
+      "tp:bobber_make_heavy": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_heavy"
+          ]
+        }
+      },
+      "tp:bobber_make_light": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_light"
+          ]
+        }
+      },
+      "tp:bobber_make_climbing": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_climbing"
+          ]
+        }
+      },
+      "tp:bobber_make_stranded": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_stranded"
+          ]
+        }
+      },
+      "tp:bobber_make_anchored": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_anchored"
+          ]
+        }
+      },
+      "tp:bobber_make_eager": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_eager"
+          ]
+        }
+      },
+      "tp:bobber_make_idle": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_idle"
+          ]
+        }
+      },
+      "tp:bobber_make_laden": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_laden"
+          ]
+        }
+      },
+      "tp:bobber_make_ferry": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_ferry"
+          ]
+        }
+      },
+      "tp:bobber_make_swaying": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_swaying"
+          ]
+        }
+      },
+      "tp:bobber_make_straight": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_straight"
+          ]
+        }
+      },
+      "tp:bobber_make_gasping": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_gasping"
+          ]
+        }
+      },
+      "tp:bobber_make_bubbling": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_bubbling"
+          ]
+        }
+      },
+      "tp:bobber_make_quiet": {
+        "add": {
+          "component_groups": [
+            "tp:bobber_quiet"
+          ]
+        }
+      },
+      "tp:bobber_unanchor": {
+        "remove": {
+          "component_groups": [
+            "tp:bobber_anchored"
+          ]
+        }
+      }
+    }
+  }
+}

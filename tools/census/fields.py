@@ -47,122 +47,71 @@ INDEX = "Entity component definitions.json"
 # list rather than a regression. `--min-declarations 1` gates on the whole tail.
 GATE = 8
 
-# Reasons several navigation components share.
-DOOR_ANNOTATION = ("Not in the published schema. Mojang writes it beside `minecraft:annotation.open_door`, "
-                   "and that component is what decides whether the pathfinder plans through a closed door.")
-AMPHIBIOUS = ("Walking the bottom under water: a Java mob that may not float sinks and walks it, and water is "
-              "priced at nothing unless `avoid_water` says otherwise, so nothing is left to set.")
-FROM_AIR = "Java's flying navigator starts a path from wherever the entity is, the air included."
+SUFFOCATION = ("Mojang documents seconds between suffocation damage with a default of -20, and writes 0 on "
+               "every vanilla mob and -1 on the player. The Minecraft Wiki's damage page names one drowning "
+               "rate and no edition difference: a hit of 2 when the air reaches -20, which then goes back to "
+               "0, and a mob's first hit sixteen seconds under water, where a floor of 0 would hit a pig at "
+               "fifteen and then every tick. So the value sets no rate a pack can see, and Java's "
+               "`LivingEntity.baseTick` hurts at that rate once `shouldTakeDrowningDamage` finds the air at -20.")
 
-TEMPT_SOUND = ("Mojang's documentation counts the gap between tempt sounds in ticks, and its cat writes "
-               "[0, 100] where its strider writes 2 to 5, which no one unit fits; the sound is left unmade "
-               "rather than made at one of the two rates.")
-
-BOBBING = ("The shape of the rise and fall on the surface. The lift above gives a floating entity Java's own "
-           "bob, and nothing in Java lets an entity choose another.")
-
-SLEEPING_BOX = ("From 1.21 Java's `LivingEntity.getDimensions` is final and answers a fixed box of a fifth of a "
-                "block for the sleeping pose, which is the pose a sleeping entity takes here, so a box of a "
-                "pack's own has nowhere to go.")
+TOUCH_TEXT = ("Mojang documents it as the label of the interact button shown with touch-screen controls. "
+              "Java has no touch-screen controls and no interact button, and Bedrock shows the label to no "
+              "keyboard player either.")
 
 # A field a reader may skip, and why. Keyed by component, then by field; the key "*" covers every
 # field of that component that no reader names.
 REASONS = {
     # Components whose whole body describes something Java holds nowhere.
     "minecraft:breathable": {
-        "suffocate_time": "Documented as seconds between suffocation damage with a default of -20, which no "
-                          "count of seconds can be, and written as 0 or -1 by every vanilla entity. Java's "
-                          "own two damage a second once the air is gone is what applies.",
-        "generates_bubbles": "The bubbles a Bedrock client draws around a mob breathing under water, "
-                             "which Java draws for no mob.",
-        "totalSupply": "An older spelling the schemas no longer describe; the default stands in for it.",
-        "suffocateTime": "An older spelling the schemas no longer describe; the default stands in for it.",
+        "suffocate_time": SUFFOCATION,
+        "suffocateTime": SUFFOCATION,
     },
     "minecraft:conditional_bandwidth_optimization": {
-        "*": "How often Bedrock's own server resends an entity, which Java decides for itself.",
-    },
-    "minecraft:physics": {
-        "has_gravity": "Java can switch gravity off per entity, but Mojang's fish declare it off and still "
-                       "fall back when they leap out of water, so the engine does not apply it as written; "
-                       "a mob that flies is held up by its move control either way.",
-        "has_collision": "Java can switch collision off per entity, as its own vex does every tick, but every "
-                         "vanilla mob declaring it also declares the gravity left alone above, and one without "
-                         "the other falls through the floor.",
-        "push_towards_closest_space": "The one vanilla entity declaring it is the player, which this mod "
-                                      "applies nothing to.",
-    },
-    "minecraft:push_through": {"*": "A crowd spacing per entity, which Java holds nowhere."},
-    "minecraft:can_climb": {"*": "Carries no fields; declaring it is the whole statement."},
-    "minecraft:inventory": {
-        "container_type": "The screen a player opens onto the entity's slots, which Java builds for its own "
-                          "horses, chest minecarts and hoppers by class. The entity holds the slots here and "
-                          "has no screen onto them, so a player cannot open them.",
-        "can_be_siphoned_from": "A Java hopper draws from an entity that is a container, which only Java's "
-                                "own minecarts and boats are.",
-        "additional_slots_per_strength": "Only Mojang's llama writes it, beside an `inventory_size`, and the "
-                                         "documentation leaves open how the two add up; its "
-                                         "`minecraft:strength` sizes a container alone at three slots a point.",
-    },
-    "minecraft:equipment": {
-        "*": "Names a loot table Java rolls for a mob's gear at spawn, which the loot reader covers.",
+        "*": "Which position updates Bedrock's server may skip to save bandwidth, by distance and by filter, "
+             "a saving Mojang describes as changing nothing a player sees. Java's `ServerEntity.sendChanges` "
+             "sends on the type's own `updateInterval` and on every impulse, so the entity is kept in step "
+             "either way.",
     },
     "minecraft:dweller": {
-        "*": "Village membership. Java's point of interest manager would let any mob claim a bed or a job "
-             "site, but the village those claims make up, its gossip, its golems and its raids, is kept by "
-             "Java's villager brain, which a pack's entity has none of; the restriction radius is read.",
-    },
-    "minecraft:offspring": {
-        "blend_attributes": "Mojang's documentation names no attribute and no rule this blends by; the "
-                            "attributes `parent_centric_attribute_blending` lists are blended, by Java's "
-                            "own horse breeding.",
-    },
-    "minecraft:preferred_path": {
-        "*": "Per-block path costs. Java's walk node evaluator prices each node by the path type it "
-             "classes the block as and keeps no price per block, so the prices need an evaluator of this "
-             "mod's own, which is not written; `max_fall_blocks` is read.",
+        "dwelling_type": "`village` is the one type published, and Java keeps a village as the points of "
+                         "interest in `PoiManager`, which is where `Dwelling` takes its claims, so there "
+                         "is no second kind of dwelling to choose.",
+        "can_migrate": "Moving between villages. Java keeps no village an entity belongs to: "
+                       "`ServerLevel.isVillage` asks only whether points of interest are near a place, so "
+                       "there is no first village to stay in and no second one to move to.",
+        "first_founding_reward": "Reputation a player earns as a village is first founded. Java founds no "
+                                 "village, it has points of interest and no moment one starts, and keeps "
+                                 "reputation per villager in `Villager.gossips` rather than per village.",
+        "dweller_role": "Read for `inhabitant`, `defender` and `passive`. `hostile` is the role Mojang gives "
+                        "the raiders a raid spawns, which makes them members of the village's raid. Java's "
+                        "`Raid` spawns its own waves and holds its members as `Raider` in `groupRaiderMap`, "
+                        "and an `AddonEntity` is no `Raider`, so a hostile dweller has no raid to join.",
     },
 
     # Fields read somewhere other than through a field helper.
-    "minecraft:type_family": {"family": "Read where the families are collected."},
     "minecraft:behavior.random_look_around": {
-        "look_distance": "Java's random look aims at a point one block away at the eye's own height, so the "
-                         "distance along that bearing changes no angle the head turns through.",
+        "look_distance": "Java's `RandomLookAroundGoal.tick` aims the look control at a point on the chosen "
+                         "bearing at the eye's own height, and how far along that bearing the point lies "
+                         "changes no angle the head turns through.",
     },
     "minecraft:rail_sensor": {
-        "tick_command_block_on_activate": "Java's `activateMinecart` is overridden by `MinecartCommandBlock` "
-                                          "alone, and a pack's entity is not one, so it has no command block "
-                                          "to start ticking.",
-        "tick_command_block_on_deactivate": "Java's `activateMinecart` is overridden by `MinecartCommandBlock` "
-                                            "alone, and a pack's entity is not one, so it has no command block "
-                                            "to stop ticking.",
+        "tick_command_block_on_activate": "Only an entity carrying a command block has one to tick: in Bedrock "
+                                          "that is the engine's own command block minecart, whose command no "
+                                          "pack can write, and in Java `MinecartCommandBlock.getCommandBlock`, "
+                                          "which an `AddonEntity` has not got.",
+        "tick_command_block_on_deactivate": "Only an entity carrying a command block has one to tick: in "
+                                            "Bedrock that is the engine's own command block minecart, whose "
+                                            "command no pack can write, and in Java "
+                                            "`MinecartCommandBlock.getCommandBlock`, which an `AddonEntity` has "
+                                            "not got.",
     },
-    "minecraft:player.exhaustion": {
-        "*": "Read by `PlayerDefinition.Attribute`, which takes `value` and `max` of the five player "
-             "attributes from one helper. `value` is written into `FoodData`'s exhaustion at join and "
-             "respawn and `max` holds it under the ceiling.",
-    },
-    "minecraft:player.level": {
-        "*": "Read by `PlayerDefinition.Attribute`: `value` sets `Player.experienceLevel` and `max` holds "
-             "the level under the ceiling, which Java does not state.",
-    },
-    "minecraft:player.experience": {
-        "*": "Read by `PlayerDefinition.Attribute`: `value` sets `Player.experienceProgress` and `max` "
-             "holds it under the ceiling.",
-    },
-    "minecraft:exhaustion_values": {
-        "*": "Read by `PlayerDefinition.Action`, whose key is the field name. Each price scales the "
-             "amount Java passes to `Player.causeFoodExhaustion` at that call site.",
-    },
-    "minecraft:loot": {"table": "Read by the loot table converter, which files the table under this path."},
     "minecraft:trade_table": {
-        "table": "Read where the trades are loaded, while the pack is still open.",
-        "*": "Bedrock's own trading screen: Java's merchant screen has no display name of its own and "
-             "no economy to convert the trades into.",
+        "new_screen": "Picks between Bedrock's two trading layouts. A merchant opens Java's one "
+                      "`MenuType.MERCHANT` screen, `MerchantScreen`, so there is no second layout to pick.",
     },
     "minecraft:economy_trade_table": {
-        "table": "Read where the trades are loaded, while the pack is still open.",
-        "*": "The cure discounts and the persistence belong to Bedrock's villager economy, which Java's "
-             "merchant screen has no counterpart for.",
+        "new_screen": "Picks between Bedrock's two trading layouts. A merchant opens Java's one "
+                      "`MenuType.MERCHANT` screen, `MerchantScreen`, so there is no second layout to pick.",
     },
 
     # Attributes. Bedrock states a value and a ceiling; Java's attributes carry a fixed ceiling of
@@ -171,126 +120,40 @@ REASONS = {
     "minecraft:knockback_resistance": {"max": "Java fixes the attribute's own ceiling."},
     "minecraft:movement": {"max": "Java fixes the attribute's own ceiling."},
 
-    # Navigation. Java asks its node evaluator about doors and floating and the mob what each kind of
-    # ground costs; what is left here is what it has no question for.
-    "minecraft:navigation.walk": {
-        "using_door_annotation": DOOR_ANNOTATION,
-        "is_amphibious": AMPHIBIOUS,
-        "avoid_portals": "Java's pathfinder classes a portal block as open ground, so there is no kind of "
-                         "ground to price it by.",
-    },
-    "minecraft:navigation.generic": {
-        "using_door_annotation": DOOR_ANNOTATION,
-        "is_amphibious": AMPHIBIOUS,
-        "can_jump": "Java's ground navigator plans every step up a block as a jump and has no switch for "
-                    "a mob that may not; the one vanilla entity saying no is a dolphin, which swims.",
-    },
-    "minecraft:navigation.float": {"using_door_annotation": DOOR_ANNOTATION},
-    "minecraft:navigation.hover": {"can_path_from_air": FROM_AIR},
-    "minecraft:navigation.fly": {"can_path_from_air": FROM_AIR},
-
-    # Movement styles.
-    "minecraft:movement.sway": {
-        "*": "The side to side sway of a swimming fish, which is how its body is drawn moving rather than "
-             "where it goes; Java's swimming move control steers it straight.",
-    },
-
-    "minecraft:buoyant": {
-        "apply_gravity": "The lift is added on top of the gravity Java applies in a liquid, so an entity "
-                         "saying no to gravity still has it; every vanilla mob declaring this says yes.",
-        "movement_type": BOBBING,
-        "big_wave_probability": BOBBING,
-        "big_wave_speed": BOBBING,
-        "can_auto_step_from_liquid": "Java lets a mob pushing against the bank climb out of water already.",
-        "drag_down_on_buoyancy_removed": "A boat's sinking when it stops floating; the two vanilla entities "
-                                         "writing it are Mojang's boats.",
-    },
-
     # Goals. Java's goal of the same name takes fewer parameters than Bedrock states.
-    "minecraft:behavior.mount_pathing": {
-        "*": "A mob riding another steers it in Java: the rider plans with the mount's navigator and the "
-             "mount's own movement goals are switched off while it is ridden, so the chase and the "
-             "distance kept belong to the rider's attack goal.",
-    },
-    "minecraft:behavior.share_items": {"*": "Java's stroll goal has no arrival radius of its own."},
-    "minecraft:behavior.sleep": {
-        "sleep_collider_width": SLEEPING_BOX,
-        "sleep_collider_height": SLEEPING_BOX,
-        "sleep_y_offset": SLEEPING_BOX,
-    },
-    "minecraft:behavior.float": {
-        "*": "Java's float goal swims a mob up with no chance of its own and no passengers to drop.",
-    },
-    "minecraft:behavior.tempt": {
-        "tempt_sound": TEMPT_SOUND,
-        "sound_interval": TEMPT_SOUND,
-    },
     "minecraft:behavior.avoid_mob_type": {
-        "*": "Java's avoid goal flees whatever it is given at the speed it is given, with no sound, no "
-             "probability and no event when it gets away.",
-    },
-    "minecraft:behavior.follow_owner": {
-        "ignore_vibration": "Whether a vibration interrupts the following. Only the allay says it does, and "
-                            "its note block goals sit above this one in priority, which is what interrupts it.",
-    },
-    "minecraft:behavior.drink_potion": {
-        "speed_modifier": "The potion's effects arrive the moment it is chosen, so there is no time spent "
-                          "drinking for the entity to be slowed through.",
-
-        "priority": "Drinking runs beside the entity's goals on the sensor pass rather than as one of "
-                    "them, so it has no place among them to take.",
-    },
-    "minecraft:behavior.trade_interest": {
-        "*": "Java's merchant screen opens on a click rather than after a mob has shown interest.",
+        "river_speed_multiplier": "Documented only as the speed 'when following river', and the goal "
+                                  "follows nothing: no vanilla entity states it and nothing says what "
+                                  "a river is to a flight.",
     },
     "minecraft:behavior.trade_with_player": {"filters": "Java's merchant screen opens for whoever clicks."},
     "minecraft:behavior.swim_wander": {
-        "look_ahead": "Java's swimming navigator plans the whole path through the water, around whatever "
-                      "is in the way, before the entity moves, so there is no distance ahead to look.",
+        "look_ahead": "The wander is a path `WaterBoundPathNavigation` plans through the water to a spot "
+                      "`BehaviorUtils.getRandomSwimmablePos` picks, around whatever is in the way, before "
+                      "the entity moves, so there is no distance ahead to look for an obstacle.",
     },
     "minecraft:behavior.player_ride_tamed": {
-        "priority": "The behaviour is answered as a rule on who may get on, asked whenever somebody tries, "
-                    "so there is no goal for a priority to place.",
-    },
-    "minecraft:flocking": {
-        "low_flock_limit": "Documented only as the low bound of a flock, with nothing said of what a smaller "
-                           "flock does, so a flock of any size flocks.",
-        "use_center_of_mass": "Documented only as following a flock by its centre of mass, with nothing said "
-                              "of what a flocker follows otherwise, so cohesion pulls towards the middle of "
-                              "the flock either way.",
+        "priority": "Mojang's goal holds no controls by default, so its priority orders it against "
+                    "nothing, and Java moves a player-ridden mount in LivingEntity.travelRidden rather "
+                    "than through any goal, so what it would place has no effect here. The behaviour "
+                    "is answered as the rule on who may get on.",
     },
 
     # The rest, one component at a time.
-    "minecraft:home": {
-        "home_block_list": "Bedrock checks the list against the block an event set the home at; the home here "
-                           "is where the entity stood as the component arrived, which is no such block, so "
-                           "the list has nothing to be checked against.",
-    },
-    "minecraft:rideable": {
-        "interact_text": "Java shows no prompt of its own for using a mob.",
-    },
-    "minecraft:is_dyeable": {"interact_text": "Java shows no prompt of its own for using a mob."},
-    "minecraft:tamemount": {
-        "feed_text": "Java shows no prompt of its own for using a mob.",
-        "ride_text": "Java shows no prompt of its own for using a mob.",
-    },
+    "minecraft:rideable": {"interact_text": TOUCH_TEXT},
+    "minecraft:is_dyeable": {"interact_text": TOUCH_TEXT},
+    "minecraft:tamemount": {"feed_text": TOUCH_TEXT, "ride_text": TOUCH_TEXT},
     "minecraft:behavior.dragondeath": {
-        "priority": "The long death runs in LivingEntity.tickDeath, once the entity is dead and no goal "
-                    "runs, so there is no goal for a priority to order.",
+        "priority": "The long death runs in LivingEntity.tickDeath, and LivingEntity.aiStep skips "
+                    "serverAiStep, where the goals run, while isImmobile answers isDeadOrDying, so no "
+                    "goal is left for a priority to order against.",
     },
     "minecraft:projectile": {
-        "is_dangerous": "Java's one dangerous projectile is the blue wither skull, whose flag is a field of "
-                        "WitherSkull that sets its block resistance cap and its look; no goal asks any "
-                        "projectile whether it is dangerous.",
-    },
-    "minecraft:shooter": {
-        "magic": "A drink here takes no time, its effects landing the tick its conditions hold, so the "
-                 "ranged attack never runs beside a drink it would have to be kept apart from.",
-    },
-    "minecraft:area_attack": {
-        "death_message_override": "Java words a death by the msgId of the damage type that dealt it, a "
-                                  "registered type shared by every blow of that kind rather than "
-                                  "something one blow carries.",
+        "is_dangerous": "Mojang's schema says it affects AI reactions and client behaviour and names none, and "
+                        "no published goal or client field mentions it. In Java only `WitherSkull.getInertia`, "
+                        "`WitherSkull.getBlockExplosionResistance` and `WitherSkullRenderer` read "
+                        "`isDangerous`, and Mojang's dangerous skull states its inertia, its blast's "
+                        "`max_resistance` and its texture in fields of their own.",
     },
 }
 
@@ -314,9 +177,16 @@ TYPE = re.compile(r"\b([A-Z]\w+)\s*[.(]")
 COMPONENT = re.compile(r"\"(minecraft:[a-z0-9_.]+)\"")
 METHOD = re.compile(
     r"^[ \t]*(?:(?:public|private|protected|static|final|abstract|synchronized|default)\s+)+"
-    r"[\w.<>,\[\]?\s]+\s+(\w+)\s*\([^;{]*\)\s*(?:throws [\w.,\s]+)?\{",
+    r"(?:[\w.<>,\[\]?\s]+\s+)?(\w+)\s*\([^;{]*\)\s*(?:throws [\w.,\s]+)?\{",
     re.M,
 )
+
+# An enum whose constants name the fields they stand for, read by walking `values()`: the constant's
+# first argument is the field.
+ENUM = re.compile(r"\benum\s+(\w+)\s*\{([^;]*);")
+ENUM_KEY = re.compile(r"^\s*[A-Z][A-Z0-9_]*\(\s*\"([a-z][a-z0-9_]*)\"", re.M)
+VALUES = re.compile(r"\b([A-Z]\w*)\.values\(\)")
+ENUM_FIELDS: dict[str, set[str]] = collections.defaultdict(set)
 CALL = re.compile(r"(\w+)\s*\(")
 
 # How far a reader is followed into the helpers it calls. Two steps reach the value types that turn
@@ -522,6 +392,8 @@ def harvest(text: str, methods: dict[str, list[str]], seen: set[str], depth: int
     that turn a component into a value live in their own files.
     """
     fields = direct(text)
+    for walked in VALUES.findall(text):
+        fields.update(ENUM_FIELDS.get(walked, set()))
     if depth == 0 and types:
         for named in set(TYPE.findall(text)) & set(types):
             fields.update(types[named])
@@ -606,6 +478,9 @@ def main() -> int:
             methods[name].extend(overloads)
 
     types = {path.stem: direct(source) for path, source in java.items()}
+    for source in java.values():
+        for name, constants in ENUM.findall(source):
+            ENUM_FIELDS[name].update(ENUM_KEY.findall(constants))
 
     taken: dict[str, set[str]] = collections.defaultdict(set)
     for source in java.values():

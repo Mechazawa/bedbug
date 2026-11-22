@@ -1,0 +1,500 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:rover",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {}
+    },
+    "component_groups": {
+      "tp:rover_seat": {
+        "minecraft:rideable": {
+          "seat_count": 1,
+          "family_types": [
+            "tp_rover"
+          ],
+          "seats": [
+            {
+              "position": [
+                0,
+                1.0,
+                0
+              ]
+            }
+          ]
+        }
+      },
+      "tp:rover_pathing": {
+        "minecraft:behavior.mount_pathing": {
+          "priority": 2,
+          "speed_multiplier": 1.5,
+          "target_dist": 0,
+          "track_target": true
+        }
+      },
+      "tp:rover_pathing_distant": {
+        "minecraft:behavior.mount_pathing": {
+          "priority": 2,
+          "speed_multiplier": 1.5,
+          "target_dist": 3,
+          "track_target": true
+        }
+      },
+      "tp:rover_attacking": {
+        "minecraft:behavior.melee_attack": {
+          "priority": 2,
+          "speed_multiplier": 1
+        }
+      },
+      "tp:rover_home_listed": {
+        "minecraft:home": {
+          "restriction_type": "all_movement",
+          "restriction_radius": 4,
+          "home_block_list": [
+            "minecraft:web"
+          ]
+        }
+      },
+      "tp:rover_avoid_seen": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ]
+        }
+      },
+      "tp:rover_avoid_blind": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ],
+          "ignore_visibility": true
+        }
+      },
+      "tp:rover_avoid_escaping": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ],
+          "max_flee": 4,
+          "on_escape_event": {
+            "event": "tp:rover_escaped",
+            "target": "self"
+          }
+        }
+      },
+      "tp:rover_avoid_dropping": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ],
+          "remove_target": true
+        }
+      },
+      "tp:rover_avoid_wary": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "llama"
+              },
+              "max_dist": 5
+            },
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ],
+          "probability_per_strength": 0
+        }
+      },
+      "tp:rover_avoid_aloud": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ],
+          "avoid_mob_sound": "retreat",
+          "sound_interval": {
+            "min": 0.5,
+            "max": 0.5
+          }
+        }
+      },
+      "tp:rover_avoid_pacing": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5,
+              "walk_speed_multiplier": 0.5,
+              "sprint_speed_multiplier": 1.5
+            }
+          ],
+          "sprint_distance": 2
+        }
+      },
+      "tp:rover_avoid_near": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 5
+            }
+          ],
+          "avoid_target_xz": 1,
+          "avoid_target_y": 1
+        }
+      },
+      "tp:rover_escaped": {
+        "minecraft:is_chested": {}
+      },
+      "tp:rover_tempted_aloud": {
+        "minecraft:behavior.tempt": {
+          "priority": 1,
+          "items": [
+            "minecraft:apple"
+          ],
+          "within_radius": 6,
+          "tempt_sound": "tempt",
+          "sound_interval": {
+            "range_min": 0.5,
+            "range_max": 0.5
+          }
+        }
+      },
+      "tp:rover_following_minding": {
+        "minecraft:behavior.follow_owner": {
+          "priority": 1,
+          "speed_multiplier": 1,
+          "start_distance": 4,
+          "stop_distance": 2,
+          "can_teleport": false,
+          "ignore_vibration": false
+        }
+      },
+      "tp:rover_following": {
+        "minecraft:behavior.follow_owner": {
+          "priority": 1,
+          "speed_multiplier": 1,
+          "start_distance": 4,
+          "stop_distance": 2,
+          "can_teleport": false,
+          "ignore_vibration": true
+        }
+      },
+      "tp:rover_drinking": {
+        "minecraft:behavior.drink_potion": {
+          "priority": 1,
+          "speed_modifier": -0.25,
+          "potions": [
+            {
+              "id": 12,
+              "chance": 1,
+              "filters": {
+                "none_of": [
+                  {
+                    "test": "has_mob_effect",
+                    "subject": "self",
+                    "value": "fire_resistance"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "tp:rover_magic": {
+        "minecraft:behavior.drink_potion": {
+          "priority": 1,
+          "speed_modifier": -0.25,
+          "potions": [
+            {
+              "id": 12,
+              "chance": 1,
+              "filters": {
+                "none_of": [
+                  {
+                    "test": "has_mob_effect",
+                    "subject": "self",
+                    "value": "fire_resistance"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "minecraft:shooter": {
+          "def": "minecraft:snowball",
+          "magic": true
+        }
+      },
+      "tp:rover_plain_shooter": {
+        "minecraft:behavior.drink_potion": {
+          "priority": 1,
+          "speed_modifier": -0.25,
+          "potions": [
+            {
+              "id": 12,
+              "chance": 1,
+              "filters": {
+                "none_of": [
+                  {
+                    "test": "has_mob_effect",
+                    "subject": "self",
+                    "value": "fire_resistance"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "minecraft:shooter": {
+          "def": "minecraft:snowball"
+        }
+      },
+      "tp:rover_sleeper": {
+        "minecraft:behavior.sleep": {
+          "priority": 3,
+          "sleep_collider_width": 1,
+          "sleep_collider_height": 0.3,
+          "sleep_y_offset": 0.6
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_rover",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.0
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:attack": {
+        "damage": 0
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:rover_make_seat": {
+        "add": {
+          "component_groups": [
+            "tp:rover_seat"
+          ]
+        }
+      },
+      "tp:rover_make_pathing": {
+        "add": {
+          "component_groups": [
+            "tp:rover_seat",
+            "tp:rover_pathing"
+          ]
+        }
+      },
+      "tp:rover_make_pathing_distant": {
+        "add": {
+          "component_groups": [
+            "tp:rover_seat",
+            "tp:rover_pathing_distant"
+          ]
+        }
+      },
+      "tp:rover_make_attacking": {
+        "add": {
+          "component_groups": [
+            "tp:rover_attacking"
+          ]
+        }
+      },
+      "tp:rover_make_home_listed": {
+        "add": {
+          "component_groups": [
+            "tp:rover_home_listed"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_seen": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_seen"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_blind": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_blind"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_escaping": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_escaping"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_dropping": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_dropping"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_wary": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_wary"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_aloud": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_aloud"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_pacing": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_pacing"
+          ]
+        }
+      },
+      "tp:rover_make_avoid_near": {
+        "add": {
+          "component_groups": [
+            "tp:rover_avoid_near"
+          ]
+        }
+      },
+      "tp:rover_escaped": {
+        "add": {
+          "component_groups": [
+            "tp:rover_escaped"
+          ]
+        }
+      },
+      "tp:rover_make_tempted_aloud": {
+        "add": {
+          "component_groups": [
+            "tp:rover_tempted_aloud"
+          ]
+        }
+      },
+      "tp:rover_make_following_minding": {
+        "add": {
+          "component_groups": [
+            "tp:rover_following_minding"
+          ]
+        }
+      },
+      "tp:rover_make_following": {
+        "add": {
+          "component_groups": [
+            "tp:rover_following"
+          ]
+        }
+      },
+      "tp:rover_make_drinking": {
+        "add": {
+          "component_groups": [
+            "tp:rover_drinking"
+          ]
+        }
+      },
+      "tp:rover_make_magic": {
+        "add": {
+          "component_groups": [
+            "tp:rover_magic"
+          ]
+        }
+      },
+      "tp:rover_make_plain_shooter": {
+        "add": {
+          "component_groups": [
+            "tp:rover_plain_shooter"
+          ]
+        }
+      },
+      "tp:rover_make_sleeper": {
+        "add": {
+          "component_groups": [
+            "tp:rover_sleeper"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -522,7 +522,7 @@ public final class KeeperGoalGameTests {
      * A player with no client, joined through a connection whose far end is a queue, which hears
      * every sound the server sends near it.
      */
-    private record Listener(ServerPlayer player, EmbeddedChannel channel, Map<String, List<Heard>> sounds) {
+    record Listener(ServerPlayer player, EmbeddedChannel channel, Map<String, List<Heard>> sounds) {
         static Listener join(GameTestHelper helper, BlockPos at) {
             MinecraftServer server = helper.getLevel().getServer();
             GameProfile profile = new GameProfile(UUID.randomUUID(), "Listener");

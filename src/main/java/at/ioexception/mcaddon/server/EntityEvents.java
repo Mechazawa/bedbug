@@ -187,8 +187,8 @@ public final class EntityEvents {
             }
             case "minecraft:instant_despawn" -> entity.discard();
             case "minecraft:transformation" -> {
-                if (!(entity instanceof AddonEntity addon) || !addon.startTransforming(values)) {
-                    transform(entity, values, state);
+                if (!(entity instanceof AddonEntity addon) || !addon.startTransforming(values, other)) {
+                    transform(entity, values, other, state);
                 }
             }
             case "minecraft:health" -> {
@@ -291,18 +291,13 @@ public final class EntityEvents {
     }
 
     /**
-     * `minecraft:transformation` replaces the entity with another one.
-     *
-     * The new entity takes the old one's place and name; nothing else carries across, which is what
-     * Bedrock does unless the pack asks for its equipment to be kept.
-     */
-    /**
      * Replaces the entity with the one `minecraft:transformation` names, at once.
      *
      * The new entity is given the groups the component's `add` lists, as the event that makes it
-     * would have given them, and `transformation_sound` is the old one's last sound.
+     * would have given them, and `transformation_sound` is the old one's last sound. `cause` raised
+     * the event that started the transformation, which a trader takes as whoever cured it.
      */
-    public static void transform(Entity entity, JsonObject values, AddonState state) {
+    public static void transform(Entity entity, JsonObject values, Entity cause, AddonState state) {
         String into = at.ioexception.mcaddon.util.Json.text(values, "into", null);
         if (into == null || !(entity.level() instanceof ServerLevel level)) return;
 
@@ -330,6 +325,10 @@ public final class EntityEvents {
         if (!groups.isEmpty() && becomes != null) {
             changeGroups(replacement, becomes,
                 new EntityEvent.ChangeGroups(Filter.parse(null), groups, java.util.List.of()), null, state);
+        }
+        // After the groups, which decide what the new entity trades by.
+        if (entity instanceof AddonEntity was && replacement instanceof AddonEntity trader) {
+            trader.inheritTrades(was, cause);
         }
         if (entity instanceof AddonEntity addon) {
             addon.makeNoise(at.ioexception.mcaddon.util.Json.text(values, "transformation_sound", null));

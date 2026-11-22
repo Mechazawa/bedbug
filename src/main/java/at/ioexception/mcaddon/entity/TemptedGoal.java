@@ -16,6 +16,11 @@ import java.util.Set;
  * and is never startled; Bedrock states the reach, whether height counts towards it, where to stop
  * and whether a sudden move scares the entity off, so the walk is its own here. Being startled is
  * Java's rule for it: the player moving or turning while within six blocks.
+ *
+ * `tempt_sound` is made as the entity is tempted and again every `sound_interval` seconds while it
+ * stays tempted. Mojang's documentation counts that interval in ticks, but its strider waits 2 to 5,
+ * which would be a sound several times a second, so it is read in seconds like every other sound
+ * interval Bedrock states.
  */
 final class TemptedGoal extends Goal {
     /** How close a player has to be for moving to startle the entity, which is Java's own six. */
@@ -39,6 +44,9 @@ final class TemptedGoal extends Goal {
     private final String endEvent;
     /** Whether the entity steers straight at the player rather than following a path. */
     private final boolean pointToPoint;
+    private final String sound;
+    private final Goals.Span soundGap;
+    private int nextSoundAt;
     private Player player;
     private double seenX;
     private double seenY;
@@ -64,6 +72,8 @@ final class TemptedGoal extends Goal {
         this.whileRidden = Goals.flag(goal, "can_tempt_while_ridden", false);
         this.startEvent = Goals.event(goal, "on_tempt_start");
         this.endEvent = Goals.event(goal, "on_tempt_end");
+        this.sound = Goals.text(goal, "tempt_sound");
+        this.soundGap = Goals.span(goal, "sound_interval", 0, 0);
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 
@@ -142,6 +152,7 @@ final class TemptedGoal extends Goal {
         seenPitch = player.getXRot();
         seenYaw = player.getYRot();
         if (startEvent != null) mob.raiseEvent(startEvent);
+        nextSoundAt = mob.tickCount;
     }
 
     @Override
@@ -161,6 +172,10 @@ final class TemptedGoal extends Goal {
     @Override
     public void tick() {
         mob.getLookControl().setLookAt(player, mob.getMaxHeadYRot() + 20, mob.getMaxHeadXRot());
+        if (sound != null && mob.tickCount >= nextSoundAt) {
+            mob.makeNoise(sound);
+            nextSoundAt = mob.tickCount + Math.max(1, soundGap.roll(mob.getRandom()));
+        }
         if (mob.distanceTo(player) < stopDistance) {
             halt();
         } else if (pointToPoint) {

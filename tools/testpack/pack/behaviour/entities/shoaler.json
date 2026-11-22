@@ -1,0 +1,105 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:shoaler",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "component_groups": {
+      "tp:shoaler_huddled": {
+        "minecraft:flocking": {
+          "influence_radius": 3.5,
+          "goal_weight": 2,
+          "low_flock_limit": 3,
+          "separation_threshold": 0.5,
+          "cohesion_threshold": 3.5,
+          "cohesion_weight": 2
+        }
+      },
+      "tp:shoaler_paired": {
+        "minecraft:flocking": {
+          "influence_radius": 3.5,
+          "goal_weight": 2,
+          "low_flock_limit": 2,
+          "separation_threshold": 0.5,
+          "cohesion_threshold": 3.5,
+          "cohesion_weight": 2
+        }
+      },
+      "tp:shoaler_massed": {
+        "minecraft:flocking": {
+          "influence_radius": 3.5,
+          "goal_weight": 2,
+          "use_center_of_mass": true,
+          "separation_threshold": 0.5,
+          "cohesion_threshold": 3.5,
+          "cohesion_weight": 2
+        }
+      },
+      "tp:shoaler_trailing": {
+        "minecraft:flocking": {
+          "influence_radius": 3.5,
+          "goal_weight": 2,
+          "use_center_of_mass": false,
+          "separation_threshold": 0.5,
+          "cohesion_threshold": 3.5,
+          "cohesion_weight": 2
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_shoaler",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 0.6
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {}
+    },
+    "events": {
+      "tp:shoaler_make_huddled": {
+        "add": {
+          "component_groups": [
+            "tp:shoaler_huddled"
+          ]
+        }
+      },
+      "tp:shoaler_make_paired": {
+        "add": {
+          "component_groups": [
+            "tp:shoaler_paired"
+          ]
+        }
+      },
+      "tp:shoaler_make_massed": {
+        "add": {
+          "component_groups": [
+            "tp:shoaler_massed"
+          ]
+        }
+      },
+      "tp:shoaler_make_trailing": {
+        "add": {
+          "component_groups": [
+            "tp:shoaler_trailing"
+          ]
+        }
+      }
+    }
+  }
+}

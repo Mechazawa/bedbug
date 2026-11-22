@@ -1,0 +1,59 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:townsfolk",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_townsfolk", "mob"]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 0.9
+      },
+      "minecraft:health": {
+        "value": 10,
+        "max": 10
+      },
+      "minecraft:movement": {
+        "value": 0
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "component_groups": {
+      "tp:townsfolk_defender": {
+        "minecraft:dweller": {
+          "dwelling_type": "village",
+          "dweller_role": "defender",
+          "can_find_poi": false,
+          "can_migrate": true,
+          "first_founding_reward": 0,
+          "update_interval_base": 60,
+          "update_interval_variant": 40
+        }
+      },
+      "tp:townsfolk_passive": {
+        "minecraft:dweller": {
+          "dwelling_type": "village",
+          "dweller_role": "passive",
+          "can_find_poi": false,
+          "can_migrate": true,
+          "first_founding_reward": 0,
+          "update_interval_base": 60,
+          "update_interval_variant": 40
+        }
+      }
+    },
+    "events": {
+      "tp:townsfolk_defend": {"add": {"component_groups": ["tp:townsfolk_defender"]}},
+      "tp:townsfolk_settle": {"add": {"component_groups": ["tp:townsfolk_passive"]}}
+    }
+  }
+}
