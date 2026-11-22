@@ -52,6 +52,7 @@ public final class JavaModelPoseClientGameTest implements FabricClientGameTest {
             Worlds.waitForChunks(world);
             world.getServer().runCommand("summon minecraft:villager ~ ~ ~3 {NoAI:1b}");
             LivingEntity villager = Entities.waitForClientLiving(context, "minecraft:villager");
+            if (Entities.animatedByAnotherAddon(context, villager)) return;
             Map<String, PosedParts.Part> own = context.computeOnClient(client -> PosedParts.of(villager));
             Assert.near(own.get("head").xScale(), 1, TOLERANCE, "the head's scale before any clip is played");
 
