@@ -82,6 +82,10 @@ REASONS = {
         "first_founding_reward": "Reputation a player earns as a village is first founded. Java founds no "
                                  "village, it has points of interest and no moment one starts, and keeps "
                                  "reputation per villager in `Villager.gossips` rather than per village.",
+        "dweller_role": "Read for `inhabitant`, `defender` and `passive`. `hostile` is the role Mojang gives "
+                        "the raiders a raid spawns, which makes them members of the village's raid. Java's "
+                        "`Raid` spawns its own waves and holds its members as `Raider` in `groupRaiderMap`, "
+                        "and an `AddonEntity` is no `Raider`, so a hostile dweller has no raid to join.",
     },
 
     # Fields read somewhere other than through a field helper.

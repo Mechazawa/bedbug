@@ -50,6 +50,7 @@
       "at.ioexception.mcaddon.gametest.CureDecayGameTests",
       "at.ioexception.mcaddon.gametest.PackerGameTests",
       "at.ioexception.mcaddon.gametest.SettlerGameTests",
+      "at.ioexception.mcaddon.gametest.DwellerRoleGameTests",
       "at.ioexception.mcaddon.gametest.ScriptGameTests",
       "at.ioexception.mcaddon.gametest.ScriptToolGameTests",
       "at.ioexception.mcaddon.gametest.RegistryGameTests",
