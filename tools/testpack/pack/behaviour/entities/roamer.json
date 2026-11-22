@@ -225,6 +225,18 @@
           "stop_distance": 1.5
         }
       },
+      "tp:roamer_wary": {
+        "minecraft:navigation.walk": {
+          "blocks_to_avoid": [
+            {
+              "name": "minecraft:gold_block"
+            },
+            {
+              "tags": "q.any_tag('tp:sturdy')"
+            }
+          ]
+        }
+      },
       "tp:roamer_straying": {
         "minecraft:home": {
           "restriction_radius": 3,
@@ -262,6 +274,13 @@
       "minecraft:jump.static": {}
     },
     "events": {
+      "tp:roamer_wary": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_wary"
+          ]
+        }
+      },
       "tp:roamer_toward": {
         "add": {
           "component_groups": [

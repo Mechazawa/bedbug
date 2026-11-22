@@ -178,8 +178,6 @@ REASONS = {
         "is_amphibious": AMPHIBIOUS,
         "avoid_portals": "Java's pathfinder classes a portal block as open ground, so there is no kind of "
                          "ground to price it by.",
-        "blocks_to_avoid": "Java prices a step by the kind of ground it is rather than by the block, so a "
-                           "list of blocks would take a node evaluator of this mod's own.",
     },
     "minecraft:navigation.generic": {
         "using_door_annotation": DOOR_ANNOTATION,

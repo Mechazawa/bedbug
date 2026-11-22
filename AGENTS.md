@@ -2946,6 +2946,14 @@ publishes nothing on, decided here:
   water or shade", with no fire or helmet named. A helmet is named only as stopping the burn, and
   only the Legacy Console Edition waited for the fire.
 
+- `blocks_to_avoid` on any `minecraft:navigation.*` closes a node to the pathfinder where a listed
+  block fills a cell of the mob's box there or is the block it would stand on. Mojang says only that
+  the pathfinder avoids them; standing on the block counts so that the breeze's trapdoors and the
+  goat's powder snow are both kept off. Java's level caches one path type per block for every mob,
+  so `AvoidedBlockMixin` asks the list where the walk and swim evaluators work a type out for one
+  mob, and `aPathNeverStepsOnABlockItsNavigationAvoids` reads it back. A mob needs to have landed
+  for a ground navigator to plan at all, so the test lets its roamers fall first.
+
 **The game test world is dark.** `isBrightOutside` answered false there at a clock of 25020, so a test
 about the day runs `time set day` and a goal asks the clock.
 ## Carrying blocks, laying, working and giving
