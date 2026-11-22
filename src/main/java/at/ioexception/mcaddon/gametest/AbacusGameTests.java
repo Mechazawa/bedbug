@@ -162,10 +162,28 @@ public final class AbacusGameTests {
             helper.getLevel().damageSources().playerAttack(killer), KILLING_BLOW);
 
         helper.assertTrue(!abacus.isAlive(), ABACUS + " survived a killing blow.");
-        int awarded = helper.getLevel().getEntitiesOfClass(ExperienceOrb.class, abacus.getBoundingBox().inflate(1))
-            .stream().mapToInt(ExperienceOrb::getValue).sum();
+        int awarded = experienceIn(helper, abacus.getBoundingBox().inflate(1));
         helper.assertTrue(awarded == expected,
             ABACUS + " after " + event + " left " + awarded + " experience where " + expected + " was due.");
         helper.succeed();
+    }
+
+    /**
+     * The experience the orbs in a box hold. An orb Java spawns merges into one of the same value
+     * whose id matches its own modulo 40, so one orb may stand for several.
+     */
+    static int experienceIn(GameTestHelper helper, net.minecraft.world.phys.AABB box) {
+        return helper.getLevel().getEntitiesOfClass(ExperienceOrb.class, box).stream()
+            .mapToInt(orb -> orb.getValue() * mergedCount(orb)).sum();
+    }
+
+    private static int mergedCount(ExperienceOrb orb) {
+        try {
+            java.lang.reflect.Field count = ExperienceOrb.class.getDeclaredField("count");
+            count.setAccessible(true);
+            return count.getInt(orb);
+        } catch (ReflectiveOperationException missing) {
+            throw new IllegalStateException(missing);
+        }
     }
 }

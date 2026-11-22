@@ -2991,6 +2991,10 @@ default batches that sets night, such as the sleep tests, otherwise turned the s
 **The game test world has more than one biome.** On 26.3 the rain tests stood in a desert, where no
 rain falls, so a test whose answer depends on the biome runs `fillbiome` over its area first.
 
+**An experience orb may hold several.** Java merges a new orb into one of the same value whose id
+matches its own modulo 40, so a test summing orbs reads `AbacusGameTests.experienceIn`, which counts
+each orb's merged count as well.
+
 **A sleeping player needs a bed.** `LivingEntity.tick` wakes a sleeper whose bed is gone, so a test
 that calls `startSleeping` places one first (`NapperGameTests.bed`).
 ## Carrying blocks, laying, working and giving
