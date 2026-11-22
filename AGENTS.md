@@ -3285,3 +3285,51 @@ value or a named state picks a member of. A Bedrock id may be a Java block in a 
 the way back starts from a `BlockState`: a lit furnace reports itself as `minecraft:lit_furnace`. A
 command line is translated through `BedrockBlockNames.Resolved.command`, which writes only the
 properties the pack named, because a test for a block asks about those and no others.
+
+## Census reasons: trade
+
+`tp:haggler` (`HagglerGameTests`), `tp:packer` (`PackerGameTests`), `tp:foal` (`FoalGameTests`) and
+`tp:settler` (`SettlerGameTests`) carry the fields below, one group each. Decided where Mojang
+publishes nothing:
+
+- **A trade table's `display_name` is a key of the pack's text**, as Mojang's `entity.villager.armor`
+  is, so the trading screen's title is `Component.translatable` of it. With both trade components
+  on, `minecraft:trade_table` is the one traded by and titles the screen.
+- **`behavior.trade_interest`** holds up the results of the offers whose cost is the item the
+  customer holds, in table order, turning to the next every `carried_item_switch_time`, and puts the
+  ware away once the customer has held nothing it buys for `remove_item_time`.
+- **`persist_trades`** keeps the offers whole, uses included, through a transformation into an
+  entity with no table, and that entity hands them on until one with a table trades by them.
+  **`convert_trades_economy`** gives an `economy_trade_table` its fresh offers, and each takes the
+  result components (enchantments, custom data) of the old offer with the same cost and result
+  items; uses are not carried.
+- **A cure is the transformation a player started.** The player who raised the event adding the
+  transformation's group cured the trader, delayed or not. `cured_discount` adds Bedrock's minor and
+  major gossip for that player, capped at `max_cured_discount`; both default to `[-25, -20]`, which
+  are Java's own cure gossip and ceilings (`GossipType` `MINOR_POSITIVE` and `MAJOR_POSITIVE`). The
+  price is Java's `Villager.updateSpecialPrices`: a reputation of minor plus five times major moves
+  each offer by the reputation times its price multiplier, for that player only, until the screen
+  closes. Nothing decays. `use_legacy_price_formula` and the nearby cure fields are not read.
+- **`container_type`** opens Java's chest grid in whole rows (at most six) over the slots, the cells
+  past the last slot shut: `container`, `minecart_chest`, `chest_boat`, `hopper` and
+  `minecart_hopper` on any use, `horse` only to a crouching player, `inventory` never. Java's horse,
+  hopper and minecart menus belong to their own entity classes. The inventory key of a player riding
+  the entity opens nothing, because Java sends it only for a vehicle that is `HasCustomInventoryScreen`
+  by class and every add-on mount would then lose the player's own inventory.
+- **`can_be_siphoned_from`** decides the entity's class at registration: a type any of whose
+  inventories may be siphoned is built as `SiphonedEntity`, a Java `Container`, because Java's hopper
+  and Lithium's both find entity containers by class. Its slots face a hopper only while the live
+  inventory says so, both ways, as Bedrock's chest minecart does; otherwise it is a container of no
+  slots, which also stops a hopper under it picking up dropped items.
+- **`additional_slots_per_strength`** with `minecraft:strength` gives that many slots per point of
+  strength, at most `inventory_size`.
+- **`blend_attributes`** false turns off the blending `parent_centric_attribute_blending` asks for.
+- **`minecraft:dweller`** is `entity/Dwelling`. An `inhabitant` (the role Mojang's villager has and
+  the Bedrock wiki says claims a bed and a bell) that `can_find_poi` takes a ticket on the nearest
+  free bed, bell and job site within 48 blocks, Java's `AcquirePoi` range, every
+  `update_interval_base` plus up to `update_interval_variant` ticks (60 and 40 where unstated, as
+  every vanilla dweller writes them), and gives them back when it dies or is discarded. The other
+  roles claim nothing: Java counts only `Villager` for golems and `Raider` for raids, so a role
+  changes nothing else. `preferred_profession` narrows the job site to that Java profession's
+  (`stone_mason` is `mason`, the other names lose their underscores). `SleepGoal` and `WorkGoal` go
+  to the claimed bed and job site first.
