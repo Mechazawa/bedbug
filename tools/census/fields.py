@@ -237,9 +237,6 @@ REASONS = {
         "priority": "Drinking runs beside the entity's goals on the sensor pass rather than as one of "
                     "them, so it has no place among them to take.",
     },
-    "minecraft:behavior.trade_interest": {
-        "*": "Java's merchant screen opens on a click rather than after a mob has shown interest.",
-    },
     "minecraft:behavior.trade_with_player": {"filters": "Java's merchant screen opens for whoever clicks."},
     "minecraft:behavior.swim_wander": {
         "look_ahead": "Java's swimming navigator plans the whole path through the water, around whatever "

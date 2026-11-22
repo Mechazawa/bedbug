@@ -18,6 +18,9 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.UUID;
 
@@ -43,6 +46,63 @@ public final class HagglerGameTests {
             HAGGLER + " opened a trading screen titled by " + title + " and not by its display name.");
         helper.succeed();
     }
+
+    /**
+     * `minecraft:behavior.trade_interest` holds up what the trader sells for the item the customer
+     * holds, turning to the next such ware every `carried_item_switch_time`: two trades take an
+     * emerald, for iron and for gold, and a third takes a diamond for coal, which is never shown.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 80)
+    public void anInterestedTraderTurnsThroughWhatItSellsForTheHeldItem(GameTestHelper helper) {
+        AddonEntity haggler = haggler(helper, "tp:haggler_interest");
+        if (haggler == null) {
+            helper.succeed();
+            return;
+        }
+
+        haggler.setNoAi(false);
+        Customer customer = Customer.join(helper);
+        customer.player().setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.EMERALD));
+        java.util.Set<Item> shown = new java.util.HashSet<>();
+        helper.onEachTick(() -> shown.add(haggler.getMainHandItem().getItem()));
+        helper.succeedWhen(() -> {
+            helper.assertFalse(shown.contains(Items.COAL), HAGGLER + " held up coal, which it sells for a diamond.");
+            helper.assertTrue(shown.contains(Items.IRON_INGOT) && shown.contains(Items.GOLD_INGOT),
+                HAGGLER + " showed " + shown + " and not both wares it sells for an emerald.");
+            customer.leave();
+        });
+    }
+
+    /**
+     * `remove_item_time` is how long the trader keeps its ware up once the customer holds nothing it
+     * buys: a second here, so it is still up half a second after the emerald is gone and put away
+     * a second and a half after.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 120)
+    public void anInterestedTraderWaitsBeforePuttingItsWareAway(GameTestHelper helper) {
+        AddonEntity haggler = haggler(helper, "tp:haggler_interest");
+        if (haggler == null) {
+            helper.succeed();
+            return;
+        }
+
+        haggler.setNoAi(false);
+        Customer customer = Customer.join(helper);
+        customer.player().setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.EMERALD));
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertFalse(haggler.getMainHandItem().isEmpty(),
+                HAGGLER + " holds nothing up to a customer holding an emerald."))
+            .thenExecute(() -> customer.player().setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY))
+            .thenExecuteAfter(STILL_SHOWN, () -> helper.assertFalse(haggler.getMainHandItem().isEmpty(),
+                HAGGLER + " put its ware away at once when the customer let go of the emerald."))
+            .thenExecuteAfter(PUT_AWAY - STILL_SHOWN, () -> helper.assertTrue(haggler.getMainHandItem().isEmpty(),
+                HAGGLER + " still holds " + haggler.getMainHandItem() + " long after the emerald was gone."))
+            .thenExecute(customer::leave)
+            .thenSucceed();
+    }
+
+    private static final int STILL_SHOWN = 10;
+    private static final int PUT_AWAY = 30;
 
     static AddonEntity haggler(GameTestHelper helper, String event) {
         AddonEntity haggler = BehaviourGameTests.spawn(helper, HAGGLER, STAND);
