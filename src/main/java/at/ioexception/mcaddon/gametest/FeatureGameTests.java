@@ -12,6 +12,7 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -55,6 +56,41 @@ public final class FeatureGameTests {
                 "the spread's height did not read the x it chose at " + offset.toShortString());
         }
         helper.assertTrue(found > 0, "the spread placed nothing: " + heard);
+        helper.succeed();
+    }
+
+    /**
+     * `tp:mark_by_biome` places one mark a row for each of four biome tag questions its biome answers
+     * yes: `desert` alone, `swamp` or `desert`, both `desert` and `warm`, and `desert` asked at its
+     * own position. A desert answers all four, a swamp the second alone and plains none.
+     */
+    @GameTest()
+    public void aScatterCountsItsIterationsFromTheBiomesTags(GameTestHelper helper) {
+        if (noPack()) {
+            helper.succeed();
+            return;
+        }
+
+        BlockPos origin = helper.absolutePos(new BlockPos(0, 1, 0));
+        net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
+        for (Map.Entry<String, Integer> biome : Map.of("minecraft:desert", 4, "minecraft:swamp", 1,
+            "minecraft:plains", 0).entrySet()) {
+            // The biome a position reads is taken from a cell up to one cell away, so the fill reaches
+            // a cell past the row on every side.
+            server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "fillbiome "
+                + (origin.getX() - 4) + " " + (origin.getY() - 4) + " " + (origin.getZ() - 4) + " " + (origin.getX() + 11) + " " + (origin.getY() + 4) + " "
+                + (origin.getZ() + 4) + " " + biome.getKey());
+            BedrockCommandGameTests.typed(helper, "fill " + origin.getX() + " " + origin.getY() + " "
+                + origin.getZ() + " " + (origin.getX() + 7) + " " + origin.getY() + " " + origin.getZ() + " air");
+            List<String> heard = place(helper, "tp:mark_by_biome", origin);
+
+            int found = 0;
+            for (int x = 0; x < 8; x++) {
+                if (gold(helper, origin.offset(x, 0, 0))) found++;
+            }
+            helper.assertTrue(found == biome.getValue(), "in " + biome.getKey() + " the scatter placed " + found
+                + " marks where its biome tags allow " + biome.getValue() + ": " + heard);
+        }
         helper.succeed();
     }
 

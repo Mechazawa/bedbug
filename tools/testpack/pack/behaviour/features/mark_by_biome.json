@@ -1,0 +1,18 @@
+{
+  "format_version": "1.13.0",
+  "minecraft:scatter_feature": {
+    "description": {
+      "identifier": "tp:mark_by_biome"
+    },
+    "places_feature": "tp:mark",
+    "distribution": {
+      "iterations": "q.has_biome_tag('desert') + q.has_any_biome_tags('swamp', 'desert') + q.has_all_biome_tags('desert', 'warm') + q.has_biome_tag('desert', v.worldx, v.worldy, v.worldz)",
+      "x": {
+        "distribution": "fixed_grid",
+        "extent": [0, 7]
+      },
+      "y": 0,
+      "z": 0
+    }
+  }
+}

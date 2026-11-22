@@ -2475,6 +2475,11 @@ so these are decided here, from the Bedrock wiki's feature page where it says an
 - `scatter_chance` written as a number or an expression is a percentage.
 - `query.heightmap` reads Java's `MOTION_BLOCKING_NO_LEAVES`, as the entity query does, and
   `query.above_top_solid` reads `OCEAN_FLOOR`.
+- `has_biome_tag`, `has_any_biome_tags` and `has_all_biome_tags` read a tag the way a rule's biome
+  filter does (`BiomeMatch.Tag`). With no coordinates they ask the biome at the position the scatter
+  has reached; `has_biome_tag(tag, x, z)` asks the surface of that column and `(tag, x, y, z)` that
+  block. Mojang says only "the current placement or given position". `tp:mark_by_biome` and
+  `FeatureGameTests.aScatterCountsItsIterationsFromTheBiomesTags` cover all three.
 
 `SingleBlockFeature` decides these where nothing is published: no `may_replace` replaces anything
 (Mojang's documentation says the block can be placed anywhere); `min_sides_must_attach` defaults to

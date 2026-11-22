@@ -39,8 +39,9 @@ checked first. 35 of the 70 engine names have a different Java name and are mapp
   `scatter_chance`, `coordinate_eval_order`, and per axis a value, a Molang expression or a
   distribution (`uniform`, `gaussian`, `inverse_gaussian`, `triangle`, `fixed_grid`,
   `jittered_grid`) with `extent`, `step_size` and `grid_offset`. Expressions can use
-  `variable.worldx`, `worldy` and `worldz`, `query.heightmap`, `query.above_top_solid` and
-  `query.noise`. A scatter can place another scatter.
+  `variable.worldx`, `worldy` and `worldz`, `query.heightmap`, `query.above_top_solid`,
+  `query.noise`, `query.has_biome_tag`, `query.has_any_biome_tags` and `query.has_all_biome_tags`.
+  A scatter can place another scatter.
 - `snap_to_surface_feature` and `surface_relative_threshold_feature` become placement modifiers on
   the feature they wrap.
 - A feature rule becomes a placed feature at its generation step. At world load it is added to each
