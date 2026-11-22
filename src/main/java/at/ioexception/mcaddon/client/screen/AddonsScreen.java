@@ -35,7 +35,8 @@ import java.util.Set;
  * click on the row opening it to the rest.
  *
  * Open it with `new AddonsScreen(parent)`; Done goes back to `parent`. In a world each row reads On
- * or Off as the world plays it and nothing switches. Create World and Edit World open it with a
+ * or Off as the world plays it, nothing switches, and a line over the rows names Edit World as the
+ * place to switch them. Create World and Edit World open it with a
  * switch on each row over the world's add-on list: Create World plays the choice once Done is
  * pressed, and Edit World writes each switch into the world's list at once and activates nothing.
  */
@@ -113,7 +114,12 @@ public final class AddonsScreen extends ColumnScreen {
         List<AddonEntry> addons = AddonEntry.loaded().stream()
             .map(addon -> chosen == null ? addon : new AddonEntry(addon.converted(), chosen.plays(addon.uuid())))
             .toList();
-        if (addons.isEmpty()) text(Component.translatable("mcaddon.addons.none").getString());
+        if (addons.isEmpty()) {
+            text(Component.translatable("mcaddon.addons.none").getString());
+        } else if (chosen == null) {
+            text(Component.translatable("mcaddon.addons.switch_hint").getString());
+            skip(AddonRow.GAP);
+        }
         addons.forEach(this::show);
     }
 

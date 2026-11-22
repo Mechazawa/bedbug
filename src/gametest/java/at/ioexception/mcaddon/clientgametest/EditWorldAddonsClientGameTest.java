@@ -25,6 +25,7 @@ import java.util.List;
  */
 public final class EditWorldAddonsClientGameTest implements FabricClientGameTest {
     private static final String NAMESPACE = "tp";
+    private static final String HINT = "Turn add-ons on or off for a world in Edit World.";
 
     @Override
     public void runTest(ClientGameTestContext context) {
@@ -48,6 +49,8 @@ public final class EditWorldAddonsClientGameTest implements FabricClientGameTest
         Assert.that("[]".equals(outside), "Edit World with its Add-Ons button puts " + outside + " off the screen.");
         AddonRows.click(context, "Add-Ons");
         context.waitForScreen(AddonsScreen.class);
+        Assert.that(!AddonRows.shows(context, HINT),
+            "Edit World's Add-Ons screen says add-ons are switched elsewhere.");
         Assert.that("Off".equals(AddonRows.state(context, NAMESPACE)),
             "Edit World reads an installed add-on the world's list does not name as On.");
         Assert.that(!AddonRows.warning(context, NAMESPACE).isEmpty(),

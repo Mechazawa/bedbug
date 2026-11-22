@@ -87,6 +87,8 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
         context.waitForScreen(PauseScreen.class);
         context.clickScreenButton("mcaddon.addons.button");
         context.waitForScreen(AddonsScreen.class);
+        Assert.that(shown(context).contains("Turn add-ons on or off for a world in Edit World."),
+            "Expected the pause menu's Add-Ons screen to say where add-ons are switched, and found " + shown(context));
         collapsedRow(context);
         expandedRow(context);
 
