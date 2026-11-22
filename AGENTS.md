@@ -3608,3 +3608,30 @@ publishes nothing:
   Mojang does not say what the offset is measured from. Here it is the floor of the bed's block,
   because Java places a sleeper 0.6875 above that floor and Mojang's villager states 0.6 with a
   height of 0.3, which then rests on the mattress.
+
+## Census gap: avoid-entries
+
+Each `entity_types` entry of `minecraft:behavior.avoid_mob_type` is a mob descriptor
+(`MobDescriptor.json`), and `AvoidMobsGoal.Entry` reads all of its fields: `max_dist`, `max_flee`,
+`max_height`, `walk_speed_multiplier`, `sprint_speed_multiplier`, `must_see`,
+`must_see_forget_duration`, `check_if_outnumbered`, `cooldown`, `reevaluate_description` and
+`priority`. A flight runs on the entry that chose what is fled. `ShirkerGameTests` reads each back
+through `tp:shirker`. Mojang publishes the fields and not how they meet the goal's own, so:
+
+- **Reach.** The goal's schema gives its `max_dist` a default of 3 and the descriptor's a default of
+  16. No vanilla entity relies on the 3: of the 28 that declare the goal, every entry but three
+  states its own `max_dist`, and of those three the phantom and the wandering trader state one at the
+  top (16 and 6). A cap of 3 at the top would hold every vanilla mob to 3 blocks, which their
+  entries of 6 to 24 contradict. So an entry's field comes from the entry, then from the same field
+  at the top, then from the descriptor's default of 16; the goal's 3 is never used. The same chain
+  holds for `max_flee` and the two speeds.
+- **Sight.** An entry stating `must_see` decides for itself; one stating none sees through walls
+  only under the goal's `ignore_visibility`. `must_see_forget_duration` ends a flight from something
+  out of sight that long, and only under an entry stating `must_see` true, as the descriptor says.
+- **`check_if_outnumbered`** flees only while more entities within the entry's reach answer its
+  filters than there are of the entity's own type there, itself included, which is Java's
+  `piglinsOutnumberHoglins` and `hoglinsOutnumberPiglins` rule.
+- **`cooldown`** counts from the end of a flight the entry chose, and holds that entry alone.
+- **`priority`** orders entries the way a goal priority does: the lowest wins, then the nearest
+  candidate. **`max_height`** below nothing leaves the height unbounded.
+- **`reevaluate_description`** ends a flight once what is fled stops answering the entry's filters.
