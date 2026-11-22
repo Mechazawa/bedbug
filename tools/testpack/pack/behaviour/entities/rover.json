@@ -309,6 +309,14 @@
         "minecraft:shooter": {
           "def": "minecraft:snowball"
         }
+      },
+      "tp:rover_sleeper": {
+        "minecraft:behavior.sleep": {
+          "priority": 3,
+          "sleep_collider_width": 1,
+          "sleep_collider_height": 0.3,
+          "sleep_y_offset": 0.6
+        }
       }
     },
     "components": {
@@ -477,6 +485,13 @@
         "add": {
           "component_groups": [
             "tp:rover_plain_shooter"
+          ]
+        }
+      },
+      "tp:rover_make_sleeper": {
+        "add": {
+          "component_groups": [
+            "tp:rover_sleeper"
           ]
         }
       }

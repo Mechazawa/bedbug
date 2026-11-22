@@ -3335,3 +3335,9 @@ properties the pack named, because a test for a block asks about those and no ot
   selector waits between asks.
 - `minecraft:shooter` `magic` stops a ranged attack while the entity is drinking, as Java's witch
   throws nothing while `isDrinkingPotion`.
+- `minecraft:behavior.sleep` `sleep_collider_width`, `sleep_collider_height` and `sleep_y_offset`
+  shape the box while the entity sleeps. `LivingEntity.getDimensions` is final and answers the
+  sleeping pose with a fixed fifth of a block, so `AddonEntity` overrides `Entity.makeBoundingBox`.
+  Mojang does not say what the offset is measured from; here it is the floor of the bed's block,
+  because Java places a sleeper 0.6875 above that floor and Mojang's villager states 0.6 with a
+  height of 0.3, which then rests on the mattress.

@@ -786,6 +786,26 @@ public class AddonEntity extends PathfinderMob
         return homes.isEmpty() || homes.contains(level().getBlockState(homePosition()).getBlock());
     }
 
+    /**
+     * The box a sleeping entity takes, which `minecraft:behavior.sleep` states.
+     *
+     * Java answers the sleeping pose with a fixed fifth of a block in the final
+     * `LivingEntity.getDimensions`, so the box is made here instead: `sleep_collider_width` across,
+     * `sleep_collider_height` high, its bottom `sleep_y_offset` above the floor of the bed's block.
+     */
+    @Override
+    protected net.minecraft.world.phys.AABB makeBoundingBox(net.minecraft.world.phys.Vec3 at) {
+        com.google.gson.JsonObject sleep = definition == null || getPose() != net.minecraft.world.entity.Pose.SLEEPING
+            ? null : liveComponent("minecraft:behavior.sleep");
+        if (sleep == null) return super.makeBoundingBox(at);
+
+        double half = Goals.number(sleep, "sleep_collider_width", 1) / 2;
+        double bottom = getSleepingPos()
+            .map(bed -> bed.getY() + Goals.number(sleep, "sleep_y_offset", 1)).orElse(at.y);
+        return new net.minecraft.world.phys.AABB(at.x - half, bottom, at.z - half,
+            at.x + half, bottom + Goals.number(sleep, "sleep_collider_height", 1), at.z + half);
+    }
+
     /** The value the home `minecraft:home` saves is kept under, which a chunk written out keeps. */
     private static final String HOME = "home_position";
 

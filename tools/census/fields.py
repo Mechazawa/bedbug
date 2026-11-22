@@ -57,10 +57,6 @@ FROM_AIR = "Java's flying navigator starts a path from wherever the entity is, t
 BOBBING = ("The shape of the rise and fall on the surface. The lift above gives a floating entity Java's own "
            "bob, and nothing in Java lets an entity choose another.")
 
-SLEEPING_BOX = ("From 1.21 Java's `LivingEntity.getDimensions` is final and answers a fixed box of a fifth of a "
-                "block for the sleeping pose, which is the pose a sleeping entity takes here, so a box of a "
-                "pack's own has nowhere to go.")
-
 # A field a reader may skip, and why. Keyed by component, then by field; the key "*" covers every
 # field of that component that no reader names.
 REASONS = {
@@ -206,11 +202,6 @@ REASONS = {
 
     # Goals. Java's goal of the same name takes fewer parameters than Bedrock states.
     "minecraft:behavior.share_items": {"*": "Java's stroll goal has no arrival radius of its own."},
-    "minecraft:behavior.sleep": {
-        "sleep_collider_width": SLEEPING_BOX,
-        "sleep_collider_height": SLEEPING_BOX,
-        "sleep_y_offset": SLEEPING_BOX,
-    },
     "minecraft:behavior.float": {
         "*": "Java's float goal swims a mob up with no chance of its own and no passengers to drop.",
     },

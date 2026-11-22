@@ -304,6 +304,31 @@ public final class RoverGameTests {
         });
     }
 
+    /**
+     * A sleeping entity takes the box `minecraft:behavior.sleep` states: Mojang's villager numbers,
+     * a block across and three tenths high, resting six tenths above the floor of its bed's block.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 20)
+    public void aSleeperTakesTheBoxItsSleepGoalStates(GameTestHelper helper) {
+        AddonEntity sleeper = BehaviourGameTests.spawn(helper, ROVER, STAND);
+        if (sleeper == null) {
+            helper.succeed();
+            return;
+        }
+        EntityEvents.trigger(sleeper, "tp:rover_make_sleeper", null, ServerHooks.state());
+        NapperGameTests.bed(helper, STAND.south(2));
+        BlockPos bed = helper.absolutePos(STAND.south(2));
+        sleeper.startSleeping(bed);
+        helper.runAfterDelay(2, () -> {
+            net.minecraft.world.phys.AABB box = sleeper.getBoundingBox();
+            helper.assertTrue(Math.abs(box.getXsize() - 1) < 1.0E-4 && Math.abs(box.getYsize() - 0.3) < 1.0E-4,
+                ROVER + " sleeps in a box " + box.getXsize() + " across and " + box.getYsize() + " high.");
+            helper.assertTrue(Math.abs(box.minY - (bed.getY() + 0.6)) < 1.0E-4,
+                ROVER + " sleeps " + (box.minY - bed.getY()) + " above its bed's floor.");
+            helper.succeed();
+        });
+    }
+
     private static long snowballsBy(GameTestHelper helper, AddonEntity shooter) {
         return helper.getLevel().getEntitiesOfClass(net.minecraft.world.entity.projectile.Projectile.class,
                 shooter.getBoundingBox().inflate(3))
