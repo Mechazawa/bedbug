@@ -45,6 +45,9 @@ public final class AddonEmitters {
 
     private static final List<Running> RUNNING = new ArrayList<>();
 
+    /** What ends an effect that started no emitter. */
+    public static final Runnable NOTHING = () -> { };
+
     /** The emitter making a particle at this moment, whose variables the particle is born with. */
     private static Running emitting;
 
@@ -82,6 +85,9 @@ public final class AddonEmitters {
         /** How far the emitter has moved since it started, which its travel events count in. */
         private float travelled;
         private Vec3 was;
+
+        /** Set once whatever started the effect ends it, which it does on its next tick. */
+        private boolean ended;
 
         private Running(ParticleDefinition definition, SimpleParticleType type, Entity following,
             Supplier<Vec3> anchor, int depth, MolangEnvironment.Queries queries,
@@ -156,22 +162,24 @@ public final class AddonEmitters {
     /**
      * Starts an effect an entity's animation asked for: its emitter stands wherever `anchor` says at
      * each moment, answers the entity's queries, and runs the animation's `pre_effect_script` as it
-     * starts. An effect not bound to the entity is given no entity to follow.
+     * starts. An effect not bound to the entity is given no entity to follow. What comes back ends
+     * the emitter; the particles it made live out their lives.
      */
-    public static void start(String identifier, Entity following, Supplier<Vec3> anchor,
+    public static Runnable start(String identifier, Entity following, Supplier<Vec3> anchor,
         MolangEnvironment.Queries queries, List<MolangExpression> preEffectScript) {
-        start(identifier, following, anchor, 0, queries, preEffectScript);
+        return start(identifier, following, anchor, 0, queries, preEffectScript);
     }
 
-    private static void start(String identifier, Entity following, Supplier<Vec3> anchor, int depth,
+    private static Runnable start(String identifier, Entity following, Supplier<Vec3> anchor, int depth,
         MolangEnvironment.Queries queries, List<MolangExpression> preEffectScript) {
         SimpleParticleType type = AddonParticles.typeOf(identifier);
         ParticleDefinition definition = AddonParticles.definitionOf(identifier);
-        if (type == null || definition == null || depth > MAXIMUM_DEPTH) return;
+        if (type == null || definition == null || depth > MAXIMUM_DEPTH) return NOTHING;
 
         Running effect = new Running(definition, type, following, anchor, depth, queries, preEffectScript);
         RUNNING.add(effect);
         raise(effect, definition.emitter().events().creation());
+        return () -> effect.ended = true;
     }
 
     /**
@@ -243,7 +251,7 @@ public final class AddonEmitters {
     private static boolean advance(Running effect) {
         float was = effect.loopAge();
         effect.age += 1f / 20f;
-        if (effect.age > MAXIMUM_SECONDS) return false;
+        if (effect.ended || effect.age > MAXIMUM_SECONDS) return false;
         if (effect.following != null && effect.following.isRemoved()) return false;
         if (effect.looped()) was = 0f;
 

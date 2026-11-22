@@ -47,6 +47,9 @@ import java.util.function.Predicate;
  * counts `v.stirred` off its timeline at nought seconds, and which leaves on `1` for a state counting
  * `v.awake`. Entering the first state is the first frame's move, so that frame counts a wake and a
  * stir and no awakening, and the next frame counts the awakening alone.
+ *
+ * A controller state's particle effects end as the state is left, which `tp:flare`'s `glow`
+ * controller shows.
  */
 public final class AnimationClientGameTest implements FabricClientGameTest {
     private static final float TOLERANCE = 0.01f;
@@ -87,7 +90,30 @@ public final class AnimationClientGameTest implements FabricClientGameTest {
             firstState(context, world);
             orientation(context, world);
             stride(context, world);
+            stateEffects(context, world);
         }
+    }
+
+    /**
+     * `tp:flare`'s `glow` controller starts in a state whose `particle_effects` start `tp:glow`, an
+     * emitter looping for ever at ten particles a second, and leaves it once the flare is a second
+     * old. Leaving the state ends the emitter, so no glow is made after that.
+     */
+    private static void stateEffects(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("execute as @p at @s run summon tp:flare ~ ~ ~3");
+        AddonEntity flare = Entities.waitForClient(context, "tp:flare");
+        Worlds.waitForClient(context, client -> Born.of("tp:glow").size() >= 3, PATIENCE,
+            () -> "tp:flare's first controller state starts tp:glow, which made " + Born.of("tp:glow").size()
+                + " particles.");
+        Worlds.waitForClient(context, client -> flare.tickCount >= 30, PATIENCE,
+            () -> "tp:flare never grew a second and a half old on the client.");
+        int lit = context.computeOnClient(client -> Born.of("tp:glow").size());
+        context.waitTicks(20);
+        int after = context.computeOnClient(client -> Born.of("tp:glow").size());
+        Assert.that(after == lit, "tp:flare's glow state ends its looping tp:glow as it is left at a second,"
+            + " and " + (after - lit) + " glow particles were made a second after that.");
+        world.getServer().runCommand("kill @e[type=tp:flare]");
     }
 
     /**

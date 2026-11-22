@@ -3103,6 +3103,11 @@ first standing place; 0, the default, checks every place in one tick and picks t
   the locator was as it started and outlives the entity. An `emitter_bound` event's effect follows the
   entity, not the locator. The emitter's own orientation does not follow the bone, because
   `emitter_local_space` is not acted on.
+- A controller state's `particle_effects` end as the state is left, as Mojang's particle
+  documentation says: `EffectSink.particle` hands back what ends the emitter and the controller's
+  `ControllerState` runs it on the transition. Mojang does not say what an ended emitter does, so it
+  raises its expiration event like any emitter that runs out, and the particles it made live out
+  their own lifetimes. An animation timeline's effects are fire and forget and are never ended.
 - A collision event's `min_speed` is at least two blocks a second, its default, as Mojang documents.
   `events` may be one event or a list.
 - Java's `Particle.move` stops a particle for good once a block stops its fall exactly, which is

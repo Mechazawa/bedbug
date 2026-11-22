@@ -40,9 +40,9 @@ public final class AddonEffects {
             }
 
             @Override
-            public void particle(String particleId, String locator, List<MolangExpression> preEffectScript,
+            public Runnable particle(String particleId, String locator, List<MolangExpression> preEffectScript,
                 boolean bound) {
-                spawn(entity, animator, models, particleId, locator, preEffectScript, bound);
+                return spawn(entity, animator, models, particleId, locator, preEffectScript, bound);
             }
         };
     }
@@ -73,26 +73,26 @@ public final class AddonEffects {
      *
      * A pack's own particle definitions have no Java counterpart, so what can be shown is the vanilla
      * effect a Bedrock id names. Anything else is counted and reported by `/mcaddon entities` rather
-     * than silently doing nothing.
+     * than silently doing nothing. A vanilla effect is one particle, so there is no emitter to end.
      */
-    private static void spawn(Entity entity, EntityAnimator animator, AddonModels models, String particleId,
+    private static Runnable spawn(Entity entity, EntityAnimator animator, AddonModels models, String particleId,
         String locator, List<MolangExpression> preEffectScript, boolean bound) {
-        if (particleId == null || entity.level() == null) return;
+        if (particleId == null || entity.level() == null) return AddonEmitters.NOTHING;
 
         Vec3 at = anchor(entity, animator, models, locator);
         if (AddonParticles.definitionOf(particleId) != null) {
-            AddonEmitters.start(particleId, bound ? entity : null,
+            return AddonEmitters.start(particleId, bound ? entity : null,
                 bound ? () -> anchor(entity, animator, models, locator) : () -> at,
                 animator.environment()::query, preEffectScript);
-            return;
         }
 
         ParticleOptions options = BedrockParticles.vanilla(particleId);
         if (options == null) {
             AddonEntities.unsupported("particle " + particleId);
-            return;
+            return AddonEmitters.NOTHING;
         }
         entity.level().addParticle(options, at.x, at.y, at.z, 0, 0, 0);
+        return AddonEmitters.NOTHING;
     }
 
     /**

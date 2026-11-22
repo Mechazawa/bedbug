@@ -16,15 +16,18 @@
       "particle_effects": {
         "puff": "tp:puff",
         "wake": "tp:wake",
-        "loose": "tp:wake_loose"
+        "loose": "tp:wake_loose",
+        "glow": "tp:glow"
       },
       "animations": {
-        "rise": "animation.tp.flare.rise"
+        "rise": "animation.tp.flare.rise",
+        "glow": "controller.animation.tp.flare.glow"
       },
       "scripts": {
         "should_update_effects_offscreen": true,
         "animate": [
-          "rise"
+          "rise",
+          "glow"
         ]
       },
       "render_controllers": [

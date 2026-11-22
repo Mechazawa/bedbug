@@ -125,8 +125,9 @@ public final class AnimationPlayer {
             }
 
             @Override
-            public void particle(String effect, String locator, List<MolangExpression> preEffectScript,
+            public Runnable particle(String effect, String locator, List<MolangExpression> preEffectScript,
                 boolean bound) {
+                return () -> { };
             }
         };
 
@@ -134,9 +135,10 @@ public final class AnimationPlayer {
 
         /**
          * The script runs in the effect's own emitter as it starts, before its creation expression. A
-         * bound effect follows the entity, and an unbound one stays where it started.
+         * bound effect follows the entity, and an unbound one stays where it started. What comes back
+         * ends the effect's emitter, which a controller state does as it is left.
          */
-        void particle(String effect, String locator, List<MolangExpression> preEffectScript, boolean bound);
+        Runnable particle(String effect, String locator, List<MolangExpression> preEffectScript, boolean bound);
     }
 
     public void setEffects(EffectSink effects) {
