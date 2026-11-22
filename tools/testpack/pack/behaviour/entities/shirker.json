@@ -1,0 +1,263 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:shirker",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "component_groups": {
+      "tp:shirker_paced": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 8,
+              "walk_speed_multiplier": 0.5,
+              "sprint_speed_multiplier": 0.5
+            },
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "cow"
+              },
+              "max_dist": 8,
+              "walk_speed_multiplier": 1.5,
+              "sprint_speed_multiplier": 1.5
+            }
+          ]
+        }
+      },
+      "tp:shirker_ranked": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 8,
+              "priority": 2,
+              "walk_speed_multiplier": 0.5,
+              "sprint_speed_multiplier": 0.5
+            },
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "cow"
+              },
+              "max_dist": 8,
+              "priority": 1,
+              "walk_speed_multiplier": 1.5,
+              "sprint_speed_multiplier": 1.5
+            }
+          ]
+        }
+      },
+      "tp:shirker_watching": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 6,
+              "must_see": true
+            }
+          ],
+          "ignore_visibility": true
+        }
+      },
+      "tp:shirker_short": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 6,
+              "max_flee": 3
+            }
+          ],
+          "max_flee": 30,
+          "on_escape_event": {
+            "event": "tp:shirker_escaped",
+            "target": "self"
+          }
+        }
+      },
+      "tp:shirker_resting": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 6,
+              "max_flee": 3,
+              "cooldown": 10
+            }
+          ]
+        }
+      },
+      "tp:shirker_counting": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 6,
+              "check_if_outnumbered": true
+            }
+          ]
+        }
+      },
+      "tp:shirker_level": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "is_family",
+                "subject": "other",
+                "value": "pig"
+              },
+              "max_dist": 6,
+              "max_height": 1
+            }
+          ]
+        }
+      },
+      "tp:shirker_fickle": {
+        "minecraft:behavior.avoid_mob_type": {
+          "priority": 1,
+          "entity_types": [
+            {
+              "filters": {
+                "test": "has_tag",
+                "subject": "other",
+                "value": "tp_scary"
+              },
+              "max_dist": 6,
+              "reevaluate_description": true
+            }
+          ]
+        }
+      },
+      "tp:shirker_escaped": {
+        "minecraft:is_chested": {}
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_shirker",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.0
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:shirker_make_paced": {
+        "add": {
+          "component_groups": [
+            "tp:shirker_paced"
+          ]
+        }
+      },
+      "tp:shirker_make_ranked": {
+        "add": {
+          "component_groups": [
+            "tp:shirker_ranked"
+          ]
+        }
+      },
+      "tp:shirker_make_watching": {
+        "add": {
+          "component_groups": [
+            "tp:shirker_watching"
+          ]
+        }
+      },
+      "tp:shirker_make_short": {
+        "add": {
+          "component_groups": [
+            "tp:shirker_short"
+          ]
+        }
+      },
+      "tp:shirker_make_resting": {
+        "add": {
+          "component_groups": [
+            "tp:shirker_resting"
+          ]
+        }
+      },
+      "tp:shirker_make_counting": {
+        "add": {
+          "component_groups": [
+            "tp:shirker_counting"
+          ]
+        }
+      },
+      "tp:shirker_make_level": {
+        "add": {
+          "component_groups": [
+            "tp:shirker_level"
+          ]
+        }
+      },
+      "tp:shirker_make_fickle": {
+        "add": {
+          "component_groups": [
+            "tp:shirker_fickle"
+          ]
+        }
+      },
+      "tp:shirker_escaped": {
+        "add": {
+          "component_groups": [
+            "tp:shirker_escaped"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -31,6 +31,7 @@
       "at.ioexception.mcaddon.gametest.DeathMessageGameTests",
       "at.ioexception.mcaddon.gametest.PhysicsGameTests",
       "at.ioexception.mcaddon.gametest.RoverGameTests",
+      "at.ioexception.mcaddon.gametest.ShirkerGameTests",
       "at.ioexception.mcaddon.gametest.DriftGoalGameTests",
       "at.ioexception.mcaddon.gametest.KeeperGoalGameTests",
       "at.ioexception.mcaddon.gametest.ItemGoalGameTests",
