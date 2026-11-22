@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.gametest;
 
 import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.Descriptor;
 import at.ioexception.mcaddon.bedrock.fog.FogDefinition;
 import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.entity.AddonEntity;
@@ -14,6 +15,7 @@ import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
+import com.google.gson.JsonParser;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 //? if >=26.2 {
 import net.minecraft.advancements.triggers.CriteriaTriggers;
@@ -544,6 +546,44 @@ public final class PackGameTests {
         helper.succeed();
     }
 
+    /**
+     * A block geometry's `bone_visibility` decides per state which bones reach the model.
+     *
+     * The crown's base is one cube, its cap two and its rim one. The cap is shown while `tp:uses` is
+     * 2 and the rim, named in other capitals than the bone, never.
+     */
+    @GameTest()
+    public void aBlockGeometryDrawsABoneOnlyInTheStatesItsVisibilityNames(GameTestHelper helper) {
+        ConvertedPack pack = ActiveAddons.active().converted().stream()
+            .filter(one -> Files.isRegularFile(crownModel(one, "crown")))
+            .findFirst().orElse(null);
+        if (pack == null) {
+            helper.succeed();
+            return;
+        }
+
+        for (int uses = 0; uses < 4; uses++) {
+            int elements;
+            try {
+                String model = Files.readString(crownModel(pack, "crown_" + uses));
+                elements = com.google.gson.JsonParser.parseString(model).getAsJsonObject()
+                    .getAsJsonArray("elements").size();
+            } catch (IOException unreadable) {
+                helper.fail("The converted crown model could not be read: " + unreadable.getMessage());
+                return;
+            }
+            int expected = uses == 2 ? 3 : 1;
+            helper.assertTrue(elements == expected, "The crown with " + uses + " uses draws " + elements
+                + " cubes where its bone visibility leaves " + expected + ".");
+        }
+        helper.succeed();
+    }
+
+    private static Path crownModel(ConvertedPack pack, String name) {
+        return pack.root().resolve("assets").resolve("tp").resolve("models").resolve("block")
+            .resolve(name + ".json");
+    }
+
     /** The turn about the vertical axis the lamp's geometry gives its item in the inventory. */
     private static final float GUI_TURN = 45f;
 
@@ -619,6 +659,29 @@ public final class PackGameTests {
         helper.assertTrue(player.getRecipeBook().contains(recipe), "The recipe stayed locked after a tick.");
         helper.assertFalse(helper.getLevel().getServer().getRecipeManager().byKey(recipe).orElseThrow()
             .value().showNotification(), "The recipe asks for an unlock toast it never earns.");
+        helper.succeed();
+    }
+
+    /**
+     * A block's `tag:` components are its tags wherever a pack asks about one.
+     *
+     * The pillar carries `tag:tp:sturdy` and `tag:carvable`, and the lamp neither.
+     */
+    @GameTest()
+    public void aBlocksTagComponentsAreItsTags(GameTestHelper helper) {
+        Block pillar = BuiltInRegistries.BLOCK.getOptional(Platform.id("tp", "pillar")).orElse(null);
+        Block lamp = BuiltInRegistries.BLOCK.getOptional(Platform.id("tp", "lamp")).orElse(null);
+        if (pillar == null || lamp == null) {
+            helper.succeed();
+            return;
+        }
+
+        Descriptor any = Descriptor.tryFrom(JsonParser.parseString("{\"tags\": \"q.any_tag('tp:sturdy')\"}"));
+        Descriptor all = Descriptor.tryFrom(
+            JsonParser.parseString("{\"tags\": \"q.all_tags('tp:sturdy', 'carvable')\"}"));
+        helper.assertTrue(any.matches(pillar.defaultBlockState()), "q.any_tag missed tp:pillar's tag:tp:sturdy.");
+        helper.assertTrue(all.matches(pillar.defaultBlockState()), "q.all_tags missed tp:pillar's tag:carvable.");
+        helper.assertFalse(any.matches(lamp.defaultBlockState()), "q.any_tag found tp:sturdy on tp:lamp.");
         helper.succeed();
     }
 

@@ -40,9 +40,10 @@ public record AnimationScript(Map<String, String> animations, List<Gated> animat
         for (JsonElement entry : scripts == null ? List.<JsonElement>of() : Json.list(scripts, "animate")) {
             if (entry.isJsonPrimitive()) {
                 animate.add(new Gated(entry.getAsString(), null));
-            } else if (entry.isJsonObject() && !entry.getAsJsonObject().entrySet().isEmpty()) {
-                Map.Entry<String, JsonElement> gated = entry.getAsJsonObject().entrySet().iterator().next();
-                animate.add(new Gated(gated.getKey(), MolangParser.parse(gated.getValue().getAsString())));
+            } else if (entry.isJsonObject()) {
+                for (Map.Entry<String, JsonElement> gated : entry.getAsJsonObject().entrySet()) {
+                    animate.add(new Gated(gated.getKey(), MolangParser.parse(gated.getValue())));
+                }
             }
         }
 

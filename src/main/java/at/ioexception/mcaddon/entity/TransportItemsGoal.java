@@ -34,7 +34,8 @@ import java.util.Set;
  * learnt only on arriving at it, as Java's copper golem learns it, so a container that had nothing
  * to give or no room is remembered as visited and passed over. Once the pack's number of visited
  * containers is reached, or nothing is left to look at, the goal rests for its idle cooldown and
- * forgets what it visited.
+ * forgets what it visited. At each container it stands for `interaction_time` before it takes or
+ * leaves anything, as Java's copper golem does.
  */
 public final class TransportItemsGoal extends Goal {
     /** How close the entity has to stand to a container's block to open it. */
@@ -59,11 +60,13 @@ public final class TransportItemsGoal extends Goal {
     private final int maxVisited;
     private final int initialCooldown;
     private final int idleCooldown;
+    private final int interactionTime;
     private final Set<BlockPos> visited = new HashSet<>();
     private long readyAt = Long.MIN_VALUE;
     private BlockPos target;
     private Vec3 approach;
     private long startedAt;
+    private long arrivedAt;
 
     public TransportItemsGoal(AddonEntity mob, JsonObject component) {
         this.mob = mob;
@@ -81,6 +84,7 @@ public final class TransportItemsGoal extends Goal {
         this.maxVisited = (int) Goals.number(component, "max_visited_containers", 16);
         this.initialCooldown = Goals.ticks(component, "initial_cooldown", 0);
         this.idleCooldown = Goals.ticks(component, "idle_cooldown", 20);
+        this.interactionTime = Goals.ticks(component, "interaction_time", 3);
         setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 
@@ -104,6 +108,7 @@ public final class TransportItemsGoal extends Goal {
     @Override
     public void start() {
         startedAt = mob.level().getGameTime();
+        arrivedAt = -1;
         BlockPos beside = Direction.Plane.HORIZONTAL.stream().map(target::relative)
             .filter(at -> mob.level().getBlockState(at).getCollisionShape(mob.level(), at).isEmpty())
             .min(Comparator.comparingDouble(at -> at.distToCenterSqr(mob.position())))
@@ -137,6 +142,10 @@ public final class TransportItemsGoal extends Goal {
         }
 
         mob.getNavigation().stop();
+        long now = mob.level().getGameTime();
+        if (arrivedAt < 0) arrivedAt = now;
+        if (now - arrivedAt < interactionTime) return;
+
         arriveAt(HopperBlockEntity.getContainerAt(mob.level(), target));
     }
 

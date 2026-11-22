@@ -4,6 +4,7 @@ import at.ioexception.mcaddon.convert.BedrockItemTags;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.animation.AnimationPlayer;
 import at.ioexception.mcaddon.bedrock.behaviour.BedrockVillager;
+import at.ioexception.mcaddon.bedrock.behaviour.BiomeMatch;
 import at.ioexception.mcaddon.bedrock.behaviour.Families;
 import at.ioexception.mcaddon.bedrock.model.BedrockBone;
 import at.ioexception.mcaddon.bedrock.model.BoneOrientation;
@@ -935,9 +936,13 @@ public final class EntityQueries implements MolangEnvironment.Queries {
         return tag.isText() && BedrockItemTags.has(stack, tag.text());
     }
 
+    /** A Bedrock tag read the way a biome filter reads one, or a Java biome tag named by its id. */
     private static boolean carriesTag(Holder<Biome> biome, MolangValue tag) {
         TagKey<Biome> key = tagKey(Registries.BIOME, tag);
-        return key != null && biome.is(key);
+        if (key != null && biome.is(key)) return true;
+
+        String id = biome.unwrapKey().map(named -> Platform.idOf(named).toString()).orElse("");
+        return tag.isText() && !id.isEmpty() && new BiomeMatch.Tag(tag.text(), false).allows(id, () -> true);
     }
 
     /** Null when the argument is not a name a resource location accepts, which matches nothing. */

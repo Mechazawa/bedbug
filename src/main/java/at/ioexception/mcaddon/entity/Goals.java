@@ -1,7 +1,7 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.bedrock.behaviour.Descriptor;
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
-import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -176,72 +176,14 @@ final class Goals {
         return Filter.parse(component == null ? null : component.get(key));
     }
 
-    /** The blocks a component lists under one key, by the names a pack writes them under. */
+    /**
+     * The blocks a component lists under one key, in any of the shapes a block descriptor takes.
+     *
+     * A descriptor written as a Molang test of tags stands for every block that passes it now.
+     */
     static Set<Block> blocks(JsonObject component, String key) {
-        Set<Block> named = new LinkedHashSet<>();
-        if (component == null) return named;
-
-        for (JsonElement element : Json.list(component, key)) {
-            String id = element.isJsonPrimitive() ? element.getAsString()
-                : element.isJsonObject() ? blockName(element.getAsJsonObject()) : null;
-            Block block = id == null ? null : AddonBlocks.named(id);
-            if (block != null) named.add(block);
-        }
-        return named;
-    }
-
-    /**
-     * The block states a component's list of block descriptors matches, by name or by `tags`.
-     *
-     * A descriptor's `tags` is a Molang expression over the block's tags. Only `query.any_tag` and
-     * `query.all_tags` are answered, each tag asked of Java as a block tag of that name, which is how
-     * Bedrock's `trapdoors` reaches Java's.
-     */
-    static java.util.function.Predicate<net.minecraft.world.level.block.state.BlockState> blockMatcher(
-        JsonObject component, String key) {
-        Set<Block> named = blocks(component, key);
-        java.util.List<java.util.function.Predicate<net.minecraft.world.level.block.state.BlockState>> tagged =
-            Json.list(component, key).stream()
-                .filter(JsonElement::isJsonObject)
-                .map(element -> Json.text(element.getAsJsonObject(), "tags", null))
-                .filter(java.util.Objects::nonNull)
-                .map(Goals::tagTest)
-                .toList();
-        return state -> named.contains(state.getBlock()) || tagged.stream().anyMatch(test -> test.test(state));
-    }
-
-    private static java.util.function.Predicate<net.minecraft.world.level.block.state.BlockState> tagTest(
-        String expression) {
-        java.util.regex.Matcher call = TAG_QUERY.matcher(expression);
-        if (!call.find()) return state -> false;
-
-        boolean all = call.group(1).startsWith("all");
-        java.util.List<net.minecraft.tags.TagKey<Block>> tags = java.util.Arrays.stream(call.group(2).split(","))
-            .map(name -> name.trim().replaceAll("^['\"]|['\"]$", ""))
-            .map(net.minecraft.resources.Identifier::tryParse)
-            .filter(java.util.Objects::nonNull)
-            .map(id -> net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.BLOCK, id))
-            .toList();
-        return all
-            ? state -> !tags.isEmpty() && tags.stream().allMatch(state::is)
-            : state -> tags.stream().anyMatch(state::is);
-    }
-
-    private static final java.util.regex.Pattern TAG_QUERY =
-        java.util.regex.Pattern.compile("(?:query|q)\\.(any_tag|all_tags)\\s*\\(([^)]*)\\)");
-
-    /**
-     * A block descriptor's own name, which a pack writes either bare or with the states beside it.
-     *
-     * `randomly_placeable_blocks` wraps the descriptor in an entry carrying a weight and a filter, so
-     * the name may be one object further in than a plain list of blocks puts it.
-     */
-    private static String blockName(JsonObject descriptor) {
-        if (descriptor.has("name")) return Json.text(descriptor, "name", null);
-        JsonElement inner = descriptor.get("block");
-        if (inner == null) return null;
-        if (inner.isJsonPrimitive()) return inner.getAsString();
-
-        return inner.isJsonObject() ? Json.text(inner.getAsJsonObject(), "name", null) : null;
+        return Descriptor.listed(component, key).stream()
+            .flatMap(Descriptor::blocks)
+            .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 }

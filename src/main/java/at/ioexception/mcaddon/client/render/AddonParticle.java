@@ -85,7 +85,7 @@ public class AddonParticle extends SingleQuadParticle {
         setParticleSpeed(dx, dy, dz);
         ParticleDefinition.Particle.Collision collision = particle.collision();
         this.hasPhysics = collision != null && collision.enabled().evaluate(environment).truthy();
-        if (hasPhysics) {
+        if (collision != null) {
             float radius = Math.max(0.01f, collision.radius().asFloat(environment));
             setSize(radius * 2f, radius * 2f);
         }
@@ -114,6 +114,10 @@ public class AddonParticle extends SingleQuadParticle {
         ParticleDefinition.Particle particle = definition.particle();
         if (particle.initialization() != null) {
             particle.initialization().perUpdate().evaluate(environment);
+        }
+        if (particle.collision() != null) {
+            environment.setVariable("particle_age", MolangValue.of(age));
+            hasPhysics = particle.collision().enabled().evaluate(environment).truthy();
         }
         if (particle.dynamic() != null) accelerate(particle.dynamic());
         if (particle.parametric() != null) follow(particle.parametric());

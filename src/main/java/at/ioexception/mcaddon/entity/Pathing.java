@@ -1,15 +1,20 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.bedrock.behaviour.Descriptor;
 import at.ioexception.mcaddon.platform.Platform;
 import com.google.gson.JsonObject;
+import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.ai.navigation.AmphibiousPathNavigation;
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+
+import java.util.List;
 
 /**
  * What a `minecraft:navigation.*` component lets the pathfinder do, put onto the navigator Java holds.
@@ -33,7 +38,7 @@ final class Pathing {
     private final boolean jumps;
     private final boolean amphibious;
     private final boolean avoidsPortals;
-    private final java.util.function.Predicate<net.minecraft.world.level.block.state.BlockState> avoidedBlocks;
+    private final List<Descriptor> avoidedBlocks;
     private final boolean startsInAir;
     private final boolean followsDoorAnnotations;
 
@@ -53,7 +58,7 @@ final class Pathing {
         this.jumps = Goals.flag(body, "can_jump", true);
         this.amphibious = Goals.flag(body, "is_amphibious", false);
         this.avoidsPortals = Goals.flag(body, "avoid_portals", false);
-        this.avoidedBlocks = Goals.blockMatcher(body, "blocks_to_avoid");
+        this.avoidedBlocks = Descriptor.listed(body, "blocks_to_avoid");
         this.startsInAir = Goals.flag(body, "can_path_from_air", false);
         this.followsDoorAnnotations = Goals.flag(body, "using_door_annotation", true);
     }
@@ -90,14 +95,27 @@ final class Pathing {
         navigation.setCanFloat(floats);
         if (navigation instanceof GroundPathNavigation ground) ground.setAvoidSun(avoidsSun);
         if (navigation instanceof WalkingNavigation walking) {
-            walking.plan(avoidsPortals ? avoidedBlocks.or(state -> state.is(BlockTags.PORTALS)) : avoidedBlocks,
-                jumps, amphibious);
+            walking.plan(avoidsPortals, jumps, amphibious);
         }
         if (navigation instanceof AirNavigation air) air.startsInAir = startsInAir;
 
         Platform.priceWater(mob, avoidsWater);
         Platform.priceDamagingBlocks(mob, avoidsDamage);
         Platform.priceLava(mob, !crossesLava);
+    }
+
+    /**
+     * Whether a node is closed to the mob: a block the component lists fills a cell the mob's box
+     * takes there, or is the block it would stand on.
+     */
+    boolean avoids(Mob mob, BlockGetter level, int x, int y, int z) {
+        if (avoidedBlocks.isEmpty()) return false;
+
+        int across = Mth.floor(mob.getBbWidth() + 1);
+        int up = Mth.ceil(mob.getBbHeight());
+        return BlockPos.betweenClosedStream(x, y - 1, z, x + across - 1, y + up - 1, z + across - 1)
+            .map(level::getBlockState)
+            .anyMatch(state -> avoidedBlocks.stream().anyMatch(avoided -> avoided.matches(state)));
     }
 
     /**

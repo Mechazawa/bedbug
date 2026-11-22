@@ -5,6 +5,7 @@ import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.bedrock.molang.MolangValue;
+import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -55,7 +56,7 @@ public record Scatter(JsonObject body, MolangExpression iterations, MolangExpres
     /** The positions one placement of this scatter reaches from `origin`, or none when the chance fails. */
     public List<BlockPos> positions(LevelReader level, RandomSource random, BlockPos origin) {
         MolangEnvironment environment = new MolangEnvironment();
-        environment.setQueries((name, arguments) -> query(level, name, arguments));
+        environment.setQueries((name, arguments) -> query(level, environment, name, arguments));
         int[] at = {origin.getX(), origin.getY(), origin.getZ()};
         moveTo(environment, at);
 
@@ -93,8 +94,9 @@ public record Scatter(JsonObject body, MolangExpression iterations, MolangExpres
         environment.setVariable("worldz", MolangValue.of(at[2]));
     }
 
-    /** The three queries Bedrock answers while it generates a world. */
-    private static MolangValue query(LevelReader level, String name, List<MolangValue> arguments) {
+    /** The six queries of Bedrock's `world_gen` set, at the position the scatter has reached. */
+    private static MolangValue query(LevelReader level, MolangEnvironment environment, String name,
+        List<MolangValue> arguments) {
         return switch (name) {
             case "heightmap", "above_top_solid" -> {
                 if (arguments.size() < 2) yield MolangValue.ZERO;
@@ -104,13 +106,44 @@ public record Scatter(JsonObject body, MolangExpression iterations, MolangExpres
                     (int) Math.floor(arguments.get(1).number())));
             }
             case "noise" -> MolangValue.of(EntityQueries.noise(arguments));
+            case "has_biome_tag" -> MolangValue.of(!arguments.isEmpty()
+                && carries(biomeAt(level, environment, arguments.subList(1, arguments.size())),
+                    arguments.get(0)));
+            case "has_any_biome_tags" -> {
+                String biome = biomeAt(level, environment, List.of());
+                yield MolangValue.of(arguments.stream().anyMatch(tag -> carries(biome, tag)));
+            }
+            case "has_all_biome_tags" -> {
+                String biome = biomeAt(level, environment, List.of());
+                yield MolangValue.of(arguments.stream().allMatch(tag -> carries(biome, tag)));
+            }
             default -> MolangValue.ZERO;
         };
     }
 
+    /**
+     * The id of the biome at the place the arguments name: the scatter's own position with none, the
+     * surface of the column with two, and the block with three.
+     */
+    private static String biomeAt(LevelReader level, MolangEnvironment environment, List<MolangValue> place) {
+        int x = (int) Math.floor((place.size() >= 2 ? place.get(0) : environment.variable("worldx")).number());
+        int z = (int) Math.floor((place.size() >= 2 ? place.get(place.size() - 1)
+            : environment.variable("worldz")).number());
+        int y = place.size() >= 3 ? (int) Math.floor(place.get(1).number())
+            : place.size() == 2 ? level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)
+            : (int) Math.floor(environment.variable("worldy").number());
+        return level.getBiome(new BlockPos(x, y, z)).unwrapKey()
+            .map(key -> Platform.idOf(key).toString()).orElse("");
+    }
+
+    /** Whether the biome carries a Bedrock tag, read the way a feature rule's biome filter reads one. */
+    private static boolean carries(String biome, MolangValue tag) {
+        return tag.isText() && !biome.isEmpty() && new BiomeMatch.Tag(tag.text(), false).allows(biome, () -> true);
+    }
+
     /** The chance as a percentage: a number or an expression stated as one, or a fraction of its own. */
     private static MolangExpression chance(JsonElement declared) {
-        if (declared != null && declared.isJsonObject()) {
+        if (declared != null && declared.isJsonObject() && !declared.getAsJsonObject().has("expression")) {
             JsonObject fraction = declared.getAsJsonObject();
             double numerator = Json.number(fraction, "numerator", 1);
             double denominator = Json.number(fraction, "denominator", 1);
@@ -120,9 +153,8 @@ public record Scatter(JsonObject body, MolangExpression iterations, MolangExpres
     }
 
     private static MolangExpression expression(JsonElement declared, double fallback) {
-        if (declared == null || !declared.isJsonPrimitive()) return MolangExpression.constant(fallback);
-        return declared.getAsJsonPrimitive().isNumber()
-            ? MolangExpression.constant(declared.getAsDouble()) : MolangParser.parse(declared.getAsString());
+        if (declared == null || declared.isJsonNull()) return MolangExpression.constant(fallback);
+        return MolangParser.parse(declared);
     }
 
     /**
@@ -137,7 +169,7 @@ public record Scatter(JsonObject body, MolangExpression iterations, MolangExpres
 
         static Axis of(char letter, JsonElement declared) {
             int index = "xyz".indexOf(letter);
-            if (declared == null || !declared.isJsonObject()) {
+            if (declared == null || !declared.isJsonObject() || declared.getAsJsonObject().has("expression")) {
                 return new Axis(index, expression(declared, 0), null, null, null, 1, 0);
             }
 

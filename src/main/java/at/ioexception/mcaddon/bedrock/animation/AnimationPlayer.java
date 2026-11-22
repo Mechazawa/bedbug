@@ -8,8 +8,8 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -65,6 +65,10 @@ public final class AnimationPlayer {
         /** Whether the clip has reached its end at least once, which a looping one does as it wraps. */
         boolean playedThrough;
 
+        /** When the clip was started, and where in this frame's script its animate list or state asked for it. */
+        long started;
+        int asked;
+
         Running(BedrockAnimation animation) {
             this.animation = animation;
         }
@@ -88,6 +92,18 @@ public final class AnimationPlayer {
     private final Entity entity;
     private final MolangEnvironment environment = new MolangEnvironment();
     private final Map<String, Running> running = new HashMap<>();
+
+    /**
+     * The order clips are applied in: those an animate list or a state asked for, in the order the
+     * script asked for them this frame, then those started on their own, oldest first. Order matters
+     * to a clip that overrides the ones before it.
+     */
+    private static final Comparator<Running> APPLIED = Comparator
+        .comparing((Running clip) -> !clip.kept)
+        .thenComparingLong(clip -> clip.kept ? clip.asked : clip.started);
+
+    private long starts;
+    private int askedThisFrame;
     private final Map<String, BonePose> poses = new HashMap<>();
 
     /** The clips the finished queries answer for, null for every clip in flight. */
@@ -109,13 +125,18 @@ public final class AnimationPlayer {
             }
 
             @Override
-            public void particle(String effect, String locator) {
+            public void particle(String effect, String locator, List<MolangExpression> preEffectScript,
+                boolean bound) {
             }
         };
 
         void sound(String effect);
 
-        void particle(String effect, String locator);
+        /**
+         * The script runs in the effect's own emitter as it starts, before its creation expression. A
+         * bound effect follows the entity, and an unbound one stays where it started.
+         */
+        void particle(String effect, String locator, List<MolangExpression> preEffectScript, boolean bound);
     }
 
     public void setEffects(EffectSink effects) {
@@ -153,6 +174,7 @@ public final class AnimationPlayer {
         clip.stopExpression = stopExpression;
         clip.blendOutSeconds = blendOutSeconds;
         clip.waiting = animation.startDelaySeconds(environment);
+        clip.started = starts++;
         running.put(name, clip);
     }
 
@@ -201,6 +223,7 @@ public final class AnimationPlayer {
         if (clip == null) return;
 
         clip.kept = true;
+        clip.asked = askedThisFrame++;
         clip.stateWeight = weight;
         clip.shortestPath = shortestPath;
     }
@@ -220,9 +243,10 @@ public final class AnimationPlayer {
 
         environment.setDeltaTime(deltaSeconds);
 
-        Iterator<Map.Entry<String, Running>> entries = running.entrySet().iterator();
-        while (entries.hasNext()) {
-            Running clip = entries.next().getValue();
+        List<Running> applied = new ArrayList<>(running.values());
+        applied.sort(APPLIED);
+        askedThisFrame = 0;
+        for (Running clip : applied) {
             if (clip.ended) continue;
 
             advance(clip, deltaSeconds);
@@ -236,7 +260,7 @@ public final class AnimationPlayer {
             if (!over || clip.fadeOut(deltaSeconds)) continue;
 
             if (clip.kept && clip.stopExpression == null) clip.ended = true;
-            else entries.remove();
+            else running.values().remove(clip);
         }
     }
 
@@ -287,15 +311,19 @@ public final class AnimationPlayer {
         clip.waiting = clip.animation.loopDelaySeconds(environment);
         if (clip.waiting > 0f) return;
 
+        fireUpTo(clip, length);
         clip.animTime -= length * (float) Math.floor(clip.animTime / length);
         clip.lastFiredTime = -1;
     }
 
     private void fireTimeline(Running clip) {
-        float position = clip.position;
-        environment.setAnimTime(position);
-        if (position < clip.lastFiredTime) clip.lastFiredTime = -1;
+        if (clip.position < clip.lastFiredTime) clip.lastFiredTime = -1;
+        fireUpTo(clip, clip.position);
+    }
 
+    /** Fires every timeline entry and effect after the last one fired, up to and including `position`. */
+    private void fireUpTo(Running clip, float position) {
+        environment.setAnimTime(position);
         for (BedrockAnimation.TimelineEntry entry : clip.animation.timeline()) {
             if (entry.time() > position || entry.time() <= clip.lastFiredTime) continue;
             for (AnimationAction statement : entry.statements()) statement.run(entity, environment);
@@ -304,17 +332,16 @@ public final class AnimationPlayer {
             if (due(entry, position, clip.lastFiredTime)) effects.sound(entry.effect());
         }
         for (BedrockAnimation.EffectEntry entry : clip.animation.particleEffects()) {
-            if (due(entry, position, clip.lastFiredTime)) effects.particle(entry.effect(), entry.locator());
+            if (due(entry, position, clip.lastFiredTime)) {
+                effects.particle(entry.effect(), entry.locator(), entry.preEffectScript(), entry.bound());
+            }
         }
         clip.lastFiredTime = position;
     }
 
-    /** Whether an effect's moment falls in the span just played, running its script if it does. */
-    private boolean due(BedrockAnimation.EffectEntry entry, float position, float lastFired) {
-        if (entry.effect() == null || entry.time() > position || entry.time() <= lastFired) return false;
-
-        for (MolangExpression statement : entry.preEffectScript()) statement.evaluate(environment);
-        return true;
+    /** Whether an effect's moment falls in the span just played. */
+    private static boolean due(BedrockAnimation.EffectEntry entry, float position, float lastFired) {
+        return entry.effect() != null && entry.time() <= position && entry.time() > lastFired;
     }
 
     private void applyBones(Running clip) {
@@ -331,6 +358,7 @@ public final class AnimationPlayer {
         for (Map.Entry<String, BoneAnimation> bone : clip.animation.bones().entrySet()) {
             BonePose pose = poses.computeIfAbsent(bone.getKey(), name -> new BonePose());
             BoneAnimation channels = bone.getValue();
+            if (clip.animation.overridePrevious()) pose.reset();
 
             if (!channels.rotation().isEmpty()) {
                 pose.addRotation(channels.rotation().evaluate(position, environment, pose.rotation, scratch),

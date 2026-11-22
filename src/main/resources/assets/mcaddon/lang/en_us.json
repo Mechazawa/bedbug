@@ -15,6 +15,7 @@
   "mcaddon.addons.button": "Add-Ons",
   "mcaddon.addons.open": "Add-Ons...",
   "mcaddon.addons.title": "Add-Ons",
+  "mcaddon.addons.switch_hint": "Turn add-ons on or off for a world in Edit World.",
   "mcaddon.addons.none": "No add-ons are loaded. Put .mcaddon files in the addons folder and start the game again.",
   "mcaddon.addons.by": "By %s",
   "mcaddon.addons.pack.behaviour": "Behaviour pack: %s",

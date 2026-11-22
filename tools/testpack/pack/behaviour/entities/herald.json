@@ -8,10 +8,15 @@
       "is_experimental": false,
       "animations": {
         "heard": "animation.tp.herald.heard",
-        "counted": "animation.tp.herald.counted"
+        "counted": "animation.tp.herald.counted",
+        "hum": "animation.tp.herald.hum",
+        "ring": "animation.tp.herald.ring",
+        "chime": "controller.animation.tp.herald.chime"
       },
       "scripts": {
         "animate": [
+          "hum",
+          "chime",
           {
             "heard": "v.settled_wisps = 0; for_each(t.wisp, q.get_nearby_entities_except_self(3, 'tp:wisp'), { v.settled_wisps = v.settled_wisps + t.wisp->q.property('tp:settled'); }); return v.settled_wisps == 1;"
           },

@@ -1,5 +1,7 @@
 package at.ioexception.mcaddon.clientgametest;
 
+import at.ioexception.mcaddon.client.render.AddonEmitters;
+import at.ioexception.mcaddon.entity.AddonEntity;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -53,6 +55,12 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             javas(context, world);
             trail(context, world);
             curves(context, world);
+            scoped(context, world);
+            looped(context, world);
+            capped(context, world);
+            settling(context, world);
+            flare(context, world);
+            thud(context, world);
         }
     }
 
@@ -220,6 +228,151 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         Worlds.waitForClient(context, client -> Born.of("tp:burst").size() >= 2 * BURST_COUNT, PATIENCE,
             () -> "tp:ember_trail starts tp:burst as it is created and again two seconds in, from its own"
                 + " timeline, and " + Born.of("tp:burst").size() + " burst particles were made.");
+    }
+
+    /**
+     * `tp:sized` sets `variable.size` to a half in its emitter's `creation_expression` and sizes its
+     * billboard by it, so its particle reads the emitter's variables.
+     */
+    private static void scoped(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:sized ~ ~1 ~3");
+        Worlds.waitForClient(context, client -> !Born.of("tp:sized").isEmpty(), PATIENCE,
+            () -> "tp:sized emits one particle at once and none was made.");
+        Born.Particle sized = Born.of("tp:sized").get(0);
+        float size = context.computeOnClient(client -> Born.drawn(sized.particle(), Worlds.camera(client)).size());
+        Assert.near(size, 0.5f, 1e-4, "the size tp:sized's particle reads from the variable its emitter set");
+    }
+
+    /**
+     * `tp:looped` loops for a random 0.4 to 0.6 seconds at a time and never rests. Its particles are
+     * sized by `variable.emitter_age` and reddened by `variable.emitter_random_1` as they are born,
+     * so a particle of a later loop stays small and the loops do not all share one red.
+     *
+     * `tp:pulse` bursts two particles at the start of every quarter second loop, with no rest
+     * between loops.
+     */
+    private static void looped(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:looped ~ ~1 ~3");
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:pulse ~1 ~1 ~3");
+        Worlds.waitForClient(context, client -> Born.of("tp:looped").size() >= 20, PATIENCE,
+            () -> "tp:looped makes ten particles a second and made " + Born.of("tp:looped").size() + ".");
+        List<Born.Quad> quads = context.computeOnClient(client -> Born.of("tp:looped").stream()
+            .map(born -> Born.drawn(born.particle(), Worlds.camera(client))).toList());
+        for (Born.Quad quad : quads) {
+            float emitterAge = (quad.size() - 0.01f) / 0.1f;
+            Assert.that(emitterAge <= 0.65f, "tp:looped's particle was born at an emitter age of " + emitterAge
+                + ", past the longest loop of 0.6 seconds.");
+        }
+        long reds = quads.stream().map(quad -> quad.colour() >>> 16 & 0xFF).distinct().count();
+        Assert.that(reds >= 2, "tp:looped rolls its emitter randoms again every loop, and its particles"
+            + " over three loops carry " + reds + " red.");
+
+        int pulses = context.computeOnClient(client -> Born.of("tp:pulse").size());
+        Assert.that(pulses >= 6, "tp:pulse bursts two particles every quarter second loop, and made " + pulses
+            + " in two seconds.");
+        context.runOnClient(client -> AddonEmitters.clear());
+    }
+
+    /**
+     * `tp:capped` makes twenty particles a second, each living a tenth of a second, and allows five
+     * alive at once, so it keeps making them for as long as it runs.
+     */
+    private static void capped(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:capped ~ ~1 ~3");
+        Worlds.waitForClient(context, client -> Born.of("tp:capped").size() >= 30, PATIENCE,
+            () -> "tp:capped keeps at most five particles alive at once, each living a tenth of a second,"
+                + " and stopped after " + Born.of("tp:capped").size() + ".");
+        context.runOnClient(client -> AddonEmitters.clear());
+    }
+
+    /** `tp:settle`'s particle collides only once `variable.particle_age` is past a fifth of a second. */
+    private static void settling(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:settle ~ ~1 ~3");
+        Worlds.waitForClient(context, client -> !Born.of("tp:settle").isEmpty(), PATIENCE,
+            () -> "tp:settle emits one particle at once and none was made.");
+        Born.Particle settle = Born.of("tp:settle").get(0);
+        boolean early = context.computeOnClient(client -> settle.age() < 0.2f && !settle.collides());
+        Assert.that(early, "tp:settle's particle collided before its collision turned on at 0.2 seconds.");
+        Worlds.waitForClient(context, client -> settle.age() >= 0.3f, PATIENCE,
+            () -> "tp:settle's particle lives a second and never reached 0.3 of it.");
+        Assert.that(context.computeOnClient(client -> settle.collides()),
+            "tp:settle's collision is evaluated every frame and was still off at 0.3 seconds.");
+    }
+
+    /**
+     * `tp:flare`'s clip starts three effects. `tp:puff` has a `pre_effect_script` setting
+     * `variable.burst` to three, which the effect's instant rate reads, so the script runs in the
+     * emitter. `tp:wake` and `tp:wake_loose` both start at the `tip` locator while the clip lifts the
+     * body two blocks over a second: the wake is bound and rises with the locator and follows the
+     * flare when it is moved, and the loose one is not bound and stays where it started.
+     */
+    private static void flare(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("execute as @p at @s run summon tp:flare ~ ~ ~3");
+        Worlds.waitForClient(context, client -> Born.of("tp:puff").size() >= 3, PATIENCE,
+            () -> "tp:flare's clip starts tp:puff with a pre_effect_script asking for three particles, and "
+                + Born.of("tp:puff").size() + " were made.");
+        context.waitTicks(5);
+        int puffs = context.computeOnClient(client -> Born.of("tp:puff").size());
+        Assert.that(puffs == 3, "tp:puff bursts the three particles its pre_effect_script asked for once, and made "
+            + puffs + ".");
+
+        Worlds.waitForClient(context, client -> Born.of("tp:wake").size() >= 12, PATIENCE,
+            () -> "tp:wake makes ten particles a second and made " + Born.of("tp:wake").size() + ".");
+        double rise = context.computeOnClient(client -> spread(Born.of("tp:wake")));
+        Assert.that(rise > 1.5, "tp:wake follows its locator as the clip lifts it two blocks, and its particles"
+            + " were born " + rise + " blocks apart in height.");
+
+        AddonEntity flare = Entities.waitForClient(context, "tp:flare");
+        double from = context.computeOnClient(client -> flare.getX());
+        world.getServer().runCommand("execute as @e[type=tp:flare] at @s run tp @s ~6 ~ ~");
+        Worlds.waitForClient(context, client -> flare.getX() > from + 5.9, PATIENCE,
+            () -> "tp:flare was moved six blocks and the client never saw it arrive.");
+        context.waitTicks(3);
+        int wakes = context.computeOnClient(client -> Born.of("tp:wake").size());
+        int looses = context.computeOnClient(client -> Born.of("tp:wake_loose").size());
+        context.waitTicks(6);
+        double to = context.computeOnClient(client -> flare.getX());
+        List<Born.Particle> moved = context.computeOnClient(client ->
+            Born.of("tp:wake").subList(wakes, Born.of("tp:wake").size()));
+        List<Born.Particle> stayed = context.computeOnClient(client ->
+            Born.of("tp:wake_loose").subList(looses, Born.of("tp:wake_loose").size()));
+        Assert.that(!moved.isEmpty() && moved.stream().allMatch(born -> Math.abs(born.at().x - to) < 1),
+            "tp:wake is bound to the flare and was born away from it after it moved.");
+        Assert.that(!stayed.isEmpty() && stayed.stream().allMatch(born -> Math.abs(born.at().x - from) < 1),
+            "tp:wake_loose is not bound to the flare and followed it when it moved.");
+        world.getServer().runCommand("kill @e[type=tp:flare]");
+        context.runOnClient(client -> AddonEmitters.clear());
+    }
+
+    /**
+     * `tp:thud_soft` lands at about a block a second and `tp:thud_hard` at about ten. Both raise an event
+     * starting `tp:thud_mark` on landing, with no `min_speed`, which is two blocks a second.
+     */
+    private static void thud(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.runOnClient(client -> Born.clear());
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:thud_soft ~ ~ ~3");
+        Worlds.waitForClient(context, client -> !Born.of("tp:thud_soft").isEmpty(), PATIENCE,
+            () -> "tp:thud_soft emits one particle at once and none was made.");
+        context.waitTicks(20);
+        int soft = context.computeOnClient(client -> Born.of("tp:thud_mark").size());
+        Assert.that(soft == 0, "tp:thud_soft lands slower than two blocks a second and still raised its"
+            + " collision event " + soft + " times.");
+
+        world.getServer().runCommand("bedrock execute as @p at @s run particle tp:thud_hard ~ ~ ~3");
+        Worlds.waitForClient(context, client -> !Born.of("tp:thud_mark").isEmpty(), PATIENCE,
+            () -> "tp:thud_hard lands at about ten blocks a second and never raised its collision event.");
+    }
+
+    /** How far apart in height the particles were born. */
+    private static double spread(List<Born.Particle> particles) {
+        double lowest = particles.stream().mapToDouble(born -> born.at().y).min().orElse(0);
+        double highest = particles.stream().mapToDouble(born -> born.at().y).max().orElse(0);
+        return highest - lowest;
     }
 
     /** Each of the four channels within one step of the colour asked for. */

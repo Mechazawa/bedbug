@@ -43,6 +43,7 @@
           ],
           "search_range_xz": 3,
           "search_range_y": 1,
+          "target_dig_position_offset": 0,
           "goal_radius": 1.5,
           "find_valid_position_retries": 200,
           "cooldown_range": {
@@ -91,6 +92,56 @@
           ],
           "search_range_xz": 4,
           "search_range_y": 1,
+          "target_dig_position_offset": 0,
+          "goal_radius": 1.5,
+          "find_valid_position_retries": 5000,
+          "cooldown_range": {
+            "min": 0,
+            "max": 0
+          },
+          "digging_duration_range": {
+            "min": 1,
+            "max": 1
+          },
+          "item_table": "loot_tables/entities/digger_find.json",
+          "spawn_item_after_seconds": 0.5,
+          "spawn_item_pos_offset": 2,
+          "on_searching_start": {
+            "event": "tp:digger_searched",
+            "target": "self"
+          },
+          "on_fail_during_searching": {
+            "event": "tp:digger_search_failed",
+            "target": "self"
+          },
+          "on_digging_start": {
+            "event": "tp:digger_dug",
+            "target": "self"
+          },
+          "on_item_found": {
+            "event": "tp:digger_found",
+            "target": "self"
+          },
+          "on_fail_during_digging": {
+            "event": "tp:digger_dig_failed",
+            "target": "self"
+          },
+          "on_success": {
+            "event": "tp:digger_succeeded",
+            "target": "self"
+          }
+        }
+      },
+      "tp:digger_reaching": {
+        "minecraft:behavior.random_search_and_dig": {
+          "priority": 0,
+          "speed_multiplier": 1,
+          "target_blocks": [
+            "minecraft:gold_block"
+          ],
+          "search_range_xz": 4,
+          "search_range_y": 1,
+          "target_dig_position_offset": 2,
           "goal_radius": 1.5,
           "find_valid_position_retries": 5000,
           "cooldown_range": {
@@ -139,6 +190,7 @@
           ],
           "search_range_xz": 3,
           "search_range_y": 1,
+          "target_dig_position_offset": 0,
           "goal_radius": 1.5,
           "find_valid_position_retries": 200,
           "cooldown_range": {
@@ -300,6 +352,13 @@
         "add": {
           "component_groups": [
             "tp:digger_patient"
+          ]
+        }
+      },
+      "tp:digger_make_reaching": {
+        "add": {
+          "component_groups": [
+            "tp:digger_reaching"
           ]
         }
       },

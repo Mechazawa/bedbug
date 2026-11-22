@@ -22,15 +22,7 @@ final class ParticleJson {
     static MolangExpression expression(JsonObject json, String key, double fallback) {
         JsonElement value = json == null ? null : json.get(key);
         if (value == null || !value.isJsonPrimitive()) return MolangExpression.constant(fallback);
-        return expression(value);
-    }
-
-    static MolangExpression expression(JsonElement value) {
-        if (!value.isJsonPrimitive()) return MolangExpression.ZERO;
-
-        JsonPrimitive primitive = value.getAsJsonPrimitive();
-        Object raw = primitive.isNumber() ? primitive.getAsDouble() : primitive.getAsString();
-        return MolangParser.parse(raw);
+        return MolangParser.parse(value);
     }
 
     static Vector3Expression vector(JsonObject json, String key) {
@@ -44,8 +36,8 @@ final class ParticleJson {
 
         JsonArray array = value.getAsJsonArray();
         if (array.size() < 3) return Vector3Expression.ZERO;
-        return new Vector3Expression(expression(array.get(0)), expression(array.get(1)),
-            expression(array.get(2)));
+        return new Vector3Expression(MolangParser.parse(array.get(0)), MolangParser.parse(array.get(1)),
+            MolangParser.parse(array.get(2)));
     }
 
     static boolean flag(JsonObject json, String key, boolean fallback) {

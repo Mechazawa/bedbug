@@ -5,7 +5,6 @@ import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
 
 /**
  * One `{r, g, b, a}` group of a render controller, each channel a Molang expression.
@@ -33,12 +32,8 @@ public record ControllerColour(
     private static MolangExpression channel(JsonObject body, String name) {
         JsonElement value = body.get(name);
         // An absent channel leaves whatever the engine would have used, which is what `this` reads.
-        if (value == null || !value.isJsonPrimitive()) return MolangEnvironment::self;
-
-        JsonPrimitive primitive = value.getAsJsonPrimitive();
-        return primitive.isNumber()
-            ? MolangExpression.constant(primitive.getAsFloat())
-            : MolangParser.parse(primitive.getAsString());
+        if (value == null || value.isJsonNull()) return MolangEnvironment::self;
+        return MolangParser.parse(value);
     }
 
     /**

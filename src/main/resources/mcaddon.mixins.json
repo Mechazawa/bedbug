@@ -5,6 +5,8 @@
   "compatibilityLevel": "JAVA_17",
   "mixins": [
     "PackRepositoryMixin",
+    "AnvilRepairMixin",
+    "RepairItemRecipeMixin",
     "NetherBiomeDataMixin",
     "TheEndBiomeOverridesMixin",
     "ServerPacksSourceMixin",
@@ -48,6 +50,7 @@
     "VillagerMixin",
     "MobEventsMixin",
     "MobPickupMixin",
+    "AvoidedBlockMixin",
     "ShearEventMixin",
     "RaiderCelebrateMixin",
     "VillagerCelebrateMixin",

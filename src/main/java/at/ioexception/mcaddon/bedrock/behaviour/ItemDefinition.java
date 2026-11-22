@@ -14,7 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
 
 /**
  * An item a behaviour pack declares.
@@ -213,16 +212,11 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
     /** What an undyed leather item is worth in both editions. */
     private static final int LEATHER_BROWN = 0xA06540;
 
-    /** One block `minecraft:digger` names, and how fast this breaks it. */
-    public record DestroySpeed(String block, float speed) {
+    /** The blocks one `minecraft:digger` entry describes, and how fast this breaks them. */
+    public record DestroySpeed(Descriptor block, float speed) {
     }
 
-    /**
-     * The blocks `minecraft:digger` lists a speed for.
-     *
-     * An entry whose `block` is an object holds a Molang tag query, which picks blocks by a
-     * condition the game evaluates per block, so there is no fixed set of blocks to answer with.
-     */
+    /** The blocks `minecraft:digger` lists a speed for, in any shape of block descriptor. */
     public List<DestroySpeed> destroySpeeds() {
         JsonObject digger = components.get("minecraft:digger");
         if (digger == null) return List.of();
@@ -230,9 +224,13 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
         return Json.list(digger, "destroy_speeds").stream()
             .filter(JsonElement::isJsonObject)
             .map(JsonElement::getAsJsonObject)
-            .filter(entry -> entry.has("block") && entry.get("block").isJsonPrimitive())
-            .map(entry -> new DestroySpeed(entry.get("block").getAsString(),
-                entry.has("speed") ? entry.get("speed").getAsFloat() : 1f))
+            .filter(entry -> entry.has("block"))
+            .map(entry -> {
+                Descriptor block = Descriptor.tryFrom(entry.get("block"));
+                return block == null ? null
+                    : new DestroySpeed(block, entry.has("speed") ? entry.get("speed").getAsFloat() : 1f);
+            })
+            .filter(java.util.Objects::nonNull)
             .toList();
     }
 
@@ -326,20 +324,6 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
         if (absorption == null) return Set.of();
 
         return DamageCause.allNamed(Json.list(absorption, "absorbable_causes"));
-    }
-
-    /** The items `minecraft:repairable` accepts for repairing this one. */
-    public List<String> repairItems() {
-        JsonObject repairable = components.get("minecraft:repairable");
-        if (repairable == null) return List.of();
-
-        return Json.list(repairable, "repair_items").stream()
-            .flatMap(entry -> entry.isJsonObject()
-                ? Json.list(entry.getAsJsonObject(), "items").stream()
-                : Stream.of(entry))
-            .filter(JsonElement::isJsonPrimitive)
-            .map(JsonElement::getAsString)
-            .toList();
     }
 
     /**

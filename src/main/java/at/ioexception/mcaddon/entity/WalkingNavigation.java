@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.entity;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.level.Level;
@@ -12,20 +13,19 @@ import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.PathfindingContext;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 
-import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
 
 /**
  * Java's ground navigator, planning with what a pack's `minecraft:navigation.walk` or `generic` and
  * its `minecraft:preferred_path` say about single blocks, steps up and the ground under water.
  *
- * Java prices a node by the kind of ground it is. Bedrock also names blocks to keep off, refuses
+ * Java prices a node by the kind of ground it is. Bedrock also keeps a mob out of portals, refuses
  * steps up for a mob that may not jump, keeps a mob that is not amphibious off the bottom of deep
  * water, and prices each block a mob prefers. Each of those is a node this evaluator refuses or
  * prices after Java's own evaluator has placed it.
  */
 final class WalkingNavigation extends GroundPathNavigation {
-    private Predicate<BlockState> avoided = state -> false;
+    private boolean avoidsPortals;
     private boolean jumps = true;
     private boolean amphibious;
     private ToDoubleFunction<BlockState> blockCost;
@@ -35,8 +35,8 @@ final class WalkingNavigation extends GroundPathNavigation {
         super(mob, level);
     }
 
-    void plan(Predicate<BlockState> avoid, boolean canJump, boolean walksUnderWater) {
-        this.avoided = avoid;
+    void plan(boolean keepsOutOfPortals, boolean canJump, boolean walksUnderWater) {
+        this.avoidsPortals = keepsOutOfPortals;
         this.jumps = canJump;
         this.amphibious = walksUnderWater;
     }
@@ -57,10 +57,10 @@ final class WalkingNavigation extends GroundPathNavigation {
         @Override
         public PathType getPathType(PathfindingContext context, int x, int y, int z) {
             PathType type = super.getPathType(context, x, y, z);
-            if (type == PathType.BLOCKED) return type;
+            if (type == PathType.BLOCKED || !avoidsPortals) return type;
 
-            boolean refused = avoided.test(context.getBlockState(new BlockPos(x, y, z)))
-                || avoided.test(context.getBlockState(new BlockPos(x, y - 1, z)));
+            boolean refused = context.getBlockState(new BlockPos(x, y, z)).is(BlockTags.PORTALS)
+                || context.getBlockState(new BlockPos(x, y - 1, z)).is(BlockTags.PORTALS);
             return refused ? PathType.BLOCKED : type;
         }
 

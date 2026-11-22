@@ -1,0 +1,144 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:abacus",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "tp:count": {
+          "type": "int",
+          "range": [
+            0,
+            10
+          ],
+          "default": 0
+        },
+        "tp:unmet": {
+          "type": "bool",
+          "default": "q.had_component_group('tp:never')"
+        },
+        "tp:sum": {
+          "type": "int",
+          "range": [
+            0,
+            10
+          ],
+          "default": "1 + 2"
+        },
+        "tp:shade": {
+          "type": "enum",
+          "values": [
+            "dim",
+            "bright"
+          ],
+          "default": "bright"
+        },
+        "tp:flag": {
+          "type": "bool",
+          "default": false
+        }
+      }
+    },
+    "component_groups": {
+      "tp:abacus_beating": {
+        "minecraft:heartbeat": {
+          "interval": "2.0 - math.clamp(query.property('tp:count') / 2, 0, 1.5)"
+        }
+      },
+      "tp:abacus_rewarding": {
+        "minecraft:variant": {
+          "value": 3
+        },
+        "minecraft:experience_reward": {
+          "on_death": "query.last_hit_by_player ? query.variant + 1 : 0"
+        }
+      },
+      "tp:abacus_summing": {
+        "minecraft:experience_reward": {
+          "on_death": [
+            "2",
+            "3"
+          ]
+        }
+      },
+      "tp:abacus_picky": {
+        "minecraft:behavior.pickup_items": {
+          "priority": 0,
+          "max_dist": 6,
+          "goal_radius": 2,
+          "can_pickup_any_item": true,
+          "excluded_items": [
+            {
+              "tags": "q.any_tag('minecraft:is_sword')"
+            }
+          ]
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "tp_abacus",
+          "mob"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 0.8
+      },
+      "minecraft:health": {
+        "value": 10,
+        "max": 10
+      },
+      "minecraft:movement": {
+        "value": 0.25
+      },
+      "minecraft:physics": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:movement.basic": {},
+      "minecraft:jump.static": {}
+    },
+    "events": {
+      "tp:abacus_make_beating": {
+        "add": {
+          "component_groups": [
+            "tp:abacus_beating"
+          ]
+        }
+      },
+      "tp:abacus_count": {
+        "set_property": {
+          "tp:count": "q.property('tp:count') + 1"
+        }
+      },
+      "tp:abacus_make_rewarding": {
+        "add": {
+          "component_groups": [
+            "tp:abacus_rewarding"
+          ]
+        }
+      },
+      "tp:abacus_make_summing": {
+        "add": {
+          "component_groups": [
+            "tp:abacus_summing"
+          ]
+        }
+      },
+      "tp:abacus_toggle": {
+        "set_property": {
+          "tp:flag": "!q.property('tp:flag')"
+        }
+      },
+      "tp:abacus_make_picky": {
+        "add": {
+          "component_groups": [
+            "tp:abacus_picky"
+          ]
+        }
+      }
+    }
+  }
+}

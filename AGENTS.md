@@ -828,6 +828,14 @@ These are the checks it runs, and what each one catches:
   `step` in its body, which the script registers and answers by tagging whoever used the item with
   that step.
 
+  **`bone_visibility` is applied per state model.** `BlockDefinition.drawsBone` evaluates each
+  bone's Molang (or boolean) against the state's values, and `BlockGeometry.elements` leaves out the
+  cubes of a bone that comes out false. Mojang does not say whether a hidden bone hides its children
+  or how names compare, so here a hidden bone hides its own cubes only and names compare without
+  regard to case, as `part_visibility` does on entities. The default model and the block's item take
+  each state's first value. `tp:crown` shows its cap only at `tp:uses` 2 and never its rim, and
+  `PackGameTests.aBlockGeometryDrawsABoneOnlyInTheStatesItsVisibilityNames` counts the cubes.
+
   **Bedrock's block geometry is centred on the block.** A full block's cube has the origin
   `[-8, 0, -8]`, where Java's block model runs from 0 to 16, so `BlockGeometry` moves every corner
   and pivot half a block on X and Z. The lamp's geometry is written in Bedrock's frame (its post at
@@ -1910,6 +1918,11 @@ decide what it acts on and a reported field is still a dropped one.
   `display`, Bedrock's `shelf` becoming Java's `on_shelf` from 26. The `embedded` context, the two
   pivots and `fit_to_frame` are reported in `BlockGeometry.display`, because Java has no context for
   an embedded visual, turns and scales a model about its middle, and never fits an item to its frame.
+- **A rotation element written as an object naming one axis** (`[{"y": "180 - this"}, ...]`).
+  Mojang's schema allows the shape and publishes nothing on what it means; the squid writes `y`,
+  `x` and `y` in turn, which may be three turns applied in order. The clip is reported as
+  `animation rotation written per axis` and left out. `BedrockAssets.readSection` reads each entry
+  of a file on its own, so the clips after it still load.
 - **`parent_setup`** is reported for a wearer Java draws with a model of its own, which has no
   variables to write into. **`binding`** on such a wearer finds the part `JavaModelParts` answers
   to the bone, with `rightItem` and `leftItem` seven pixels down each arm as Mojang's humanoid
@@ -1931,6 +1944,14 @@ wiki's custom armour guide, carry no `item` condition and no slot test, and Bedr
 diamond helmet flat. A Villager News hat binds its root to `head` by name and is not drawn on the
 head while held. An item no armour slot takes, such as the trident, the spyglass or `tp:baton`,
 draws its attachable in the hand. `AttachableClientGameTest` holds `tp:topper` and `tp:visor`.
+
+**Of several attachables for one item, one whose `item` condition holds wins.** Mojang ships
+`diamond_helmet.json`, naming no condition, beside `diamond_helmet.player.json`, asking
+`query.owner_identifier == 'minecraft:player'`, and publishes no rule for the pair. `Attachables.choose`
+takes the first whose condition holds and else the first naming the item with no condition, whatever
+order the files were read in. Only the chosen one's animator is moved on; the others are asked their
+condition through `Animators.standing`. The test pack's `golden_helmet` pair is read back by
+`AttachableClientGameTest`.
 
 Seven fields are read outside the renderer itself, which is where to look for them:
 
@@ -2039,6 +2060,12 @@ plays once and stays finished while it is asked for, and `q.any_animation_finish
 `q.all_animations_finished` answer for the clips of the controller's current state, a looping clip
 counting once it has come round the first time. An effect a clip fires at a locator is born where
 the drawn model carries that locator, through its bone's pose.
+
+Clips are applied in the order the script asks for them on that frame: the animate list in its
+order, a controller's clips where the controller stands in it. A clip started on its own, by
+`/bedrock playanimation` or a script, comes after those, oldest first; Mojang publishes no order for
+it. A clip declaring `override_previous_animation` puts each bone it names back to rest before it
+adds its own pose, so it replaces what the clips before it did to those bones.
 
 **A clip played on a mob Java draws moves Java's model of it.** `/bedrock playanimation` on a vanilla
 villager names the bones of Bedrock's own villager geometry, so `JavaModelPoses` runs the clip on an
@@ -2433,7 +2460,7 @@ stand within the distance, itself included, of the type named where one is. `get
 is the same without the entity asking, a name found in no Mojang material today. Both are listed in
 `EntityQueries.EXPERIMENTAL`, which `components.py` reads as answered on purpose. `q.get_ride`,
 `q.target` and `context.player` appear in no Mojang material and are not answered. `context.other`
-is the repair target of an item's `repair_amount`, which nothing here evaluates.
+is the item repairing another in an item's `repair_amount`, which `item.Repairable` answers.
 `BehaviourGameTests.anEntityReadsThePropertiesOfTheEntitiesNearItThroughAnArrow` has `tp:herald` add
 up `tp:settled` over two wisps through `->` inside `for_each` and count them through
 `combine_entities`; `MolangTest` runs Mojang's struct examples against stub entities.
@@ -2467,6 +2494,11 @@ so these are decided here, from the Bedrock wiki's feature page where it says an
 - `scatter_chance` written as a number or an expression is a percentage.
 - `query.heightmap` reads Java's `MOTION_BLOCKING_NO_LEAVES`, as the entity query does, and
   `query.above_top_solid` reads `OCEAN_FLOOR`.
+- `has_biome_tag`, `has_any_biome_tags` and `has_all_biome_tags` read a tag the way a rule's biome
+  filter does (`BiomeMatch.Tag`). With no coordinates they ask the biome at the position the scatter
+  has reached; `has_biome_tag(tag, x, z)` asks the surface of that column and `(tag, x, y, z)` that
+  block. Mojang says only "the current placement or given position". `tp:mark_by_biome` and
+  `FeatureGameTests.aScatterCountsItsIterationsFromTheBiomesTags` cover all three.
 
 `SingleBlockFeature` decides these where nothing is published: no `may_replace` replaces anything
 (Mojang's documentation says the block can be placed anywhere); `min_sides_must_attach` defaults to
@@ -2734,6 +2766,8 @@ AddonsScreen(parent)` is the one way in for a world, which only shows what is on
 opens from a button of its own; `addToPauseMenu` puts the button on the pause menu through Fabric's `ScreenEvents`, in the
 row of the lowest button, which it moves down a row. The three screens extend `ColumnScreen`, a
 heading, a `ScrollingColumn` and a Done button that goes back to the parent.
+The screen without switches says above its rows that add-ons are switched in Edit World. No Bedrock
+wording for that was found, so the line is this mod's own.
 
 Each add-on is one `AddonRow` widget: the pack's `pack.png` (a `DynamicTexture` per converted root,
 loaded when first needed and released in `removed()`, with the game's `unknown_pack.png` as the
@@ -2741,7 +2775,14 @@ fallback), name and version over one truncated description line, an On/Off label
 `IconButton`s laid over the row's right edge (gear for `PackSettingsScreen`, disabled with a tooltip
 when no pack has settings; info for `AddonReportScreen`). A click on the row body opens it to the full
 descriptions, authors, both packs and each pack's modules with their version and description;
-the screen keeps which roots are open and rebuilds, so the column learns the new height. The row
+the screen keeps which roots are open and rebuilds, so the column learns the new height.
+**A screen hands a click only to the first of its children under the pointer** (`getChildAt` in
+`ContainerEventHandler.mouseClicked`), and the row is added before the buttons over it, so
+`AddonRow.isMouseOver` answers false over their corner; otherwise the row takes their clicks. A test
+presses these buttons with the pointer (`AddonRows.turn` and `click`), because `onPress` passes this
+by. Java's Edit World fills a window 240 high with 6 pixels to spare, so `EditWorldScreenMixin`
+shrinks the gap over Save and Cancel to nothing to make room for its button, and
+`EditWorldAddonsClientGameTest` asks that every widget stays on the screen. The row
 draws through `Platform.paint`, and the gear and info pictures are this mod's own
 `textures/gui/*.png`, since Java ships no gear. The version-specific widget API is written for 26
 and later only. `AddonReportScreen`
@@ -2859,6 +2900,14 @@ redirects the neighbour's `isFaceSturdy(side)` call inside a pane's `getStateFor
 `updateShape`, the only place a pane knows the side. `tp:pillar` carries the rule and
 `aConnectionRuleNamesTheSidesNeighboursReach` reads fence, bars and wall back.
 
+## Block tags
+
+A block's tags are its `minecraft:tags` list and every `tag:<name>` component, the form packs wrote
+before that list; Mojang's schemas name only the list, and the Bedrock wiki's block tag page shows
+the component. Both become Java block tags in the converted data pack, a bare name under
+`minecraft:`, so a descriptor's `q.any_tag`, the block tag queries and a filter ask Java's tag.
+`PackGameTests.aBlocksTagComponentsAreItsTags` reads `tp:pillar`'s two back.
+
 ## Recipe unlock context and priority
 
 `AlwaysUnlocked` adds a `minecraft:tick` criterion to the recipe's unlock advancement, which grants
@@ -2907,6 +2956,20 @@ publishes nothing on, decided here:
   either: skeletons "seek out shelter during the day" and drowned on land by day "seek out nearby
   water or shade", with no fire or helmet named. A helmet is named only as stopping the burn, and
   only the Legacy Console Edition waited for the fire.
+
+- `blocks_to_avoid` on any `minecraft:navigation.*` closes a node to the pathfinder where a listed
+  block fills a cell of the mob's box there or is the block it would stand on. Mojang says only that
+  the pathfinder avoids them; standing on the block counts so that the breeze's trapdoors and the
+  goat's powder snow are both kept off. Java's level caches one path type per block for every mob,
+  so `AvoidedBlockMixin` asks the list where the walk and swim evaluators work a type out for one
+  mob, and `aPathNeverStepsOnABlockItsNavigationAvoids` reads it back. A mob needs to have landed
+  for a ground navigator to plan at all, so the test lets its roamers fall first.
+
+- A test of a random choice fails by construction when every draw goes the other way, so it
+  takes enough draws to make that one run in tens of thousands.
+  `aRandomBlockWalkTakesAnyMatchingBlockInRange` had eight roamers, one failed run in 256. It has
+  sixteen and reads the walk each planned (`getPath().getTarget()`) rather than where it stands,
+  so a crowd blocking the far block counts nothing against it.
 
 **The game test world is dark.** `isBrightOutside` answered false there at a clock of 25020, so a test
 about the day runs `time set day` and a goal asks the clock.
@@ -2968,7 +3031,10 @@ fields and one-line descriptions. The rest is decided here:
 - The search fails when the spot's ground stops being a target block or the path is lost. The dig
   fails when its ground stops being a target block. Either also fails when another goal takes over.
   `cooldown_range` starts when the goal ends, whatever the outcome.
-- `target_dig_position_offset` is not read: the spot itself is dug.
+- `target_dig_position_offset` (default 2.25) is the distance ahead of the entity's feet, along its
+  body yaw, whose ground block is the one dug. It is asked every dig tick, so the dig fails when
+  that ground is not a target block. The search still draws spots by their own ground. The test
+  pack's groups state 0 where a test wants the dig at the entity's feet.
 
 `minecraft:behavior.raid_garden` eats one crop per visit, `initial_eat_delay` seconds after
 arriving. It looks for the next crop `eat_delay` seconds later. After `max_to_eat` crops (no limit
@@ -3022,8 +3088,9 @@ what a container holds is learnt only on arriving at it; a container that gave n
 nothing is visited, and the goal rests for `idle_cooldown` and forgets its visits once it has
 visited `max_visited_containers` or finds nothing left to look at; a stack is taken whole up to
 `max_stack_size` from the first slot holding one, and put down by filling matching stacks and
-empty slots in slot order; `initial_cooldown` counts from the goal's first check. The 3 second
-`interaction_time` is not waited out. The goal starts only on the ground, because Java plans no path
+empty slots in slot order; `initial_cooldown` counts from the goal's first check. `interaction_time` (3
+seconds) is waited out at the container, counted on the game clock from arrival, before anything is
+taken or left. The goal starts only on the ground, because Java plans no path
 from the air and the first container would read as out of reach. A path ends a block short of the
 spot beside the container, so the last of the way is stepped straight in both goals.
 
@@ -3037,8 +3104,76 @@ column counts. A spot further than `minimum_teleport_distance` is teleported to,
 `teleport_offset` over it, once per run, so an offset larger than the distance cannot loop. On arrival
 `on_drop_attempt` is raised, the drop rolled at `drop_item_chance`, and the gift thrown along the
 look at the target, whose height is capped at `max_head_look_at_height` over the entity's feet. A
-goal naming no `loot_table` drops what the entity holds. `search_count` is not read: every block
-is checked in one tick, which is its default.
+goal naming no `loot_table` drops what the entity holds. `search_count` draws that many random
+places in the search box a tick (for every tick since the last look, at most two) and takes the
+first standing place; 0, the default, checks every place in one tick and picks the best.
+
+## Particle emitters
+
+`client/render/AddonEmitters` runs an effect's emitter and `AddonParticleProvider` makes each particle.
+`ParticleClientGameTest` reads each rule back through `clientgametest/Born`.
+
+- A particle starts with a copy of its emitter's variables as they stand at its birth
+  (`AddonEmitters.birthScope`), so it reads what `creation_expression` and `per_update_expression`
+  set, `v.emitter_age` and the emitter randoms. Mojang says particle expressions can use these and not
+  whether a particle sees later changes, so the copy is decided here.
+- An emitter runs in loops. `emitter_lifetime_once` and an emitter with no lifetime have one loop,
+  `emitter_lifetime_expression` one loop for its whole life. `active_time`, `sleep_time` and an
+  instant rate's `num_particles` are evaluated once as each loop starts, the four emitter randoms
+  are rolled again for every loop after the first, `v.emitter_age` counts from the loop's start and
+  `v.emitter_lifetime` is the loop's `active_time`. The timeline fires on every loop.
+- A steady rate's `max_particles` caps the emitter's particles alive at once, evaluated as each loop
+  starts. The provider hands each particle it makes to `AddonEmitters.adopt`, which keeps it in the
+  emitter's `alive` list.
+- A collision's `enabled` is evaluated each tick before the particle moves, and its
+  `collision_radius` sizes the particle whether or not it collides at birth.
+- An animation's or a controller state's `pre_effect_script` runs in the effect's emitter as it
+  starts, after the emitter randoms and before `creation_expression`. An emitter an entity's
+  animation started answers that entity's queries, which is what Mojang's own scripts read
+  (`query.surface_particle_color`).
+- An effect an animation starts at a locator stands where the drawn model puts that locator at each
+  tick, so it rises and turns with the bone. With `bind_to_actor` false it is left in the world where
+  the locator was as it started and outlives the entity. An `emitter_bound` event's effect follows the
+  entity, not the locator. The emitter's own orientation does not follow the bone, because
+  `emitter_local_space` is not acted on.
+- A collision event's `min_speed` is at least two blocks a second, its default, as Mojang documents.
+  `events` may be one event or a list.
+
+## Molang in entity components and events
+
+`tp:abacus` carries the Molang a behaviour pack writes into components and events, and
+`AbacusGameTests` reads each back.
+
+- `minecraft:heartbeat` `interval` is read from the live set and answered with the entity's own
+  queries at each beat; the next beat is that many seconds later.
+- `minecraft:experience_reward` is answered with the entity's own queries and
+  `query.last_hit_by_player` laid over them. `on_bred` answers that query true, as a breeding is a
+  player's doing; Mojang publishes nothing on it.
+- A property value a pack writes (`default`, an event's `set_property`) goes through
+  `ServerEntityDefinition.Property.value`: a string is Molang unless it is one of an enum's values,
+  as the Bedrock wiki says. The answer takes the type (an `int` drops its fraction) and is clamped
+  to the range. An enum answer it does not hold, or no value at all, is its first value; Mojang
+  publishes nothing on either. A default is answered once, as the entity is first seen.
+- `bedrock.behaviour.Descriptor` is a block or item descriptor in each of Mojang's shapes: a bare
+  name, `name` (or an item's `item`) with a block's `states`, or `tags`, Molang that
+  `query.all_tags` and `query.any_tag` answer. A block's tags are Java's block tags under the name
+  the pack wrote; an item's go through `BedrockItemTags`. `Goals.blocks` stands a tag test for every
+  block passing it when the goal is built. A `minecraft:digger` rule is built on each data load
+  from 26, against the tags that load brings. A pack block's `tag:` components are its tags, and a
+  `navigation.*` `blocks_to_avoid` list is a list of descriptors.
+- `minecraft:repairable` `repair_amount` is answered by `item.Repairable` for the item being
+  repaired (`query.max_durability`, `query.remaining_durability`), with `context.other` the item
+  repairing it. `AnvilRepairMixin` uses it for a material in place of Java's quarter, and
+  `AnvilRepairMixin` and `RepairItemRecipeMixin` for a second copy of the item in place of that
+  copy's own durability. Mojang publishes no rule for combining, so Java's bonus of 12 in a hundred
+  at the anvil and 5 in the grid stays on top, as both editions' wikis describe. `RepairGameTests`
+  reads `tp:file` back. Which items repair at all is the entries' descriptors, names and tag tests
+  alike, which `AnvilRepairMixin` asks in place of Java's `Repairable` component. A second copy of
+  the item still takes Java's combining branch: Mojang's own items list themselves, and in that
+  branch the copy's entry amount and the anvil's bonus are both applied. The first entry naming an
+  item decides its amount, and one stating none keeps Java's quarter.
+  `anItemNamedByATagRepairsAtTheAnvil` repairs a file with a plank through
+  `q.any_tag('minecraft:planks')`.
 
 ## Conventions
 
@@ -3298,14 +3433,13 @@ properties the pack named, because a test for a block asks about those and no ot
 ## Census reasons: nav
 
 `entity/WalkingNavigation` is the ground navigator of every add-on entity that walks. Its evaluator
-is Java's `WalkNodeEvaluator` with four refusals and one price laid over the nodes Java places.
+is Java's `WalkNodeEvaluator` with three refusals and one price laid over the nodes Java places;
+`blocks_to_avoid` is answered by `AvoidedBlockMixin` on every evaluator, as described above.
 `tp:wayfarer` carries one group per field and `PathingGameTests` reads each back off a planned path.
 Mojang publishes the fields and one line each, so these rules are decided here:
 
-- `blocks_to_avoid` and `avoid_portals` refuse a node whose own block or the block under it matches.
-  A descriptor names a block or states `tags` as Molang; only `query.any_tag` and `query.all_tags`
-  are answered (`Goals.blockMatcher`), each tag asked of Java as a block tag of that name. A portal
-  is a block in Java's `minecraft:portals` tag.
+- `avoid_portals` refuses a node whose own block or the block under it is in Java's
+  `minecraft:portals` tag.
 - `can_jump` false plans no step up a block: the evaluator is given a jump size of nothing.
 - `is_amphibious` false refuses a node on the bottom with water over its head, for a mob that does
   not float. A mob already in water may still plan through such nodes, so it can walk out.

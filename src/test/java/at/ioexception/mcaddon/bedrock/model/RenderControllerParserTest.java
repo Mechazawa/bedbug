@@ -1,5 +1,6 @@
 package at.ioexception.mcaddon.bedrock.model;
 
+import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 
@@ -48,5 +49,43 @@ class RenderControllerParserTest {
 
         Map<String, ?> rule = controller.materials().get(0);
         assertEquals(List.of("*", "hat"), List.copyOf(rule.keySet()));
+    }
+
+    @Test
+    void anArrayDeclaredInLowerCaseAnswersItsCapitalisedName() {
+        RenderController controller = read("""
+            { "arrays": { "textures": { "array.skins": [ "Texture.plain", "Texture.dyed" ] } },
+              "textures": [ "Array.skins[1]" ] }""");
+        MolangEnvironment environment = new MolangEnvironment();
+        environment.setArrays(controller.arrays());
+
+        assertEquals("dyed", controller.textures().get(0).evaluate(environment).text());
+    }
+
+    @Test
+    void anIndexPastTheEndWrapsAndANegativeOneIsClamped() {
+        RenderController controller = read("""
+            { "arrays": { "textures": { "Array.skins": [ "Texture.a", "Texture.b", "Texture.c" ] } },
+              "textures": [ "Array.skins[4]", "Array.skins[-2]", "Array.skins[2.9]" ] }""");
+        MolangEnvironment environment = new MolangEnvironment();
+        environment.setArrays(controller.arrays());
+
+        assertEquals(List.of("b", "a", "c"), controller.textures().stream()
+            .map(texture -> texture.evaluate(environment).text()).toList());
+    }
+
+    @Test
+    void aSingleEntryWrittenInPlaceOfAListIsAListOfOne() {
+        RenderController controller = read("""
+            { "arrays": { "textures": { "Array.skins": "Texture.only" } },
+              "textures": "Array.skins[0]",
+              "materials": { "*": "Material.default" },
+              "part_visibility": { "*": "1.0" } }""");
+        MolangEnvironment environment = new MolangEnvironment();
+        environment.setArrays(controller.arrays());
+
+        assertEquals("only", controller.textures().get(0).evaluate(environment).text());
+        assertEquals(List.of("*"), List.copyOf(controller.materials().get(0).keySet()));
+        assertEquals(List.of("*"), List.copyOf(controller.partVisibility().get(0).keySet()));
     }
 }

@@ -13,11 +13,16 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.nio.file.Path;
 
-/** Puts an Add-Ons button on Edit World, above the row of Save and Cancel. */
+/**
+ * Puts an Add-Ons button on Edit World, above the row of Save and Cancel, in the room of the gap
+ * over that row. Java's screen fills a window 240 high with 6 to spare, so the button only fits
+ * there.
+ */
 @Mixin(EditWorldScreen.class)
 public abstract class EditWorldScreenMixin {
     private static final int BUTTON_WIDTH = 200;
@@ -38,5 +43,11 @@ public abstract class EditWorldScreenMixin {
         layout.addChild(Button.builder(Component.translatable("mcaddon.addons.button"),
                 button -> Platform.setScreen(AddonsScreen.forWorld(screen, world)))
             .width(BUTTON_WIDTH).build());
+    }
+
+    @ModifyArg(method = "<init>", at = @At(value = "INVOKE",
+        target = "Lnet/minecraft/client/gui/layouts/SpacerElement;<init>(II)V", ordinal = 1), index = 1)
+    private int mcaddon$closeGap(int height) {
+        return 0;
     }
 }

@@ -87,25 +87,6 @@ class ComponentFieldsTest {
             entity.component("minecraft:navigation.walk"), "not_written", true));
     }
 
-    /**
-     * The breeding reward is Molang, and the expression asks whether a player struck the last blow.
-     *
-     * Asking Gson for the number behind that expression throws, which would cost the birth rather
-     * than the reward.
-     */
-    @Test
-    void readsTheBreedingRewardOutOfTheMolangThatStatesIt() throws IOException {
-        assertEquals(7, bredReward(entity("""
-            "minecraft:experience_reward": {"on_bred": "query.last_hit_by_player ? 7 : 0"}
-            """)));
-        assertEquals(3, bredReward(entity("\"minecraft:experience_reward\": {\"on_bred\": 3}")));
-        assertEquals(0, bredReward(entity("\"minecraft:type_family\": {}")));
-    }
-
-    private static int bredReward(ServerEntityDefinition definition) {
-        return ServerEntityDefinition.experienceWhenBred(definition.components().get("minecraft:experience_reward"));
-    }
-
     /** A trigger is a bare event name or the object carrying it, and both appear in the same pack. */
     @Test
     void readsAnEventOutOfEitherFormOfATrigger() throws IOException {

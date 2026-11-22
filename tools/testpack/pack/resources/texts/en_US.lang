@@ -17,6 +17,7 @@ item.tp:pebble.name=Test Pebble
 tile.tp:lamp.name=Test Lamp
 tile.tp:totem.name=Test Totem
 tile.tp:pillar.name=Test Pillar
+tile.tp:crown.name=Test Crown
 entity.tp:sprite.name=Test Sprite
 entity.tp:ember.name=Test Ember
 item.spawn_egg.entity.tp:sprite.name=Spawn Test Sprite

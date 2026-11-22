@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.script.surface;
 
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import at.ioexception.mcaddon.bedrock.entity.EntityReference;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.registry.AddonEntities;
@@ -296,9 +297,10 @@ public final class EntityMembers extends Surface {
         ServerEntityDefinition.Property property = definition == null ? null : definition.properties().get(name);
         if (property == null) return unsupported("Entity.resetProperty(" + name + ")");
 
-        state.setProperty(entity.getUUID(), name, property.initial());
+        Object initial = property.initial(new EntityReference(entity).scope());
+        state.setProperty(entity.getUUID(), name, initial);
         EntityPropertySync.broadcast(entity, state);
-        return property.initial();
+        return initial;
     }
 
     /** Measured the way the world's own count is, so the two numbers a pack compares mean the same. */
