@@ -14,7 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
 
 /**
  * An item a behaviour pack declares.
@@ -325,20 +324,6 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
         if (absorption == null) return Set.of();
 
         return DamageCause.allNamed(Json.list(absorption, "absorbable_causes"));
-    }
-
-    /** The items `minecraft:repairable` accepts for repairing this one. */
-    public List<String> repairItems() {
-        JsonObject repairable = components.get("minecraft:repairable");
-        if (repairable == null) return List.of();
-
-        return Json.list(repairable, "repair_items").stream()
-            .flatMap(entry -> entry.isJsonObject()
-                ? Json.list(entry.getAsJsonObject(), "items").stream()
-                : Stream.of(entry))
-            .filter(JsonElement::isJsonPrimitive)
-            .map(JsonElement::getAsString)
-            .toList();
     }
 
     /**

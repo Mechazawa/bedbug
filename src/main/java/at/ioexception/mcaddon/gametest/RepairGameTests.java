@@ -28,12 +28,16 @@ public final class RepairGameTests {
     }
 
     private static int anvil(GameTestHelper helper, ItemStack left, ItemStack right) {
+        return result(helper, left, right).getDamageValue();
+    }
+
+    private static ItemStack result(GameTestHelper helper, ItemStack left, ItemStack right) {
         ServerPlayer player = helper.makeMockServerPlayerInLevel();
         AnvilMenu anvil = new AnvilMenu(0, player.getInventory(),
             ContainerLevelAccess.create(helper.getLevel(), helper.absolutePos(BlockPos.ZERO)));
         anvil.getSlot(0).set(left);
         anvil.getSlot(1).set(right);
-        return anvil.getSlot(2).getItem().getDamageValue();
+        return anvil.getSlot(2).getItem();
     }
 
     /** One flint gives back a tenth, where Java would give back a quarter. */
@@ -47,6 +51,24 @@ public final class RepairGameTests {
 
         int damage = anvil(helper, file(file, 60), new ItemStack(Items.FLINT));
         helper.assertTrue(damage == 50, "A file at 60 damage repaired with a flint kept " + damage + ".");
+        helper.succeed();
+    }
+
+    /** A plank repairs a file through the entry naming the planks by a tag, by its five. */
+    @GameTest()
+    public void anItemNamedByATagRepairsAtTheAnvil(GameTestHelper helper) {
+        Item file = BuiltInRegistries.ITEM.getOptional(Platform.id("tp", "file")).orElse(null);
+        if (file == null) {
+            helper.succeed();
+            return;
+        }
+
+        ItemStack repaired = result(helper, file(file, 60), new ItemStack(Items.OAK_PLANKS));
+        helper.assertFalse(repaired.isEmpty(), "An anvil refused to repair a file with an oak plank.");
+        helper.assertTrue(repaired.getDamageValue() == 55,
+            "A file at 60 damage repaired with a plank kept " + repaired.getDamageValue() + ".");
+        helper.assertTrue(result(helper, file(file, 60), new ItemStack(Items.COBBLESTONE)).isEmpty(),
+            "An anvil repaired a file with cobblestone, which no entry names.");
         helper.succeed();
     }
 

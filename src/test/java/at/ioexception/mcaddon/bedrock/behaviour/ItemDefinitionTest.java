@@ -171,19 +171,6 @@ class ItemDefinitionTest {
             tag -> tag.equals(BlockTags.LOGS) && block == Blocks.OAK_LOG);
     }
 
-    /** Each repair entry holds its own list of items, and a bare name stands for a list of one. */
-    @Test
-    void flattensTheRepairItems() throws IOException {
-        ItemDefinition item = item("""
-            {"minecraft:repairable": {"repair_items": [
-                {"items": ["minecraft:stick", "minecraft:oak_planks"], "repair_amount": 10},
-                "minecraft:diamond"]}}
-            """);
-
-        assertEquals(List.of("minecraft:stick", "minecraft:oak_planks", "minecraft:diamond"),
-            item.repairItems());
-    }
-
     /** Bedrock turns a component off by writing false into it, keeping the component declared. */
     @Test
     void readsAComponentSwitchedOff() throws IOException {
