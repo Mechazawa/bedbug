@@ -25,13 +25,14 @@ import java.util.Comparator;
  * - `tp:sprite` enables attachables, holds items at twice the size and draws them at full brightness.
  * - `tp:warden` draws the same geometry and declares none of that, so it wears nothing and holds an
  *   item at the ordinary size in the light around it.
- * - `tp:prism` enables attachables and hides armour, so the visor is drawn in its hand and not on its
- *   head; a held item is drawn in place of nothing only while its `hide_held_items` expression,
- *   `q.mark_variant == 1`, is false.
+ * - `tp:prism` enables attachables and hides armour, so the visor is not drawn on its head. Held, the
+ *   visor is drawn as an item, because an item worn in an armour slot draws no attachable in a hand.
+ *   A held item is drawn only while its `hide_held_items` expression, `q.mark_variant == 1`, is false.
  * - The client's own player and a husk, which Java draws with models of its own, wear `tp:topper`
  *   and hold `tp:baton`. Java draws neither item, and each attachable hangs off the part of Java's
  *   model its binding names: the topper, pivoted at 28 pixels and modelled on top of a humanoid
- *   head, sits there and turns with the head, and the baton sits in the right hand.
+ *   head, sits there and turns with the head, and the baton sits in the right hand. The topper held
+ *   rather than worn is drawn as an item.
  * - `tp:scroll` binds `item`, the child of an empty root, and draws a second cube on `sheet` below
  *   it, both modelled about a pivot of nothing. A bone bound below the root is not lowered by the 24
  *   pixels a bound root is, so held by the player and by `tp:prism`, `item`'s cube sits at the hand
@@ -93,6 +94,7 @@ public final class AttachableClientGameTest implements FabricClientGameTest {
             worn(context, world, sprite, warden);
             held(context, world, sprite, warden);
             prism(context, world, prism);
+            wearableHeld(context, world);
             onAPlayer(context, world);
             boundBelowTheRoot(context, world);
             onAMob(context, world);
@@ -145,6 +147,23 @@ public final class AttachableClientGameTest implements FabricClientGameTest {
         long models = armoured.models().stream().distinct().count();
         Assert.that(models == bare, () -> "The diamond horse armour's attachable covers the body slot, and the"
             + " horse was drawn with " + models + " Java models where it is drawn with " + bare + " bare.");
+    }
+
+    /**
+     * A player holding `tp:topper` and wearing nothing: Bedrock draws a worn item held in a hand as an
+     * item, so the topper's attachable draws nothing and Java draws the item in the hand.
+     */
+    private static void wearableHeld(ClientGameTestContext context, TestSingleplayerContext world) {
+        world.getServer().runCommand("item replace entity @a weapon.mainhand with tp:topper");
+        Worlds.waitForClient(context, client -> carries(client.player, EquipmentSlot.MAINHAND, "tp:topper")
+                && client.player.getItemBySlot(EquipmentSlot.HEAD).isEmpty(), 100,
+            () -> "tp:topper never reached the client's own player's hand.");
+
+        Submitted holding = posed(context, 0, 0);
+        Assert.that(holding.geometry().isEmpty(), () -> "tp:topper is worn on the head and held in the hand,"
+            + " and its attachable drew " + holding.geometry().size() + " pieces of geometry on the player.");
+        Assert.that(holding.items().size() == 1, () -> "Expected Java to draw the held tp:topper as an item and"
+            + " found " + holding.items().size() + " item models on the player.");
     }
 
     /**
@@ -295,12 +314,10 @@ public final class AttachableClientGameTest implements FabricClientGameTest {
             + " pieces of geometry were drawn for it wearing tp:visor on its head.");
 
         world.getServer().runCommand("item replace entity @e[type=tp:prism] weapon.mainhand with tp:visor");
-        Submitted holding = Frames.waitFor(context, prism, frame -> frame.geometry().size() == 3,
-            "tp:prism enables attachables and held tp:visor, and the visor was never drawn in its hand.");
-        Assert.near(holding.geometry().get(2).box().minY, PRISM_HAND, TOLERANCE,
-            "the bottom of tp:visor above tp:prism's feet, hung off its rightItem bone");
-        Assert.that(holding.items().isEmpty(), "tp:visor's attachable draws the held visor, and an item was"
-            + " drawn in the same hand as well.");
+        Submitted holding = Frames.waitFor(context, prism, frame -> frame.items().size() == 1,
+            "tp:prism held tp:visor, which is worn on the head, and it was never drawn as an item in its hand.");
+        Assert.that(holding.geometry().size() == 2, "tp:visor is worn on the head, and its attachable drew "
+            + (holding.geometry().size() - 2) + " pieces of geometry while tp:prism held it.");
 
         world.getServer().runCommand("item replace entity @e[type=tp:prism] weapon.mainhand with tp:scroll");
         Submitted scroll = Frames.waitFor(context, prism, frame -> frame.geometry().size() == 3

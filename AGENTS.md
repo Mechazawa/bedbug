@@ -737,7 +737,7 @@ These are the checks it runs, and what each one catches:
   controller state, a one second crossing out of a state declaring `blend_via_shortest_path` from
   350 degrees to 10, and a state that plays a clip once and moves on once its clips have all
   finished. It enables attachables, hides armour and hides what it holds while its mark variant is
-  one, so the visor is drawn in its hand and never on its head.
+  one, so the visor is never drawn on its head, and in its hand it is drawn as an item.
 
   `tp:tailor` draws the same two textures in three passes, the way a villager wears its profession
   over the clothes of its biome: through `tp_tailored`, the one material in the pack's own
@@ -1926,6 +1926,15 @@ same 24), and Java's model origin is already 24 pixels up. `AttachableLayer` is 
 first and clears the head item, armour and hand items of each slot it draws from the render state
 the later layers read.
 
+**An item worn in an armour slot draws no attachable while it is in a hand.** `Attachables.on`
+passes over a hand slot whose item `getEquipmentSlotForItem` puts in an armour slot, so Java draws
+it as an item. Nothing Mojang publishes states this rule. It is decided from what Bedrock does with
+attachables that name no slot: Mojang's helmet attachables, and the custom helmet in the Bedrock
+wiki's custom armour guide, carry no `item` condition and no slot test, and Bedrock draws a held
+diamond helmet flat. A Villager News hat binds its root to `head` by name and is not drawn on the
+head while held. An item no armour slot takes, such as the trident, the spyglass or `tp:baton`,
+draws its attachable in the hand. `AttachableClientGameTest` holds `tp:topper` and `tp:visor`.
+
 Seven fields are read outside the renderer itself, which is where to look for them:
 
 - **`visible_bounds_width`, `visible_bounds_height` and `visible_bounds_offset`** are the box Bedrock
@@ -2900,6 +2909,13 @@ publishes nothing on, decided here:
   it can stand on that the sky cannot see; Java's walk out of the sun asks for fire and for a monster's
   liking of the dark, which an add-on entity has none of. It and `move_through_village`'s
   `only_at_night` tell day from night by the clock, as the shelter goals do.
+- `flee_sun` is the same walk with no cooldown (`FindCoverGoal`). Mojang says only that it runs
+  from direct sunlight to shade, and every vanilla entity declaring it also burns in daylight, so
+  nothing says whether it waits for the fire. It starts unburnt and whatever the mob wears on its
+  head. The Minecraft Wiki's skeleton, zombie and drowned pages say nothing Bedrock-specific about
+  either: skeletons "seek out shelter during the day" and drowned on land by day "seek out nearby
+  water or shade", with no fire or helmet named. A helmet is named only as stopping the burn, and
+  only the Legacy Console Edition waited for the fire.
 
 **The game test world is dark.** `isBrightOutside` answered false there at a clock of 25020, so a test
 about the day runs `time set day` and a goal asks the clock.
@@ -2926,6 +2942,14 @@ about the day runs `time set day` and a goal asks the clock.
   alongside the goal's own wait between station searches. The rain tests run in the mod's own
   `mcaddon:gametest/clear_sky` test environment, which puts them in a batch of their own, so the
   rain they set reaches no other test.
+- `minecraft:behavior.work_composter` visits the composter every `use_block_min` to `use_block_max`
+  ticks (100 and 200), counted from arrival, up to `block_interaction_max` visits. Mojang publishes no
+  rule for a visit, so it follows Java's `WorkAtComposter`: a ready composter is emptied first
+  (`can_empty_composter`), then, below level 7 (`can_fill_composter`), wheat and beetroot seeds from the
+  entity's `minecraft:inventory` go in, per kind only what is held beyond `min_item_count`, at most
+  `items_per_use_max` a visit. Mojang's description says "excess seeds", which is why only those two
+  items count. A visit with nothing to do still counts and raises `on_use_block`. An entity with no
+  inventory fills nothing. `speed_multiplier` defaults to 0.5 for both work goals.
 - A worker makes the work sound of Java's villager whose profession takes the station as its job
   site, every `sound_delay_min` to `sound_delay_max` ticks while it stands at the station. Mojang's
   villager files name no work sound, so this sound is decided here, and a `sound_delay_max` of

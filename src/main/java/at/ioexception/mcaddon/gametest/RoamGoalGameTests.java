@@ -133,6 +133,35 @@ public final class RoamGoalGameTests {
             .thenSucceed();
     }
 
+    /**
+     * `minecraft:behavior.flee_sun` walks a mob under the open sky by day into the shade beside it,
+     * burning as Mojang's skeleton is in daylight or not.
+     */
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS * 2)
+    public void aMobFleeingTheSunEndsInTheShade(GameTestHelper helper) {
+        floor(helper);
+        BlockPos.betweenClosed(new BlockPos(4, 3, 0), new BlockPos(7, 3, 7))
+            .forEach(at -> helper.setBlock(at, Blocks.STONE));
+        AddonEntity[] burning = {null};
+        AddonEntity[] unburnt = {null};
+        setDay(helper);
+        helper.startSequence()
+            .thenExecuteAfter(LIGHT_SETTLES, () -> {
+                burning[0] = roamer(helper, "tp:roamer_sunshy", new BlockPos(1, 1, 2));
+                unburnt[0] = roamer(helper, "tp:roamer_sunshy", new BlockPos(1, 1, 6));
+                if (burning[0] != null) {
+                    burning[0].setRemainingFireTicks(WALK_TICKS * 2);
+                }
+            })
+            .thenWaitUntil(() -> {
+                helper.assertTrue(burning[0] == null || hidden(helper, burning[0]),
+                    ROAMER + " flees the sun while burning and is still under the sky.");
+                helper.assertTrue(unburnt[0] == null || hidden(helper, unburnt[0]),
+                    ROAMER + " flees the sun unburnt and is still under the sky.");
+            })
+            .thenSucceed();
+    }
+
     /** The cover group's three second cooldown, in ticks. */
     private static final int COOLDOWN = 60;
 
