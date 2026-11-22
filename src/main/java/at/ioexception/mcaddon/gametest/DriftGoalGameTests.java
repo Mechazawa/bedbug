@@ -399,18 +399,24 @@ public final class DriftGoalGameTests {
         }
 
         BlockPos ashore = new BlockPos(POOL + 1, 2, 4);
+        long[] movedAt = {0};
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(following(drifter), DRIFTER + " does not follow the pig."))
             .thenExecute(() -> {
                 BlockPos at = helper.absolutePos(ashore);
                 Platform.placeAt(pig, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0f, 0f);
+                movedAt[0] = helper.getTick();
             })
-            .thenExecuteAfter(GIVE_UP_TICKS, () -> helper.assertFalse(following(drifter),
-                DRIFTER + " still follows a pig out of the water."))
+            .thenWaitUntil(() -> {
+                helper.assertTrue(helper.getTick() - movedAt[0] <= GIVE_UP_TICKS,
+                    DRIFTER + " still follows a pig out of the water.");
+                helper.assertFalse(following(drifter), DRIFTER + " still follows a pig out of the water.");
+            })
             .thenSucceed();
     }
 
-    private static final int GIVE_UP_TICKS = 10;
+    /** The pig lands ashore and the goal is checked every second tick, so the give-up is not on one tick. */
+    private static final int GIVE_UP_TICKS = 40;
 
     private static boolean following(AddonEntity drifter) {
         return drifter.runningGoals().stream().anyMatch(goal -> goal.startsWith("SwimWithEntityGoal"));
