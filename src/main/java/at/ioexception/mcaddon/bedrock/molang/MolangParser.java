@@ -78,12 +78,18 @@ public final class MolangParser {
 
     /** Parses a whole Molang value, which may be a plain expression or a list of statements. */
     public static MolangExpression parse(String source) {
-        if (source == null || source.isBlank()) return MolangExpression.ZERO;
+        MolangExpression parsed = tryParse(source);
+        return parsed == null ? MolangExpression.ZERO : parsed;
+    }
+
+    /** The same, or null where the source is blank or does not parse. */
+    public static MolangExpression tryParse(String source) {
+        if (source == null || source.isBlank()) return null;
 
         try {
             return new MolangParser(source).parseProgram();
         } catch (Malformed ignored) {
-            return MolangExpression.ZERO;
+            return null;
         }
     }
 

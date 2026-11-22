@@ -1935,6 +1935,14 @@ diamond helmet flat. A Villager News hat binds its root to `head` by name and is
 head while held. An item no armour slot takes, such as the trident, the spyglass or `tp:baton`,
 draws its attachable in the hand. `AttachableClientGameTest` holds `tp:topper` and `tp:visor`.
 
+**Of several attachables for one item, one whose `item` condition holds wins.** Mojang ships
+`diamond_helmet.json`, naming no condition, beside `diamond_helmet.player.json`, asking
+`query.owner_identifier == 'minecraft:player'`, and publishes no rule for the pair. `Attachables.choose`
+takes the first whose condition holds and else the first naming the item with no condition, whatever
+order the files were read in. Only the chosen one's animator is moved on; the others are asked their
+condition through `Animators.standing`. The test pack's `golden_helmet` pair is read back by
+`AttachableClientGameTest`.
+
 Seven fields are read outside the renderer itself, which is where to look for them:
 
 - **`visible_bounds_width`, `visible_bounds_height` and `visible_bounds_offset`** are the box Bedrock

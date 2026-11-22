@@ -40,7 +40,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -55,7 +54,8 @@ public final class AddonModels {
     /**
      * One pass: a baked model, the texture to draw it with, the bones it draws and its tint.
      *
-     * `visibility` hides a bone and everything hanging off it. `owned` names the bones whose own
+     * `visibility` hides a bone's own boxes and leaves its children to their own rules, which is how
+     * Mojang's creaking hides `*` and draws its `head` under the hidden `upperBody`. `owned` names the bones whose own
      * boxes this pass draws, because a controller giving one bone a material of its own draws that
      * bone in a pass of its own while its children may still belong to this one.
      *
@@ -196,7 +196,8 @@ public final class AddonModels {
             MolangValue value = expression.evaluate(environment);
             texturePaths.add(value.isText() ? definition.textures().get(value.text()) : null);
         }
-        String texturePath = texturePaths.stream().filter(Objects::nonNull).findFirst().orElse(null);
+        // Each layer keeps its place: a first layer that names nothing is not replaced by the second.
+        String texturePath = texturePaths.isEmpty() ? null : texturePaths.get(0);
         if (texturePath == null) return List.of();
 
         List<PartVisibility.Rule> visibility = new ArrayList<>();
