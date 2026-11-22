@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.gametest;
 
 import at.ioexception.mcaddon.registry.ActiveAddons;
 import at.ioexception.mcaddon.McAddon;
+import at.ioexception.mcaddon.bedrock.behaviour.Descriptor;
 import at.ioexception.mcaddon.bedrock.fog.FogDefinition;
 import at.ioexception.mcaddon.convert.ConvertedPack;
 import at.ioexception.mcaddon.entity.AddonEntity;
@@ -14,6 +15,7 @@ import at.ioexception.mcaddon.registry.AddonItems;
 import at.ioexception.mcaddon.registry.AddonParticles;
 import at.ioexception.mcaddon.server.EntityEvents;
 import at.ioexception.mcaddon.server.ServerHooks;
+import com.google.gson.JsonParser;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 //? if >=26.2 {
 import net.minecraft.advancements.triggers.CriteriaTriggers;
@@ -657,6 +659,29 @@ public final class PackGameTests {
         helper.assertTrue(player.getRecipeBook().contains(recipe), "The recipe stayed locked after a tick.");
         helper.assertFalse(helper.getLevel().getServer().getRecipeManager().byKey(recipe).orElseThrow()
             .value().showNotification(), "The recipe asks for an unlock toast it never earns.");
+        helper.succeed();
+    }
+
+    /**
+     * A block's `tag:` components are its tags wherever a pack asks about one.
+     *
+     * The pillar carries `tag:tp:sturdy` and `tag:carvable`, and the lamp neither.
+     */
+    @GameTest()
+    public void aBlocksTagComponentsAreItsTags(GameTestHelper helper) {
+        Block pillar = BuiltInRegistries.BLOCK.getOptional(Platform.id("tp", "pillar")).orElse(null);
+        Block lamp = BuiltInRegistries.BLOCK.getOptional(Platform.id("tp", "lamp")).orElse(null);
+        if (pillar == null || lamp == null) {
+            helper.succeed();
+            return;
+        }
+
+        Descriptor any = Descriptor.tryFrom(JsonParser.parseString("{\"tags\": \"q.any_tag('tp:sturdy')\"}"));
+        Descriptor all = Descriptor.tryFrom(
+            JsonParser.parseString("{\"tags\": \"q.all_tags('tp:sturdy', 'carvable')\"}"));
+        helper.assertTrue(any.matches(pillar.defaultBlockState()), "q.any_tag missed tp:pillar's tag:tp:sturdy.");
+        helper.assertTrue(all.matches(pillar.defaultBlockState()), "q.all_tags missed tp:pillar's tag:carvable.");
+        helper.assertFalse(any.matches(lamp.defaultBlockState()), "q.any_tag found tp:sturdy on tp:lamp.");
         helper.succeed();
     }
 

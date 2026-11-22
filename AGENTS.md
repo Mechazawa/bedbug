@@ -2889,6 +2889,14 @@ redirects the neighbour's `isFaceSturdy(side)` call inside a pane's `getStateFor
 `updateShape`, the only place a pane knows the side. `tp:pillar` carries the rule and
 `aConnectionRuleNamesTheSidesNeighboursReach` reads fence, bars and wall back.
 
+## Block tags
+
+A block's tags are its `minecraft:tags` list and every `tag:<name>` component, the form packs wrote
+before that list; Mojang's schemas name only the list, and the Bedrock wiki's block tag page shows
+the component. Both become Java block tags in the converted data pack, a bare name under
+`minecraft:`, so a descriptor's `q.any_tag`, the block tag queries and a filter ask Java's tag.
+`PackGameTests.aBlocksTagComponentsAreItsTags` reads `tp:pillar`'s two back.
+
 ## Recipe unlock context and priority
 
 `AlwaysUnlocked` adds a `minecraft:tick` criterion to the recipe's unlock advancement, which grants
