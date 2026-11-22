@@ -34,8 +34,9 @@ import java.util.List;
  * standing place within `search_range` and `search_height` of the target whose distance across the
  * ground is nearest `offering_distance`. A spot further off than `minimum_teleport_distance` is
  * reached by teleporting, once per run; the rest is walked. With a `search_count` the spot is the
- * first standing place among that many random draws a tick instead of the best of all of them. On arrival the attempt event is raised
- * and the drop rolled, the item thrown along the look at the target.
+ * first standing place among that many random draws a tick instead of the best of all of them. On
+ * arrival the attempt event is raised and the drop rolled, the item thrown along the look at the
+ * target.
  */
 public final class DropItemForGoal extends Goal {
     /** How hard the gift is thrown, and how much of that goes upward. */
