@@ -878,6 +878,17 @@ public class AddonEntity extends PathfinderMob
     }
 
     /**
+     * The title of the trading screen: the `display_name` of the table the entity trades by, a key
+     * of the pack's own text, or the entity's own name where that table states none.
+     */
+    private net.minecraft.network.chat.Component tradeTitle() {
+        String named = liveText("minecraft:trade_table", "table") != null
+            ? liveText("minecraft:trade_table", "display_name")
+            : liveText("minecraft:economy_trade_table", "display_name");
+        return named == null ? getDisplayName() : net.minecraft.network.chat.Component.translatable(named);
+    }
+
+    /**
      * How far the whole entity is grown, beyond the scale its type was registered at.
      *
      * `minecraft:scale` sizes the entity, and its type was built from whatever the top level said,
@@ -6282,7 +6293,7 @@ public class AddonEntity extends PathfinderMob
         if (getTradingPlayer() != null) return super.mobInteract(player, hand);
 
         setTradingPlayer(player);
-        openTradingScreen(player, getDisplayName(), 1);
+        openTradingScreen(player, tradeTitle(), 1);
         return InteractionResult.SUCCESS;
     }
 
