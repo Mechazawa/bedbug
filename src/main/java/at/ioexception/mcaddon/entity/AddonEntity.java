@@ -6533,10 +6533,30 @@ public class AddonEntity extends PathfinderMob
         };
         if (!opens) return false;
 
+        showStock(player);
+        return true;
+    }
+
+    /**
+     * Whether the inventory key of a player riding the entity opens its slots, as it opens a tamed
+     * horse's in Bedrock. Both sides answer it, the client from the groups the server sent it.
+     */
+    public boolean opensToRider() {
+        return "horse".equals(Goals.text(liveComponent("minecraft:inventory"), "container_type"));
+    }
+
+    /** Opens the entity's slots to a player riding it, where {@link #opensToRider} says they open. */
+    public boolean openedByRider(Player player) {
+        if (carried == null || !hasPassenger(player) || !opensToRider()) return false;
+
+        showStock(player);
+        return true;
+    }
+
+    private void showStock(Player player) {
         if (!(player.containerMenu instanceof StockMenu open && open.belongsTo(this))) {
             player.openMenu(StockMenu.of(this, carried));
         }
-        return true;
     }
 
     /**

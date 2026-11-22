@@ -3553,9 +3553,8 @@ publishes nothing:
 - **`container_type`** opens Java's chest grid in whole rows (at most six) over the slots, the cells
   past the last slot shut: `container`, `minecart_chest`, `chest_boat`, `hopper` and
   `minecart_hopper` on any use, `horse` only to a crouching player, `inventory` never. Java's horse,
-  hopper and minecart menus belong to their own entity classes. The inventory key of a player riding
-  the entity opens nothing, because Java sends it only for a vehicle that is `HasCustomInventoryScreen`
-  by class and every add-on mount would then lose the player's own inventory.
+  hopper and minecart menus belong to their own entity classes. A player riding a `horse` one opens
+  it with the inventory key as well, as the next section says.
 - **`can_be_siphoned_from`** decides the entity's class at registration: a type any of whose
   inventories may be siphoned is built as `SiphonedEntity`, a Java `Container`, because Java's hopper
   and Lithium's both find entity containers by class. Its slots face a hopper only while the live
@@ -3629,3 +3628,22 @@ publishes nothing:
   Mojang does not say what the offset is measured from. Here it is the floor of the bed's block,
   because Java places a sleeper 0.6875 above that floor and Mojang's villager states 0.6 with a
   height of 0.3, which then rests on the mattress.
+
+## Census gap: ride-inventory
+
+The inventory key of a player riding an add-on mount opens the mount's slots (`StockMenu`) while its
+live `minecraft:inventory` has `container_type` `horse`, and the player's own inventory otherwise.
+Java decides this on both sides by the vehicle's class (`HasCustomInventoryScreen`): the client's
+`MultiPlayerGameMode.isServerControlledInventory` sends `OPEN_INVENTORY` instead of opening
+`InventoryScreen`, and `ServerGamePacketListenerImpl.handlePlayerCommand` opens the vehicle's screen.
+Mojang states the horse inventory inside the tamed group (`horse_tamed`, `donkey_tamed`,
+`llama_tamed`, `camel_adult`), so a class chosen at registration would answer for an untamed mount
+too. `RiderInventoryKeyMixin` answers the client's question with `AddonEntity.opensToRider`, read off
+the groups the server mirrors to it, and `RiderInventoryMixin` opens the slots on the server through
+`openedByRider`. Mojang's docs and the Bedrock wiki say only that `horse` is a container type; the
+Minecraft Wiki's horse page says a player opens a horse's inventory by riding it and pressing the
+inventory key, or by crouching and using it. Nothing published says what the key does on a mount
+with no horse inventory, so it opens the player's own, which is what Java does on any vehicle that
+has no screen. `restrict_to_owner` is not read on this path, as on the crouching one.
+`RiderInventoryClientGameTest` rides `tp:saddler` with no inventory, a horse one and a chest one and
+reads which screen the key opened.

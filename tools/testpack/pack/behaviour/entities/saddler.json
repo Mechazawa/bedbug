@@ -1,0 +1,61 @@
+{
+  "format_version": "1.21.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "tp:saddler",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": ["tp_saddler", "mob"]
+      },
+      "minecraft:collision_box": {
+        "width": 1.2,
+        "height": 1.2
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 20
+      },
+      "minecraft:movement": {
+        "value": 0
+      },
+      "minecraft:physics": {},
+      "minecraft:movement.basic": {},
+      "minecraft:navigation.walk": {},
+      "minecraft:rideable": {
+        "seat_count": 1,
+        "family_types": ["player"],
+        "seats": {
+          "position": [0, 1.1, 0]
+        }
+      }
+    },
+    "component_groups": {
+      "tp:saddler_saddlebag": {
+        "minecraft:inventory": {
+          "container_type": "horse",
+          "inventory_size": 2
+        }
+      },
+      "tp:saddler_crate": {
+        "minecraft:inventory": {
+          "container_type": "container",
+          "inventory_size": 9
+        }
+      }
+    },
+    "events": {
+      "tp:saddler_saddlebag": {
+        "add": {"component_groups": ["tp:saddler_saddlebag"]},
+        "remove": {"component_groups": ["tp:saddler_crate"]}
+      },
+      "tp:saddler_crate": {
+        "add": {"component_groups": ["tp:saddler_crate"]},
+        "remove": {"component_groups": ["tp:saddler_saddlebag"]}
+      }
+    }
+  }
+}
