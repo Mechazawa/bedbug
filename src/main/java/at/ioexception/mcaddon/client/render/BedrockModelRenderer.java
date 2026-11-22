@@ -71,13 +71,11 @@ public final class BedrockModelRenderer {
         int light, int overlay, int colour) {
 
         void bone(BakedBone bone, Quaternionf parentTurn) {
-            if (hidden.test(bone.name())) return;
-
             poseStack.pushPose();
             Quaternionf turn = poseBone(bone, parentTurn, animator, poseStack);
 
             PoseStack.Pose last = poseStack.last();
-            if (drawn.test(bone.name())) {
+            if (!hidden.test(bone.name()) && drawn.test(bone.name())) {
                 for (BakedQuad quad : bone.quads()) emitQuad(quad, shift, last, buffer, light, overlay, colour);
             }
 

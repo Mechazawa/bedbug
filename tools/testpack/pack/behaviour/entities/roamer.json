@@ -46,6 +46,12 @@
           "cooldown_time": 3
         }
       },
+      "tp:roamer_sunshy": {
+        "minecraft:behavior.flee_sun": {
+          "priority": 0,
+          "speed_multiplier": 1.2
+        }
+      },
       "tp:roamer_curled": {
         "minecraft:behavior.pet_sleep_with_owner": {
           "priority": 0,
@@ -281,6 +287,13 @@
         "add": {
           "component_groups": [
             "tp:roamer_shy"
+          ]
+        }
+      },
+      "tp:roamer_sunshy": {
+        "add": {
+          "component_groups": [
+            "tp:roamer_sunshy"
           ]
         }
       },

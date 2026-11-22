@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.bedrock.molang;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -137,16 +138,16 @@ public class MolangEnvironment {
         self = MolangValue.of(value);
     }
 
-    /** Render controllers index named arrays of texture and geometry keys. */
+    /** Render controllers index named arrays of texture and geometry keys, named in lower case. */
     public void setArrays(Map<String, List<MolangValue>> arrays) {
         this.arrays = arrays;
     }
 
     public MolangValue element(String array, int index) {
-        List<MolangValue> values = arrays.get(array);
+        List<MolangValue> values = arrays.get(array.toLowerCase(Locale.ROOT));
         if (values == null || values.isEmpty()) return MolangValue.ZERO;
-        // Bedrock clamps an out of range index rather than failing to draw.
-        return values.get(Math.min(Math.max(index, 0), values.size() - 1));
+        // Molang.html: a negative index is clamped at zero and one past the end wraps by the size.
+        return values.get(Math.max(index, 0) % values.size());
     }
 
     public void clearTemporaries() {

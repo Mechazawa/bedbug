@@ -68,6 +68,8 @@
 - Attachables draw what any entity wears or holds, players and vanilla mobs too, on their own clock.
 - A pack can pick between models for one item by its own condition.
 - An attachable can write variables into its wearer, and the layer it replaces switches off.
+- An item that an armour slot takes, such as a hat with `minecraft:wearable`, uses its attachable
+  only while worn. Held in a hand, it is drawn as an item, as in Bedrock.
 - A pack's entity wears its equipment where its client definition allows (`enable_attachables`).
   `hide_armor` hides armour slots and keeps hand items.
 - A bone with `binding` hangs on the named bone of the wearer, so a shield stays in the hand. Its

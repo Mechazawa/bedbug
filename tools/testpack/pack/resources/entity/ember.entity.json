@@ -19,7 +19,7 @@
         {"drift": "controller.animation.tp.ember.drift"}
       ],
       "scripts": {
-        "should_update_effects_offscreen": true
+        "should_update_effects_offscreen": "1.0"
       },
       "particle_effects": {
         "trail": "tp:ember_trail"
