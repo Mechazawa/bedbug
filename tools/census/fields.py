@@ -58,8 +58,12 @@ TEMPT_SOUND = ("Mojang's documentation counts the gap between tempt sounds in ti
                "[0, 100] where its strider writes 2 to 5, which no one unit fits; the sound is left unmade "
                "rather than made at one of the two rates.")
 
-BOBBING = ("The shape of the rise and fall on the surface. The lift above gives a floating entity Java's own "
-           "bob, and nothing in Java lets an entity choose another.")
+SUFFOCATION = ("Mojang documents seconds between suffocation damage with a default of -20, and writes 0 on "
+               "every vanilla mob and -1 on the player. The Minecraft Wiki's damage page names one drowning "
+               "rate and no edition difference: a hit of 2 when the air reaches -20, which then goes back to "
+               "0, and a mob's first hit sixteen seconds under water, where a floor of 0 would hit a pig at "
+               "fifteen and then every tick. So the value sets no rate a pack can see, and Java's "
+               "`LivingEntity.baseTick` hurts at that rate once `shouldTakeDrowningDamage` finds the air at -20.")
 
 SLEEPING_BOX = ("From 1.21 Java's `LivingEntity.getDimensions` is final and answers a fixed box of a fifth of a "
                 "block for the sleeping pose, which is the pose a sleeping entity takes here, so a box of a "
@@ -70,26 +74,11 @@ SLEEPING_BOX = ("From 1.21 Java's `LivingEntity.getDimensions` is final and answ
 REASONS = {
     # Components whose whole body describes something Java holds nowhere.
     "minecraft:breathable": {
-        "suffocate_time": "Documented as seconds between suffocation damage with a default of -20, which no "
-                          "count of seconds can be, and written as 0 or -1 by every vanilla entity. Java's "
-                          "own two damage a second once the air is gone is what applies.",
-        "generates_bubbles": "The bubbles a Bedrock client draws around a mob breathing under water, "
-                             "which Java draws for no mob.",
-        "totalSupply": "An older spelling the schemas no longer describe; the default stands in for it.",
-        "suffocateTime": "An older spelling the schemas no longer describe; the default stands in for it.",
+        "suffocate_time": SUFFOCATION,
+        "suffocateTime": SUFFOCATION,
     },
     "minecraft:conditional_bandwidth_optimization": {
         "*": "How often Bedrock's own server resends an entity, which Java decides for itself.",
-    },
-    "minecraft:physics": {
-        "has_gravity": "Java can switch gravity off per entity, but Mojang's fish declare it off and still "
-                       "fall back when they leap out of water, so the engine does not apply it as written; "
-                       "a mob that flies is held up by its move control either way.",
-        "has_collision": "Java can switch collision off per entity, as its own vex does every tick, but every "
-                         "vanilla mob declaring it also declares the gravity left alone above, and one without "
-                         "the other falls through the floor.",
-        "push_towards_closest_space": "The one vanilla entity declaring it is the player, which this mod "
-                                      "applies nothing to.",
     },
     "minecraft:push_through": {"*": "A crowd spacing per entity, which Java holds nowhere."},
     "minecraft:can_climb": {"*": "Carries no fields; declaring it is the whole statement."},
@@ -192,21 +181,7 @@ REASONS = {
     "minecraft:navigation.fly": {"can_path_from_air": FROM_AIR},
 
     # Movement styles.
-    "minecraft:movement.sway": {
-        "*": "The side to side sway of a swimming fish, which is how its body is drawn moving rather than "
-             "where it goes; Java's swimming move control steers it straight.",
-    },
 
-    "minecraft:buoyant": {
-        "apply_gravity": "The lift is added on top of the gravity Java applies in a liquid, so an entity "
-                         "saying no to gravity still has it; every vanilla mob declaring this says yes.",
-        "movement_type": BOBBING,
-        "big_wave_probability": BOBBING,
-        "big_wave_speed": BOBBING,
-        "can_auto_step_from_liquid": "Java lets a mob pushing against the bank climb out of water already.",
-        "drag_down_on_buoyancy_removed": "A boat's sinking when it stops floating; the two vanilla entities "
-                                         "writing it are Mojang's boats.",
-    },
 
     # Goals. Java's goal of the same name takes fewer parameters than Bedrock states.
     "minecraft:behavior.mount_pathing": {
@@ -219,9 +194,6 @@ REASONS = {
         "sleep_collider_width": SLEEPING_BOX,
         "sleep_collider_height": SLEEPING_BOX,
         "sleep_y_offset": SLEEPING_BOX,
-    },
-    "minecraft:behavior.float": {
-        "*": "Java's float goal swims a mob up with no chance of its own and no passengers to drop.",
     },
     "minecraft:behavior.tempt": {
         "tempt_sound": TEMPT_SOUND,
@@ -253,13 +225,6 @@ REASONS = {
     "minecraft:behavior.player_ride_tamed": {
         "priority": "The behaviour is answered as a rule on who may get on, asked whenever somebody tries, "
                     "so there is no goal for a priority to place.",
-    },
-    "minecraft:flocking": {
-        "low_flock_limit": "Documented only as the low bound of a flock, with nothing said of what a smaller "
-                           "flock does, so a flock of any size flocks.",
-        "use_center_of_mass": "Documented only as following a flock by its centre of mass, with nothing said "
-                              "of what a flocker follows otherwise, so cohesion pulls towards the middle of "
-                              "the flock either way.",
     },
 
     # The rest, one component at a time.

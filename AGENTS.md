@@ -1339,8 +1339,7 @@ the weight. `FogClientGameTest.media` reads each back off the frame's `FogData`.
   python3 tools/showcase/build.py --version 26.2
   ```
 
-  The lumen moth states `has_gravity` false, which this mod leaves alone, so a moth summoned in the
-  air falls unless the summon adds `{NoGravity:1b}`.
+  The lumen moth states `has_gravity` false, so a moth summoned in the air hangs where it is put.
 - **`tools/verify/verify.py`** does those game runs without a human watching the log. It starts the
   game, reads the output back for the failures that only appear at runtime, writes
   `build/verify/verdict.json` and a log per run under `build/verify/`, and exits non-zero when
@@ -3285,3 +3284,47 @@ value or a named state picks a member of. A Bedrock id may be a Java block in a 
 the way back starts from a `BlockState`: a lit furnace reports itself as `minecraft:lit_furnace`. A
 command line is translated through `BedrockBlockNames.Resolved.command`, which writes only the
 properties the pack named, because a test for a block asks about those and no others.
+
+## Census reasons: physics
+
+`tp:bobber` carries one group per field of `minecraft:physics`, `minecraft:buoyant`,
+`minecraft:behavior.float`, `minecraft:movement.sway` and `minecraft:breathable`, and `tp:shoaler`
+one per new `minecraft:flocking` field. `PhysicsGameTests` reads each back. Java moves a mob only
+while its AI runs (`LivingEntity.aiStep` calls `travel` behind `isEffectiveAi`), so these tests turn
+the AI on, and the test structure may be turned, so a test measures along the way between two of its
+own blocks (`along`).
+
+- `has_gravity` false is answered by `AddonEntity.isNoGravity`, so it is never written into the
+  entity's saved `NoGravity`. `has_collision` false sets `noPhysics`. Mojang's fish declare gravity
+  off and still fall when out of water; that is their own class in Bedrock, and a pack entity
+  without one floats, which is what the Bedrock wiki's dummy entities rely on.
+  `push_towards_closest_space` calls `Entity.moveTowardsClosestSpace` while the box is inside a
+  block, as Java's item does.
+- `minecraft:buoyant` is `entity/Buoyancy`. Mojang publishes no arithmetic, so: each tick in a named
+  liquid lifts by `base_buoyancy` times 0.03; `bobbing` lets gravity pull the entity back once it is
+  out; `none` stops the lift once its eyes are out, so it holds at the surface; `waves` (the default)
+  bobs and, at `big_wave_probability` a tick, adds `big_wave_speed` times the lift; `apply_gravity`
+  false takes gravity away while afloat; `can_auto_step_from_liquid` false undoes Java's 0.3 step
+  out onto a bank (`LivingEntity.jumpOutOfFluid`, which every Java mob takes); and
+  `drag_down_on_buoyancy_removed` is taken off the vertical speed, in blocks a tick, as the
+  component leaves an entity afloat.
+- `minecraft:behavior.float` is `StayAfloatGoal`. It holds the controls `control_flags` names, none
+  by default as the schema says, so a rider controlling the vehicle does not stop it the way Java's
+  JUMP flag would. With `sink_with_passengers` it makes no stroke while it carries anyone.
+  Passengers are put off once the head has been under water for longer than
+  `time_under_water_to_dismount_passengers`, at once by default, as the documentation says.
+- `minecraft:movement.sway` is `SwayMoveControl`: Java's smooth swimming, pushed across the way to
+  its target by `sway_amplitude` blocks a tick at the peak of a sine whose phase moves
+  `sway_frequency` radians a tick. Mojang publishes no formula.
+- `low_flock_limit`: a flock that with the entity numbers fewer does not steer it.
+  `use_center_of_mass` false (the default) pulls towards the nearest flockmate; true towards the
+  middle of the flock.
+- `totalSupply` and `suffocateTime` are spellings Microsoft Learn still lists beside `total_supply`
+  and `suffocate_time`, and Mojang's allay writes them, so `totalSupply` is read.
+  `generates_bubbles` (default true) lets one bubble rise from the eyes every ten ticks while they
+  are under water; Mojang publishes no rate.
+- `suffocate_time` stays unread. The Minecraft Wiki's damage page names one drowning rate and no
+  edition difference: a hit of 2 when the air reaches -20, then back to 0, a mob's first hit sixteen
+  seconds under water. Every vanilla mob writes 0 and the player -1, and 0 read as the floor of the
+  air count in seconds or in ticks would hit a pig at fifteen seconds and then every tick, so the
+  value sets no rate a pack sees and Java's `shouldTakeDrowningDamage` stands.
