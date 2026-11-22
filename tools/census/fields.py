@@ -151,13 +151,13 @@ REASONS = {
     "minecraft:loot": {"table": "Read by the loot table converter, which files the table under this path."},
     "minecraft:trade_table": {
         "table": "Read where the trades are loaded, while the pack is still open.",
-        "*": "Bedrock's own trading screen: Java's merchant screen has no display name of its own and "
-             "no economy to convert the trades into.",
+        "new_screen": "Picks between Bedrock's two trading layouts. A merchant opens Java's one "
+                      "`MenuType.MERCHANT` screen, `MerchantScreen`, so there is no second layout to pick.",
     },
     "minecraft:economy_trade_table": {
         "table": "Read where the trades are loaded, while the pack is still open.",
-        "*": "The cure discounts and the persistence belong to Bedrock's villager economy, which Java's "
-             "merchant screen has no counterpart for.",
+        "new_screen": "Picks between Bedrock's two trading layouts. A merchant opens Java's one "
+                      "`MenuType.MERCHANT` screen, `MerchantScreen`, so there is no second layout to pick.",
     },
 
     # Attributes. Bedrock states a value and a ceiling; Java's attributes carry a fixed ceiling of

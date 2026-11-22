@@ -104,6 +104,105 @@ public final class HagglerGameTests {
     private static final int STILL_SHOWN = 10;
     private static final int PUT_AWAY = 30;
 
+    /**
+     * `persist_trades` keeps a trader's offers through a transformation into an entity with no table
+     * and back into one with a table of its own: the trade used once before is still used once.
+     * A table without it starts afresh.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 40)
+    public void persistedTradesSurviveATransformationAndBack(GameTestHelper helper) {
+        helper.assertTrue(usesAfterTurningBack(helper, "tp:haggler_persist") == 1,
+            HAGGLER + " persists its trades and came back without the use it had made of one.");
+        helper.assertTrue(usesAfterTurningBack(helper, "tp:haggler_forget") == 0,
+            HAGGLER + " does not persist its trades and came back with an old use on one.");
+        helper.succeed();
+    }
+
+    /** Uses the first trade once, turns the trader into a husk and back, and counts its first trade's uses. */
+    private static int usesAfterTurningBack(GameTestHelper helper, String table) {
+        AddonEntity trader = haggler(helper, table);
+        if (trader == null) return -1;
+
+        trader.notifyTrade(trader.getOffers().get(0));
+        AddonEntity husk = transformed(helper, trader, "tp:haggler_turn", null);
+        helper.assertTrue(husk != null && husk.trades() == null, HAGGLER + " did not turn into a husk with no table.");
+        AddonEntity back = transformed(helper, husk, "tp:haggler_return", null);
+        int uses = back.getOffers().get(0).getUses();
+        back.discard();
+        return uses;
+    }
+
+    /**
+     * `convert_trades_economy` hands an `economy_trade_table` the old trade's result for the same
+     * items: an iron ingot enchanted on the old counter is enchanted on the new one.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 40)
+    public void convertedTradesKeepTheirResultsComponents(GameTestHelper helper) {
+        AddonEntity trader = haggler(helper, "tp:haggler_convert");
+        if (trader == null) {
+            helper.succeed();
+            return;
+        }
+
+        net.minecraft.core.Holder<net.minecraft.world.item.enchantment.Enchantment> mending =
+            helper.getLevel().registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
+                .getOrThrow(net.minecraft.world.item.enchantment.Enchantments.MENDING);
+        trader.getOffers().get(0).getResult().enchant(mending, 1);
+        AddonEntity converted = transformed(helper, trader, "tp:haggler_return", null);
+        helper.assertTrue(converted.getOffers().get(0).getResult().getEnchantments().getLevel(mending) == 1,
+            HAGGLER + " converted its trades and lost the enchantment on the iron it sold.");
+        helper.succeed();
+    }
+
+    /**
+     * A player who raised the event that transformed a trader cured it, and `cured_discount` prices
+     * that player's trades as Java prices a cured villager's: twenty five minor and twenty major
+     * gossip make a reputation of 125, and bread at eight emeralds with a multiplier of 0.05 costs two.
+     * Another customer pays the full eight.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 40)
+    public void aCuredTraderPricesItsCurerDown(GameTestHelper helper) {
+        AddonEntity trader = haggler(helper, "tp:haggler_name");
+        if (trader == null) {
+            helper.succeed();
+            return;
+        }
+
+        Customer curer = Customer.join(helper);
+        Customer stranger = Customer.join(helper);
+        AddonEntity cured = transformed(helper, trader, "tp:haggler_cure", curer.player());
+        int toCurer = breadPrice(cured, curer);
+        int toStranger = breadPrice(cured, stranger);
+        curer.leave();
+        stranger.leave();
+        helper.assertTrue(toCurer == CURED_BREAD,
+            HAGGLER + " charges the player who cured it " + toCurer + " emeralds for bread.");
+        helper.assertTrue(toStranger == FULL_BREAD,
+            HAGGLER + " charges a stranger " + toStranger + " emeralds for bread.");
+        helper.succeed();
+    }
+
+    private static int breadPrice(AddonEntity trader, Customer customer) {
+        trader.mobInteract(customer.player(), InteractionHand.MAIN_HAND);
+        int price = trader.getOffers().stream()
+            .filter(offer -> offer.getResult().is(Items.BREAD))
+            .findFirst().orElseThrow().getCostA().getCount();
+        customer.player().closeContainer();
+        trader.setTradingPlayer(null);
+        return price;
+    }
+
+    private static final int CURED_BREAD = 2;
+    private static final int FULL_BREAD = 8;
+
+    /** Raises the event whose group transforms the trader and finds what it became. */
+    private static AddonEntity transformed(GameTestHelper helper, AddonEntity trader, String event,
+        net.minecraft.world.entity.Entity cause) {
+        EntityEvents.trigger(trader, event, cause, ServerHooks.state());
+        return helper.getLevel().getEntitiesOfClass(AddonEntity.class, trader.getBoundingBox().inflate(1),
+            found -> found != trader && found.isAlive()).stream().findFirst().orElse(null);
+    }
+
     static AddonEntity haggler(GameTestHelper helper, String event) {
         AddonEntity haggler = BehaviourGameTests.spawn(helper, HAGGLER, STAND);
         if (haggler == null) return null;
@@ -117,10 +216,12 @@ public final class HagglerGameTests {
         static Customer join(GameTestHelper helper) {
             MinecraftServer server = helper.getLevel().getServer();
             GameProfile profile = new GameProfile(UUID.randomUUID(), "Customer");
-            ServerPlayer player = new ServerPlayer(server, helper.getLevel(), profile, ClientInformation.createDefault());
+            ServerPlayer player =
+                new ServerPlayer(server, helper.getLevel(), profile, ClientInformation.createDefault());
             Connection connection = new Connection(PacketFlow.SERVERBOUND);
             EmbeddedChannel channel = new EmbeddedChannel(connection);
-            server.getPlayerList().placeNewPlayer(connection, player, CommonListenerCookie.createInitial(profile, false));
+            server.getPlayerList()
+                .placeNewPlayer(connection, player, CommonListenerCookie.createInitial(profile, false));
             BlockPos spot = helper.absolutePos(STAND.west());
             Platform.placeAt(player, spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5, 0f, 0f);
             return new Customer(player, channel);
