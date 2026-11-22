@@ -182,7 +182,7 @@ public final class HagglerGameTests {
         helper.succeed();
     }
 
-    private static int breadPrice(AddonEntity trader, Customer customer) {
+    static int breadPrice(AddonEntity trader, Customer customer) {
         trader.mobInteract(customer.player(), InteractionHand.MAIN_HAND);
         int price = trader.getOffers().stream()
             .filter(offer -> offer.getResult().is(Items.BREAD))
@@ -196,7 +196,7 @@ public final class HagglerGameTests {
     private static final int FULL_BREAD = 8;
 
     /** Raises the event whose group transforms the trader and finds what it became. */
-    private static AddonEntity transformed(GameTestHelper helper, AddonEntity trader, String event,
+    static AddonEntity transformed(GameTestHelper helper, AddonEntity trader, String event,
         net.minecraft.world.entity.Entity cause) {
         EntityEvents.trigger(trader, event, cause, ServerHooks.state());
         return helper.getLevel().getEntitiesOfClass(AddonEntity.class, trader.getBoundingBox().inflate(1),
