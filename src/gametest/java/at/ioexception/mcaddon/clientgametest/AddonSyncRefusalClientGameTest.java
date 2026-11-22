@@ -17,7 +17,9 @@ import java.util.Properties;
  * The client first joins a server handing out the `sv` add-on, which registers its crate with three
  * states. It then joins a server handing out a later release whose crate has four, which cannot be
  * registered over the first without a restart: the client has to stay out of the world, show a
- * message naming the add-on, and keep its own add-ons and the crate it has.
+ * message naming the add-on, and keep its own add-ons and the crate it has. The message has to reach
+ * the screen even when the client ticks between its network thread closing the connection and
+ * storing the reason.
  */
 public final class AddonSyncRefusalClientGameTest implements FabricClientGameTest {
     @Override
@@ -30,8 +32,10 @@ public final class AddonSyncRefusalClientGameTest implements FabricClientGameTes
         Served.waitForInstalled(context);
 
         try (TestDedicatedServerContext server = Served.server(context, Served.RESHAPED, new Properties())) {
-            Worlds.startConnecting(context, server);
-            context.waitForScreen(DisconnectedScreen.class);
+            SlowClose.during(() -> {
+                Worlds.startConnecting(context, server);
+                context.waitForScreen(DisconnectedScreen.class);
+            });
             String shown = context.computeOnClient(client -> Worlds.screen(client).getNarrationMessage().getString());
             Assert.that(shown.contains("The server's copy of Served Add-On cannot replace yours"),
                 "The refusal does not name the add-on. The screen says: " + shown);

@@ -2731,6 +2731,13 @@ Traps met building it:
   connection from the network thread waits on the server thread (`executeBlocking`), and the server
   thread takes that lock every tick in `expire`, so a refusal told under it froze the server until
   the watchdog ended it. `AddonSyncRefusalClientGameTest` met it on 26.1.2; `OutgoingTest` holds it.
+- **A refusal's reason reaches the screen only because `ConnectionReasonMixin` stores it first.**
+  The client handles the server's disconnect packet on the network thread, and Java's
+  `Connection.disconnect` closes the channel and only then stores the reason. A client tick in
+  between sees the closed channel, finds no reason and shows "Connection Lost. Disconnected". With
+  Villager News installed this showed in one full client run of three. The test source set's
+  `ConnectionCloseMixin` holds the network thread a second in that window while
+  `SlowClose.during` runs, which `AddonSyncRefusalClientGameTest` does around its refused join.
 - **A configuration that changes nothing must not reload.** A join whose set equals the active one
   answers at once.
 - **The server's minute without a message counts only while archives are on their way.** A client
