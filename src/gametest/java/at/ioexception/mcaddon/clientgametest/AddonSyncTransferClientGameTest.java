@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * A client a server transfers to a server with another add-on set leaves the first visit, then
@@ -25,7 +26,8 @@ import java.util.stream.Collectors;
  * the same server after it was pointed at the `sw` add-on instead of `sv`: to the client that is a
  * second server with another set. Every set the client makes active is written down, so the
  * transfer has to show the installed set put back once and then the second server's set, in that
- * order, and the client has to stay on the second set.
+ * order, and the client has to stay on the second set. The server also hands out every add-on the
+ * test run installed, so that set is the installed add-ons and `sw`.
  */
 public final class AddonSyncTransferClientGameTest implements FabricClientGameTest {
     private static final List<String> ACTIVATED = new CopyOnWriteArrayList<>();
@@ -55,7 +57,7 @@ public final class AddonSyncTransferClientGameTest implements FabricClientGameTe
                 Worlds.waitForChunks(connection);
                 // Long enough for a leave owed by the first visit to have run, had it waited.
                 context.waitTicks(100);
-                Assert.that(ACTIVATED.equals(List.of("installed", "sw tp")),
+                Assert.that(ACTIVATED.equals(List.of("installed", servedWith("sw"))),
                     () -> "The transfer did not put the installed set back once and then activate the second "
                         + "server's set. It activated: " + ACTIVATED);
                 Assert.that(context.computeOnClient(client -> Worlds.overlay(client) == null
@@ -69,6 +71,13 @@ public final class AddonSyncTransferClientGameTest implements FabricClientGameTe
                     Served.PATIENCE, () -> "sw:pellet never reached the transferred client.");
             }
         }
+    }
+
+    /** The namespaces of a server's set: every installed add-on beside the one it hands out. */
+    private static String servedWith(String handedOut) {
+        return Stream.concat(ActiveAddons.installed().converted().stream()
+                .map(ConvertedPack::namespace), Stream.of(handedOut))
+            .distinct().sorted().collect(Collectors.joining(" "));
     }
 
     /** `installed`, or the namespaces of the set's packs. */
