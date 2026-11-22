@@ -9,6 +9,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.level.block.Blocks;
 
 /**
  * The goal fields `tp:rover` carries one group each of, read back off the world.
@@ -46,6 +47,28 @@ public final class RoverGameTests {
                 ROVER + " stating a target_dist of 3 stopped " + apart + " blocks from its rider's target.");
             helper.succeed();
         });
+    }
+
+    /**
+     * `home_block_list` holds an entity to its home only while a listed block stands there: one
+     * standing in a cobweb is held, one standing in air is not, and the first lets go once the cobweb
+     * is broken.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 60)
+    public void aHomeHoldsOnlyWhileItsBlockStands(GameTestHelper helper) {
+        helper.setBlock(STAND, Blocks.COBWEB);
+        AddonEntity webbed = rover(helper, "tp:rover_make_home_listed", STAND);
+        if (webbed == null) {
+            helper.succeed();
+            return;
+        }
+        AddonEntity bare = rover(helper, "tp:rover_make_home_listed", STAND.south(3));
+        helper.assertTrue(Platform.hasHome(webbed), ROVER + " standing in the cobweb its home lists is not held.");
+        helper.assertFalse(Platform.hasHome(bare), ROVER + " standing where its home lists no block is held.");
+
+        helper.setBlock(STAND, Blocks.AIR);
+        helper.succeedWhen(() -> helper.assertFalse(Platform.hasHome(webbed),
+            ROVER + " is still held to a home whose cobweb is gone."));
     }
 
     private static void chase(GameTestHelper helper, String mountEvent, String riderEvent, double within) {

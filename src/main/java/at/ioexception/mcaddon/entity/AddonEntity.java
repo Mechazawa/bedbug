@@ -762,8 +762,8 @@ public class AddonEntity extends PathfinderMob
         // holding the entity to it: Mojang writes an empty `minecraft:home` on entities whose events
         // only need somewhere to remember.
         if (component != null && component.equals("minecraft:home")
-            && "none".equals(at.ioexception.mcaddon.util.Json.text(
-                liveComponent("minecraft:home"), "restriction_type", "none"))) {
+            && ("none".equals(at.ioexception.mcaddon.util.Json.text(
+                liveComponent("minecraft:home"), "restriction_type", "none")) || !homeBlockStands())) {
             component = null;
         }
         if (component == null) {
@@ -772,8 +772,18 @@ public class AddonEntity extends PathfinderMob
         }
         if (Platform.hasHome(this)) return;
 
-        Platform.setHome(this, blockPosition(),
-            Math.max(1, (int) liveNumber(component, "restriction_radius", 16)));
+        net.minecraft.core.BlockPos centre = component.equals("minecraft:home") ? homePosition() : blockPosition();
+        Platform.setHome(this, centre, Math.max(1, (int) liveNumber(component, "restriction_radius", 16)));
+    }
+
+    /**
+     * Whether a block `home_block_list` names stands at the home, which holds whenever the list is
+     * empty. The home restricts the entity only while one does.
+     */
+    private boolean homeBlockStands() {
+        java.util.Set<net.minecraft.world.level.block.Block> homes =
+            Goals.blocks(liveComponent("minecraft:home"), "home_block_list");
+        return homes.isEmpty() || homes.contains(level().getBlockState(homePosition()).getBlock());
     }
 
     /** The value the home `minecraft:home` saves is kept under, which a chunk written out keeps. */
@@ -3722,6 +3732,7 @@ public class AddonEntity extends PathfinderMob
             hurtOverTime();
             breakBlocks();
             giveEffect();
+            refreshHome();
             attackAround();
             leaveTrail();
             growCrops();

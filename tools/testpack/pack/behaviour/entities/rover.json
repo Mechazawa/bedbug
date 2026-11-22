@@ -12,10 +12,16 @@
       "tp:rover_seat": {
         "minecraft:rideable": {
           "seat_count": 1,
-          "family_types": ["tp_rover"],
+          "family_types": [
+            "tp_rover"
+          ],
           "seats": [
             {
-              "position": [0, 1.0, 0]
+              "position": [
+                0,
+                1.0,
+                0
+              ]
             }
           ]
         }
@@ -41,11 +47,23 @@
           "priority": 2,
           "speed_multiplier": 1
         }
+      },
+      "tp:rover_home_listed": {
+        "minecraft:home": {
+          "restriction_type": "all_movement",
+          "restriction_radius": 4,
+          "home_block_list": [
+            "minecraft:web"
+          ]
+        }
       }
     },
     "components": {
       "minecraft:type_family": {
-        "family": ["tp_rover", "mob"]
+        "family": [
+          "tp_rover",
+          "mob"
+        ]
       },
       "minecraft:collision_box": {
         "width": 0.6,
@@ -68,16 +86,41 @@
     },
     "events": {
       "tp:rover_make_seat": {
-        "add": { "component_groups": ["tp:rover_seat"] }
+        "add": {
+          "component_groups": [
+            "tp:rover_seat"
+          ]
+        }
       },
       "tp:rover_make_pathing": {
-        "add": { "component_groups": ["tp:rover_seat", "tp:rover_pathing"] }
+        "add": {
+          "component_groups": [
+            "tp:rover_seat",
+            "tp:rover_pathing"
+          ]
+        }
       },
       "tp:rover_make_pathing_distant": {
-        "add": { "component_groups": ["tp:rover_seat", "tp:rover_pathing_distant"] }
+        "add": {
+          "component_groups": [
+            "tp:rover_seat",
+            "tp:rover_pathing_distant"
+          ]
+        }
       },
       "tp:rover_make_attacking": {
-        "add": { "component_groups": ["tp:rover_attacking"] }
+        "add": {
+          "component_groups": [
+            "tp:rover_attacking"
+          ]
+        }
+      },
+      "tp:rover_make_home_listed": {
+        "add": {
+          "component_groups": [
+            "tp:rover_home_listed"
+          ]
+        }
       }
     }
   }

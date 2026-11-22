@@ -3298,3 +3298,9 @@ properties the pack named, because a test for a block asks about those and no ot
   mount's `speed_multiplier`, sets that speed every tick ahead of the rider's goals, and stops inside
   `target_dist`. Mojang publishes nothing on `track_target` false beyond the one line, so such a
   walk goes to where the target stood as it began and ends there.
+- `minecraft:home` `home_block_list`: Mojang documents that the home restriction is removed once no
+  listed block stands at the home position. Here the home restricts the entity only while a listed
+  block stands at `homePosition()`, the block the entity's feet were in as the component arrived,
+  asked as the component arrives and on every sensor pass, so a broken block lets go within ten
+  ticks and one put back holds the entity again. An entity spawned in the open has no listed block
+  at its home and is not held, which is what a bee summoned away from a hive is.

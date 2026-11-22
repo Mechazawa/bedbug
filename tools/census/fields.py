@@ -258,11 +258,6 @@ REASONS = {
     },
 
     # The rest, one component at a time.
-    "minecraft:home": {
-        "home_block_list": "Bedrock checks the list against the block an event set the home at; the home here "
-                           "is where the entity stood as the component arrived, which is no such block, so "
-                           "the list has nothing to be checked against.",
-    },
     "minecraft:rideable": {
         "interact_text": "Java shows no prompt of its own for using a mob.",
     },
