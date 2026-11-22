@@ -97,9 +97,15 @@ REASONS = {
         "*": "Names a loot table Java rolls for a mob's gear at spawn, which the loot reader covers.",
     },
     "minecraft:dweller": {
-        "*": "Village membership. Java's point of interest manager would let any mob claim a bed or a job "
-             "site, but the village those claims make up, its gossip, its golems and its raids, is kept by "
-             "Java's villager brain, which a pack's entity has none of; the restriction radius is read.",
+        "dwelling_type": "`village` is the one type published, and Java keeps a village as the points of "
+                         "interest in `PoiManager`, which is where `Dwelling` takes its claims, so there "
+                         "is no second kind of dwelling to choose.",
+        "can_migrate": "Moving between villages. Java keeps no village an entity belongs to: "
+                       "`ServerLevel.isVillage` asks only whether points of interest are near a place, so "
+                       "there is no first village to stay in and no second one to move to.",
+        "first_founding_reward": "Reputation a player earns as a village is first founded. Java founds no "
+                                 "village, it has points of interest and no moment one starts, and keeps "
+                                 "reputation per villager in `Villager.gossips` rather than per village.",
     },
     "minecraft:preferred_path": {
         "*": "Per-block path costs. Java's walk node evaluator prices each node by the path type it "

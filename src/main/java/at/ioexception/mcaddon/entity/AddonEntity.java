@@ -3836,6 +3836,7 @@ public class AddonEntity extends PathfinderMob
             noticeRaidWon();
             rise();
             manageAsTrader();
+            dwell();
             despawn();
             expireSummons();
             burnInDaylight();
@@ -5328,6 +5329,18 @@ public class AddonEntity extends PathfinderMob
     public void remove(net.minecraft.world.entity.Entity.RemovalReason reason) {
         super.remove(reason);
         if (bossBar != null) bossBar.removeAllPlayers();
+        if (reason.shouldDestroy()) Dwelling.release(this);
+    }
+
+    /** The game tick of the next look round the dwelling `minecraft:dweller` names. */
+    private int dwellAt;
+
+    private void dwell() {
+        Dwelling dwelling = Dwelling.tryFrom(liveComponent("minecraft:dweller"));
+        if (dwelling == null || tickCount < dwellAt) return;
+
+        dwellAt = tickCount + dwelling.interval(getRandom());
+        dwelling.claim(this);
     }
 
     /** Shows a pack's boss its bar, to everybody inside the range the component named. */

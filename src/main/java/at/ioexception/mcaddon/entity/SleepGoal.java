@@ -16,7 +16,8 @@ import java.util.EnumSet;
  * `minecraft:behavior.sleep`, which has an entity that owns a bed walk to it at night and lie on it.
  *
  * A bed is one of Java's, registered as a home point of interest, which is what a Java villager
- * claims; the entity takes the nearest free one within {@link MoveToPoiGoal#SEARCH_RADIUS} blocks.
+ * claims; the entity takes the one its `minecraft:dweller` claimed while that is free, else the
+ * nearest free one within {@link MoveToPoiGoal#SEARCH_RADIUS} blocks.
  * It walks there at `speed_multiplier` and sleeps through Java's own bed sleeping, which occupies the
  * bed and wakes the entity when the bed goes. An entity with no bed does not sleep, as Bedrock's
  * documentation says. No search, no path or too long a walk is a failed attempt, after which
@@ -119,6 +120,8 @@ public final class SleepGoal extends Goal {
 
     private BlockPos freeBed() {
         if (!(mob.level() instanceof ServerLevel level)) return null;
+        BlockPos home = Dwelling.home(mob);
+        if (home != null && isFree(level, home)) return home;
 
         return level.getPoiManager().findAll(type -> type.is(PoiTypes.HOME), at -> isFree(level, at),
                 mob.blockPosition(),
