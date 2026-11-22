@@ -78,8 +78,8 @@ public final class FeatureGameTests {
             // The biome a position reads is taken from a cell up to one cell away, so the fill reaches
             // a cell past the row on every side.
             server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "fillbiome "
-                + (origin.getX() - 4) + " " + (origin.getY() - 4) + " " + (origin.getZ() - 4) + " " + (origin.getX() + 11) + " " + (origin.getY() + 4) + " "
-                + (origin.getZ() + 4) + " " + biome.getKey());
+                + (origin.getX() - 4) + " " + (origin.getY() - 4) + " " + (origin.getZ() - 4) + " "
+                + (origin.getX() + 11) + " " + (origin.getY() + 4) + " " + (origin.getZ() + 4) + " " + biome.getKey());
             BedrockCommandGameTests.typed(helper, "fill " + origin.getX() + " " + origin.getY() + " "
                 + origin.getZ() + " " + (origin.getX() + 7) + " " + origin.getY() + " " + origin.getZ() + " air");
             List<String> heard = place(helper, "tp:mark_by_biome", origin);

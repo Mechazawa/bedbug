@@ -564,7 +564,8 @@ public final class PackGameTests {
             int elements;
             try {
                 String model = Files.readString(crownModel(pack, "crown_" + uses));
-                elements = com.google.gson.JsonParser.parseString(model).getAsJsonObject().getAsJsonArray("elements").size();
+                elements = com.google.gson.JsonParser.parseString(model).getAsJsonObject()
+                    .getAsJsonArray("elements").size();
             } catch (IOException unreadable) {
                 helper.fail("The converted crown model could not be read: " + unreadable.getMessage());
                 return;
