@@ -1523,6 +1523,40 @@ public final class BehaviourGameTests {
     }
 
     /**
+     * The biome tag queries name Bedrock's tags, the ones a biome filter names: an ember in a desert
+     * stands in a `desert` that is `warm` and not in a `swamp`.
+     */
+    @GameTest(structure = "mcaddon:platform")
+    public void theBiomeTagQueriesNameBedrocksTags(GameTestHelper helper) {
+        AddonEntity ember = spawn(helper, ENTITY, ON_FLOOR);
+        if (ember == null) {
+            helper.succeed();
+            return;
+        }
+
+        BlockPos feet = ember.blockPosition();
+        net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
+        server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "fillbiome "
+            + (feet.getX() - 4) + " " + (feet.getY() - 4) + " " + (feet.getZ() - 4) + " "
+            + (feet.getX() + 4) + " " + (feet.getY() + 4) + " " + (feet.getZ() + 4) + " minecraft:desert");
+
+        at.ioexception.mcaddon.bedrock.entity.EntityQueries asked =
+            new at.ioexception.mcaddon.bedrock.entity.EntityQueries(ember,
+                new at.ioexception.mcaddon.bedrock.animation.AnimationPlayer(null, ember),
+                at.ioexception.mcaddon.bedrock.entity.EntityQueries.Drawn.NONE,
+                java.util.Map::of, false);
+        java.util.function.Function<String, at.ioexception.mcaddon.bedrock.molang.MolangValue> named =
+            at.ioexception.mcaddon.bedrock.molang.MolangValue::of;
+        helper.assertTrue(asked.query("has_biome_tag", List.of(named.apply("desert"))).truthy(),
+            "query.has_biome_tag denied a desert is a desert.");
+        helper.assertTrue(asked.query("has_all_biome_tags", List.of(named.apply("desert"), named.apply("warm")))
+            .truthy(), "query.has_all_biome_tags denied a desert is warm.");
+        helper.assertFalse(asked.query("entity_biome_has_any_tags", List.of(named.apply("swamp"))).truthy(),
+            "query.entity_biome_has_any_tags called a desert a swamp.");
+        helper.succeed();
+    }
+
+    /**
      * A player scoops an ember in its scoopable group into a bucket and lets it out again as itself.
      *
      * `minecraft:bucketable` arrives with a group, so a plain ember refuses the bucket, and the one
@@ -1837,6 +1871,30 @@ public final class BehaviourGameTests {
             helper.succeed();
         });
     }
+
+    /**
+     * `tp:herald`'s chime state plays a quarter second clip and leaves on
+     * `query.all_animations_finished`, beside a ten second loop its animate list runs. The query
+     * answers for the state's own clips, so the loop does not hold the state.
+     */
+    @GameTest()
+    public void aStateLeavesOnceItsOwnClipsHaveFinished(GameTestHelper helper) {
+        AddonEntity herald = spawn(helper, HERALD);
+        if (herald == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.runAfterDelay(RUNG_TICKS, () -> {
+            helper.assertTrue(Platform.tagsOf(herald).contains("tp_herald_rung"),
+                HERALD + " did not leave its chime state once its own clip had finished: "
+                    + Platform.tagsOf(herald));
+            helper.succeed();
+        });
+    }
+
+    /** Past the chime's quarter second, and far short of the hum's ten. */
+    private static final int RUNG_TICKS = 15;
 
     private static final String HERALD = "tp:herald";
     private static final String WISP = "tp:wisp";

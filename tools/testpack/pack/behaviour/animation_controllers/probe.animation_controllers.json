@@ -27,6 +27,22 @@
         }
       }
     },
+    "controller.animation.tp.herald.chime": {
+      "initial_state": "ringing",
+      "states": {
+        "ringing": {
+          "animations": [ "ring" ],
+          "transitions": [
+            { "rung": "query.all_animations_finished" }
+          ]
+        },
+        "rung": {
+          "on_entry": [
+            "/tag @s add tp_herald_rung"
+          ]
+        }
+      }
+    },
     "controller.animation.tp.perch.settle": {
       "initial_state": "seated",
       "states": {

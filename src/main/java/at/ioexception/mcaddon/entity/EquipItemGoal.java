@@ -1,15 +1,13 @@
 package at.ioexception.mcaddon.entity;
 
-import com.google.gson.JsonElement;
+import at.ioexception.mcaddon.bedrock.behaviour.Descriptor;
 import com.google.gson.JsonObject;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.EnumSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -31,7 +29,7 @@ public final class EquipItemGoal extends Goal {
         EnumSet.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET);
 
     private final AddonEntity mob;
-    private Set<Item> excluded = Set.of();
+    private List<Descriptor> excluded = List.of();
     private boolean wearsArmour = true;
     private ItemEntity wanted;
 
@@ -40,30 +38,10 @@ public final class EquipItemGoal extends Goal {
         setFlags(EnumSet.of(Goal.Flag.MOVE));
     }
 
-    private static Set<Item> excluded(JsonObject component) {
-        Set<Item> named = new LinkedHashSet<>();
-        if (component == null) return named;
-
-        for (JsonElement element : at.ioexception.mcaddon.util.Json.list(component, "excluded_items")) {
-            String name = element.isJsonPrimitive() ? element.getAsString()
-                : element.isJsonObject()
-                    ? at.ioexception.mcaddon.util.Json.text(element.getAsJsonObject(), "item", null)
-                    : null;
-            // A Bedrock item name may carry the data value it was written with, which Java has none of.
-            if (name == null) continue;
-
-            int aux = name.indexOf(':', name.indexOf(':') + 1);
-            Item found = at.ioexception.mcaddon.registry.AddonItems.named(
-                aux < 0 ? name : name.substring(0, aux));
-            if (found != null) named.add(found);
-        }
-        return named;
-    }
-
     @Override
     public boolean canUse() {
         JsonObject equip = mob.liveComponent("minecraft:equip_item");
-        excluded = excluded(equip);
+        excluded = Descriptor.listed(equip, "excluded_items");
         wearsArmour = Goals.flag(equip, "can_wear_armor", true);
         equipHeld();
         wanted = nearest();
@@ -123,7 +101,7 @@ public final class EquipItemGoal extends Goal {
         List<ItemEntity> dropped = mob.level().getEntitiesOfClass(ItemEntity.class,
             mob.getBoundingBox().inflate(REACH),
             item -> item.isAlive() && !item.hasPickUpDelay()
-                && !excluded.contains(item.getItem().getItem())
+                && excluded.stream().noneMatch(descriptor -> descriptor.matches(item.getItem()))
                 && wearable(slotFor(item.getItem()))
                 && mob.getItemBySlot(slotFor(item.getItem())).isEmpty());
         return dropped.stream().min(java.util.Comparator.comparingDouble(mob::distanceToSqr)).orElse(null);

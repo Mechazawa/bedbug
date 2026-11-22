@@ -1,7 +1,7 @@
 package at.ioexception.mcaddon.entity;
 
+import at.ioexception.mcaddon.bedrock.behaviour.Descriptor;
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
-import at.ioexception.mcaddon.registry.AddonBlocks;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -176,32 +176,14 @@ final class Goals {
         return Filter.parse(component == null ? null : component.get(key));
     }
 
-    /** The blocks a component lists under one key, by the names a pack writes them under. */
-    static Set<Block> blocks(JsonObject component, String key) {
-        Set<Block> named = new LinkedHashSet<>();
-        if (component == null) return named;
-
-        for (JsonElement element : Json.list(component, key)) {
-            String id = element.isJsonPrimitive() ? element.getAsString()
-                : element.isJsonObject() ? blockName(element.getAsJsonObject()) : null;
-            Block block = id == null ? null : AddonBlocks.named(id);
-            if (block != null) named.add(block);
-        }
-        return named;
-    }
-
     /**
-     * A block descriptor's own name, which a pack writes either bare or with the states beside it.
+     * The blocks a component lists under one key, in any of the shapes a block descriptor takes.
      *
-     * `randomly_placeable_blocks` wraps the descriptor in an entry carrying a weight and a filter, so
-     * the name may be one object further in than a plain list of blocks puts it.
+     * A descriptor written as a Molang test of tags stands for every block that passes it now.
      */
-    private static String blockName(JsonObject descriptor) {
-        if (descriptor.has("name")) return Json.text(descriptor, "name", null);
-        JsonElement inner = descriptor.get("block");
-        if (inner == null) return null;
-        if (inner.isJsonPrimitive()) return inner.getAsString();
-
-        return inner.isJsonObject() ? Json.text(inner.getAsJsonObject(), "name", null) : null;
+    static Set<Block> blocks(JsonObject component, String key) {
+        return Descriptor.listed(component, key).stream()
+            .flatMap(Descriptor::blocks)
+            .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 }

@@ -3,6 +3,7 @@ package at.ioexception.mcaddon.server;
 import at.ioexception.mcaddon.bedrock.behaviour.EntityEvent;
 import at.ioexception.mcaddon.bedrock.behaviour.Filter;
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import at.ioexception.mcaddon.bedrock.entity.EntityReference;
 import at.ioexception.mcaddon.entity.AddonEntity;
 import at.ioexception.mcaddon.platform.Platform;
 import at.ioexception.mcaddon.registry.AddonEntities;
@@ -374,9 +375,17 @@ public final class EntityEvents {
         }
     }
 
+    /**
+     * Each value is answered in the entity's scope as the event runs, so a value written as Molang
+     * reads the property it replaces through `query.property`.
+     */
     private static void setProperties(Entity entity, EntityEvent.SetProperties properties, AddonState state) {
+        ServerEntityDefinition definition = AddonEntities.definitionOf(entity.getType());
         for (Map.Entry<String, JsonElement> value : properties.values().entrySet()) {
-            state.setProperty(entity.getUUID(), value.getKey(), plain(value.getValue()));
+            ServerEntityDefinition.Property declared =
+                definition == null ? null : definition.properties().get(value.getKey());
+            state.setProperty(entity.getUUID(), value.getKey(), declared == null ? plain(value.getValue())
+                : declared.value(value.getValue(), new EntityReference(entity).scope()));
         }
         EntityPropertySync.broadcast(entity, state);
     }

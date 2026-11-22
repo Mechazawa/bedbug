@@ -6,6 +6,8 @@ import at.ioexception.mcaddon.util.Json;
 import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -120,6 +122,20 @@ class AnimationReadingTest {
             """);
 
         assertTrue(animation.bones().get("head").rotationRelativeToEntity());
+    }
+
+    /** Mojang's armadillo writes its adult and baby walk as two keys of one object in a state. */
+    @Test
+    void keepsEveryClipOfAStateEntryWrittenAsOneObject() {
+        AnimationController controller = AnimationControllerParser.readController("controller.test",
+            Json.parse("""
+                {"states": {"default": {"animations": [
+                  {"walk": "!query.is_baby", "baby_walk": "query.is_baby"}
+                ]}}}
+                """).getAsJsonObject());
+
+        assertEquals(List.of("walk", "baby_walk"), controller.states().get("default").animations().stream()
+            .map(AnimationController.Entry::animation).toList());
     }
 
     private static BedrockAnimation read(String body) {

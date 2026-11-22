@@ -828,6 +828,14 @@ These are the checks it runs, and what each one catches:
   `step` in its body, which the script registers and answers by tagging whoever used the item with
   that step.
 
+  **`bone_visibility` is applied per state model.** `BlockDefinition.drawsBone` evaluates each
+  bone's Molang (or boolean) against the state's values, and `BlockGeometry.elements` leaves out the
+  cubes of a bone that comes out false. Mojang does not say whether a hidden bone hides its children
+  or how names compare, so here a hidden bone hides its own cubes only and names compare without
+  regard to case, as `part_visibility` does on entities. The default model and the block's item take
+  each state's first value. `tp:crown` shows its cap only at `tp:uses` 2 and never its rim, and
+  `PackGameTests.aBlockGeometryDrawsABoneOnlyInTheStatesItsVisibilityNames` counts the cubes.
+
   **Bedrock's block geometry is centred on the block.** A full block's cube has the origin
   `[-8, 0, -8]`, where Java's block model runs from 0 to 16, so `BlockGeometry` moves every corner
   and pivot half a block on X and Z. The lamp's geometry is written in Bedrock's frame (its post at
@@ -1908,6 +1916,11 @@ decide what it acts on and a reported field is still a dropped one.
   `display`, Bedrock's `shelf` becoming Java's `on_shelf` from 26. The `embedded` context, the two
   pivots and `fit_to_frame` are reported in `BlockGeometry.display`, because Java has no context for
   an embedded visual, turns and scales a model about its middle, and never fits an item to its frame.
+- **A rotation element written as an object naming one axis** (`[{"y": "180 - this"}, ...]`).
+  Mojang's schema allows the shape and publishes nothing on what it means; the squid writes `y`,
+  `x` and `y` in turn, which may be three turns applied in order. The clip is reported as
+  `animation rotation written per axis` and left out. `BedrockAssets.readSection` reads each entry
+  of a file on its own, so the clips after it still load.
 - **`parent_setup`** is reported for a wearer Java draws with a model of its own, which has no
   variables to write into. **`binding`** on such a wearer finds the part `JavaModelParts` answers
   to the bone, with `rightItem` and `leftItem` seven pixels down each arm as Mojang's humanoid
@@ -1929,6 +1942,14 @@ wiki's custom armour guide, carry no `item` condition and no slot test, and Bedr
 diamond helmet flat. A Villager News hat binds its root to `head` by name and is not drawn on the
 head while held. An item no armour slot takes, such as the trident, the spyglass or `tp:baton`,
 draws its attachable in the hand. `AttachableClientGameTest` holds `tp:topper` and `tp:visor`.
+
+**Of several attachables for one item, one whose `item` condition holds wins.** Mojang ships
+`diamond_helmet.json`, naming no condition, beside `diamond_helmet.player.json`, asking
+`query.owner_identifier == 'minecraft:player'`, and publishes no rule for the pair. `Attachables.choose`
+takes the first whose condition holds and else the first naming the item with no condition, whatever
+order the files were read in. Only the chosen one's animator is moved on; the others are asked their
+condition through `Animators.standing`. The test pack's `golden_helmet` pair is read back by
+`AttachableClientGameTest`.
 
 Seven fields are read outside the renderer itself, which is where to look for them:
 
@@ -2037,6 +2058,12 @@ plays once and stays finished while it is asked for, and `q.any_animation_finish
 `q.all_animations_finished` answer for the clips of the controller's current state, a looping clip
 counting once it has come round the first time. An effect a clip fires at a locator is born where
 the drawn model carries that locator, through its bone's pose.
+
+Clips are applied in the order the script asks for them on that frame: the animate list in its
+order, a controller's clips where the controller stands in it. A clip started on its own, by
+`/bedrock playanimation` or a script, comes after those, oldest first; Mojang publishes no order for
+it. A clip declaring `override_previous_animation` puts each bone it names back to rest before it
+adds its own pose, so it replaces what the clips before it did to those bones.
 
 **A clip played on a mob Java draws moves Java's model of it.** `/bedrock playanimation` on a vanilla
 villager names the bones of Bedrock's own villager geometry, so `JavaModelPoses` runs the clip on an
@@ -2431,7 +2458,7 @@ stand within the distance, itself included, of the type named where one is. `get
 is the same without the entity asking, a name found in no Mojang material today. Both are listed in
 `EntityQueries.EXPERIMENTAL`, which `components.py` reads as answered on purpose. `q.get_ride`,
 `q.target` and `context.player` appear in no Mojang material and are not answered. `context.other`
-is the repair target of an item's `repair_amount`, which nothing here evaluates.
+is the item repairing another in an item's `repair_amount`, which `item.RepairAmounts` answers.
 `BehaviourGameTests.anEntityReadsThePropertiesOfTheEntitiesNearItThroughAnArrow` has `tp:herald` add
 up `tp:settled` over two wisps through `->` inside `for_each` and count them through
 `combine_entities`; `MolangTest` runs Mojang's struct examples against stub entities.
@@ -2465,6 +2492,11 @@ so these are decided here, from the Bedrock wiki's feature page where it says an
 - `scatter_chance` written as a number or an expression is a percentage.
 - `query.heightmap` reads Java's `MOTION_BLOCKING_NO_LEAVES`, as the entity query does, and
   `query.above_top_solid` reads `OCEAN_FLOOR`.
+- `has_biome_tag`, `has_any_biome_tags` and `has_all_biome_tags` read a tag the way a rule's biome
+  filter does (`BiomeMatch.Tag`). With no coordinates they ask the biome at the position the scatter
+  has reached; `has_biome_tag(tag, x, z)` asks the surface of that column and `(tag, x, y, z)` that
+  block. Mojang says only "the current placement or given position". `tp:mark_by_biome` and
+  `FeatureGameTests.aScatterCountsItsIterationsFromTheBiomesTags` cover all three.
 
 `SingleBlockFeature` decides these where nothing is published: no `may_replace` replaces anything
 (Mojang's documentation says the block can be placed anywhere); `min_sides_must_attach` defaults to
@@ -3042,6 +3074,67 @@ look at the target, whose height is capped at `max_head_look_at_height` over the
 goal naming no `loot_table` drops what the entity holds. `search_count` draws that many random
 places in the search box a tick (for every tick since the last look, at most two) and takes the
 first standing place; 0, the default, checks every place in one tick and picks the best.
+
+## Particle emitters
+
+`client/render/AddonEmitters` runs an effect's emitter and `AddonParticleProvider` makes each particle.
+`ParticleClientGameTest` reads each rule back through `clientgametest/Born`.
+
+- A particle starts with a copy of its emitter's variables as they stand at its birth
+  (`AddonEmitters.birthScope`), so it reads what `creation_expression` and `per_update_expression`
+  set, `v.emitter_age` and the emitter randoms. Mojang says particle expressions can use these and not
+  whether a particle sees later changes, so the copy is decided here.
+- An emitter runs in loops. `emitter_lifetime_once` and an emitter with no lifetime have one loop,
+  `emitter_lifetime_expression` one loop for its whole life. `active_time`, `sleep_time` and an
+  instant rate's `num_particles` are evaluated once as each loop starts, the four emitter randoms
+  are rolled again for every loop after the first, `v.emitter_age` counts from the loop's start and
+  `v.emitter_lifetime` is the loop's `active_time`. The timeline fires on every loop.
+- A steady rate's `max_particles` caps the emitter's particles alive at once, evaluated as each loop
+  starts. The provider hands each particle it makes to `AddonEmitters.adopt`, which keeps it in the
+  emitter's `alive` list.
+- A collision's `enabled` is evaluated each tick before the particle moves, and its
+  `collision_radius` sizes the particle whether or not it collides at birth.
+- An animation's or a controller state's `pre_effect_script` runs in the effect's emitter as it
+  starts, after the emitter randoms and before `creation_expression`. An emitter an entity's
+  animation started answers that entity's queries, which is what Mojang's own scripts read
+  (`query.surface_particle_color`).
+- An effect an animation starts at a locator stands where the drawn model puts that locator at each
+  tick, so it rises and turns with the bone. With `bind_to_actor` false it is left in the world where
+  the locator was as it started and outlives the entity. An `emitter_bound` event's effect follows the
+  entity, not the locator. The emitter's own orientation does not follow the bone, because
+  `emitter_local_space` is not acted on.
+- A collision event's `min_speed` is at least two blocks a second, its default, as Mojang documents.
+  `events` may be one event or a list.
+
+## Molang in entity components and events
+
+`tp:abacus` carries the Molang a behaviour pack writes into components and events, and
+`AbacusGameTests` reads each back.
+
+- `minecraft:heartbeat` `interval` is read from the live set and answered with the entity's own
+  queries at each beat; the next beat is that many seconds later.
+- `minecraft:experience_reward` is answered with the entity's own queries and
+  `query.last_hit_by_player` laid over them. `on_bred` answers that query true, as a breeding is a
+  player's doing; Mojang publishes nothing on it.
+- A property value a pack writes (`default`, an event's `set_property`) goes through
+  `ServerEntityDefinition.Property.value`: a string is Molang unless it is one of an enum's values,
+  as the Bedrock wiki says. The answer takes the type (an `int` drops its fraction) and is clamped
+  to the range. An enum answer it does not hold, or no value at all, is its first value; Mojang
+  publishes nothing on either. A default is answered once, as the entity is first seen.
+- `bedrock.behaviour.Descriptor` is a block or item descriptor in each of Mojang's shapes: a bare
+  name, `name` (or an item's `item`) with a block's `states`, or `tags`, Molang that
+  `query.all_tags` and `query.any_tag` answer. A block's tags are Java's block tags under the name
+  the pack wrote; an item's go through `BedrockItemTags`. `Goals.blocks` stands a tag test for every
+  block passing it when the goal is built. A `minecraft:digger` rule is built on each data load
+  from 26, against the tags that load brings. A pack block's own `tag:` components are not tags
+  here, and `navigation.*` `blocks_to_avoid` is not read.
+- `minecraft:repairable` `repair_amount` is answered by `item.RepairAmounts` for the item being
+  repaired (`query.max_durability`, `query.remaining_durability`), with `context.other` the item
+  repairing it. `AnvilRepairMixin` uses it for a material in place of Java's quarter, and
+  `AnvilRepairMixin` and `RepairItemRecipeMixin` for a second copy of the item in place of that
+  copy's own durability. Mojang publishes no rule for combining, so Java's bonus of 12 in a hundred
+  at the anvil and 5 in the grid stays on top, as both editions' wikis describe. `RepairGameTests`
+  reads `tp:file` back. Which items repair at all still comes from the entries' plain names.
 
 ## Conventions
 

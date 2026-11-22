@@ -213,16 +213,11 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
     /** What an undyed leather item is worth in both editions. */
     private static final int LEATHER_BROWN = 0xA06540;
 
-    /** One block `minecraft:digger` names, and how fast this breaks it. */
-    public record DestroySpeed(String block, float speed) {
+    /** The blocks one `minecraft:digger` entry describes, and how fast this breaks them. */
+    public record DestroySpeed(Descriptor block, float speed) {
     }
 
-    /**
-     * The blocks `minecraft:digger` lists a speed for.
-     *
-     * An entry whose `block` is an object holds a Molang tag query, which picks blocks by a
-     * condition the game evaluates per block, so there is no fixed set of blocks to answer with.
-     */
+    /** The blocks `minecraft:digger` lists a speed for, in any shape of block descriptor. */
     public List<DestroySpeed> destroySpeeds() {
         JsonObject digger = components.get("minecraft:digger");
         if (digger == null) return List.of();
@@ -230,9 +225,13 @@ public record ItemDefinition(String identifier, String iconKey, String displayNa
         return Json.list(digger, "destroy_speeds").stream()
             .filter(JsonElement::isJsonObject)
             .map(JsonElement::getAsJsonObject)
-            .filter(entry -> entry.has("block") && entry.get("block").isJsonPrimitive())
-            .map(entry -> new DestroySpeed(entry.get("block").getAsString(),
-                entry.has("speed") ? entry.get("speed").getAsFloat() : 1f))
+            .filter(entry -> entry.has("block"))
+            .map(entry -> {
+                Descriptor block = Descriptor.tryFrom(entry.get("block"));
+                return block == null ? null
+                    : new DestroySpeed(block, entry.has("speed") ? entry.get("speed").getAsFloat() : 1f);
+            })
+            .filter(java.util.Objects::nonNull)
             .toList();
     }
 

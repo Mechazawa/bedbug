@@ -1,5 +1,8 @@
 package at.ioexception.mcaddon.bedrock.molang;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonPrimitive;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -75,25 +78,45 @@ public final class MolangParser {
 
     /** Parses a whole Molang value, which may be a plain expression or a list of statements. */
     public static MolangExpression parse(String source) {
-        if (source == null || source.isBlank()) return MolangExpression.ZERO;
+        MolangExpression parsed = tryParse(source);
+        return parsed == null ? MolangExpression.ZERO : parsed;
+    }
+
+    /** The same, or null where the source is blank or does not parse. */
+    public static MolangExpression tryParse(String source) {
+        if (source == null || source.isBlank()) return null;
 
         try {
             return new MolangParser(source).parseProgram();
         } catch (Malformed ignored) {
-            return MolangExpression.ZERO;
+            return null;
         }
     }
 
-    /** Bedrock also allows a bare number where an expression is expected. */
-    public static MolangExpression parse(Object value) {
-        if (value instanceof Number number) return MolangExpression.constant(number.doubleValue());
-        if (value instanceof String text) return parse(text);
-        return MolangExpression.ZERO;
+    /**
+     * An expression as a pack writes it in JSON: a number, a boolean, a Molang string, or the object
+     * form `{"expression": "...", "version": n}` Mojang's schemas allow wherever an expression may
+     * stand. Anything else answers 0.
+     */
+    public static MolangExpression parse(JsonElement json) {
+        if (json == null || json.isJsonNull()) return MolangExpression.ZERO;
+        if (json.isJsonObject()) {
+            JsonElement expression = json.getAsJsonObject().get("expression");
+            return expression != null && expression.isJsonPrimitive()
+                ? parse(expression.getAsString()) : MolangExpression.ZERO;
+        }
+        if (!json.isJsonPrimitive()) return MolangExpression.ZERO;
+
+        JsonPrimitive value = json.getAsJsonPrimitive();
+        if (value.isNumber()) return MolangExpression.constant(value.getAsDouble());
+        if (value.isBoolean()) return MolangExpression.constant(value.getAsBoolean() ? 1 : 0);
+        return parse(value.getAsString());
     }
 
     private MolangExpression parseProgram() {
         List<MolangExpression> statements = new ArrayList<>();
         boolean returns = false;
+        boolean closed = false;
 
         while (true) {
             skipSpace();
@@ -110,14 +133,22 @@ public final class MolangParser {
 
             statements.add(parseExpression());
             skipSpace();
-            if (peek() == ';') at += 1;
-            else break;
+            if (peek() != ';') break;
+            at += 1;
+            closed = true;
         }
 
         skipSpace();
         if (at < source.length() || statements.isEmpty()) throw new Malformed();
+        // A statement closed by `;` makes a complex expression, which answers 0 without a `return`.
         MolangExpression whole = statements.get(0);
-        if (statements.size() > 1) {
+        if (closed && !returns && statements.size() == 1) {
+            MolangExpression only = whole;
+            whole = environment -> {
+                only.evaluate(environment);
+                return MolangValue.ZERO;
+            };
+        } else if (statements.size() > 1) {
             List<MolangExpression> program = List.copyOf(statements);
             int last = program.size() - 1;
             boolean valueIsLast = returns;

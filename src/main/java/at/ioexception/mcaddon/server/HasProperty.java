@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.bedrock.behaviour.ServerEntityDefinition;
+import at.ioexception.mcaddon.bedrock.entity.EntityReference;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.state.AddonState;
 import com.mojang.brigadier.StringReader;
@@ -83,7 +84,7 @@ public record HasProperty(List<Question> questions) implements Predicate<Entity>
 
         ServerEntityDefinition definition = AddonEntities.definitionOf(entity.getType());
         ServerEntityDefinition.Property declared = definition == null ? null : definition.properties().get(property);
-        return declared == null ? null : declared.initial();
+        return declared == null ? null : declared.initial(new EntityReference(entity).scope());
     }
 
     private static String unquoted(String value) {

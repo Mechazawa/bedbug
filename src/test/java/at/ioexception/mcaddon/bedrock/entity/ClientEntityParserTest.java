@@ -39,6 +39,25 @@ class ClientEntityParserTest {
             List.copyOf(definition.animationControllers().values()));
     }
 
+    /** Mojang's armadillo writes the offscreen flag as the Molang string "1.0". */
+    @Test
+    void readsAnOffscreenFlagWrittenAsMolang() {
+        assertTrue(read("{\"scripts\": {\"should_update_effects_offscreen\": \"1.0\"}}").runsOffscreen());
+        assertTrue(read("{\"scripts\": {\"should_update_bones_and_effects_offscreen\": true}}").runsOffscreen());
+        assertFalse(read("{\"scripts\": {\"should_update_effects_offscreen\": \"0.0\"}}").runsOffscreen());
+    }
+
+    /** Mojang's wither writes a clip's name as its scale, which does not parse and counts as none. */
+    @Test
+    void aScaleThatDoesNotParseCountsAsNone() {
+        ClientEntityDefinition definition = read("""
+            {"scripts": {"scale": "animation.wither_boss.scale", "scaleY": "2.0"}}
+            """);
+
+        assertNull(definition.scale());
+        assertEquals(2f, definition.scaleY().asFloat(new MolangEnvironment()));
+    }
+
     /** A pack drawing several geometries names the one its bone queries are answered from. */
     @Test
     void answersBoneQueriesFromTheGeometryThePackNames() {
@@ -171,6 +190,16 @@ class ClientEntityParserTest {
         assertNotNull(definition.heldItemsHidden());
         assertTrue(definition.heldItemsHidden().evaluate(swallowed).truthy());
         assertFalse(definition.heldItemsHidden().evaluate(new MolangEnvironment()).truthy());
+    }
+
+    @Test
+    void keepsEveryEntryOfAnAnimateObjectWithSeveralKeys() {
+        ClientEntityDefinition definition = read("""
+            {"scripts": {"animate": [{"walk": "!query.is_baby", "baby_walk": "query.is_baby"}]}}
+            """);
+
+        assertEquals(List.of("walk", "baby_walk"),
+            definition.animate().stream().map(ClientEntityDefinition.Gated::name).toList());
     }
 
     private static ClientEntityDefinition read(String body) {

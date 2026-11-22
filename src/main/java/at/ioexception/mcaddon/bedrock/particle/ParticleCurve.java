@@ -2,6 +2,7 @@ package at.ioexception.mcaddon.bedrock.particle;
 
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
+import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import at.ioexception.mcaddon.util.Json;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -69,7 +70,7 @@ public record ParticleCurve(Kind kind, MolangExpression input, MolangExpression 
 
         List<MolangExpression> values = new ArrayList<>();
         if (nodes != null && nodes.isJsonArray()) {
-            nodes.getAsJsonArray().forEach(node -> values.add(ParticleJson.expression(node)));
+            nodes.getAsJsonArray().forEach(node -> values.add(MolangParser.parse(node)));
         }
         return values.isEmpty() ? null
             : new ParticleCurve(kind, input, range, List.copyOf(values), List.of());

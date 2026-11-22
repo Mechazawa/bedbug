@@ -47,7 +47,7 @@ public record BedrockAnimation(
      * an id, and `locator` names the bone a particle is born at. A sound has no locator.
      */
     public record EffectEntry(float time, String effect, String locator,
-        List<MolangExpression> preEffectScript) {
+        List<MolangExpression> preEffectScript, boolean bound) {
     }
 
     public boolean hasBones() {

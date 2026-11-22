@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -94,11 +95,75 @@ class AnimationPlayerTest {
         assertEquals(45f, rotation(player).y, 0.001f);
     }
 
+    /** The step that wraps a loop still fires what lies between its last position and the end. */
+    @Test
+    void firesATimelineEntryNearTheEndOfALoopOnEveryLoop() throws IOException {
+        AnimationPlayer player = playing("""
+            {"animations": {"animation.spin": {"loop": true, "animation_length": 1.0,
+              "timeline": {"0.97": "v.hits = v.hits + 1;"}}}}
+            """);
+
+        for (int tick = 0; tick < 25; tick++) player.tick(0.1f);
+        assertEquals(2f, player.environment().variable("hits").asFloat(), 0.001f);
+    }
+
+    /** A clip overriding the ones before it puts its bones back to rest before adding its own pose. */
+    @Test
+    void anOverridingClipReplacesThePoseOfTheClipsBeforeIt() throws IOException {
+        AnimationPlayer player = overriding();
+        player.ensurePlaying("animation.turn", 1f, false);
+        player.ensurePlaying("animation.nod", 1f, false);
+        player.tick(0.05f);
+        assertEquals(new Vector3f(10, 0, 0), rotation(player));
+    }
+
+    @Test
+    void anOverridingClipLeavesTheClipsAfterItAlone() throws IOException {
+        AnimationPlayer player = overriding();
+        player.ensurePlaying("animation.nod", 1f, false);
+        player.ensurePlaying("animation.turn", 1f, false);
+        player.tick(0.05f);
+        assertEquals(new Vector3f(10, 90, 0), rotation(player));
+    }
+
+    private AnimationPlayer overriding() throws IOException {
+        return player("""
+            {"animations": {
+              "animation.turn": {"loop": true, "bones": {"head": {"rotation": [0, 90, 0]}}},
+              "animation.nod": {"loop": true, "override_previous_animation": true,
+                "bones": {"head": {"rotation": [10, 0, 0]}}}
+            }}
+            """);
+    }
+
+    /** A clip that does not read costs only itself, not the clips after it in the same file. */
+    @Test
+    void keepsTheClipsAfterOneThatDoesNotRead() throws IOException {
+        AnimationPlayer player = player("""
+            {"animations": {
+              "animation.squid": {"loop": true, "bones": {"body": {"rotation": [{"y": "180 - this"}, 0, 0]}}},
+              "animation.spin": {"loop": true, "bones": {"head": {"rotation": [0, 90, 0]}}}
+            }}
+            """);
+        player.play("animation.spin", null, 0f);
+        player.play("animation.squid", null, 0f);
+        player.tick(0.05f);
+
+        assertEquals(new Vector3f(0, 90, 0), rotation(player));
+        assertNull(player.poseOf("body"));
+    }
+
     private static Vector3f rotation(AnimationPlayer player) {
         return player.poseOf("head").rotation;
     }
 
     private AnimationPlayer playing(String animations) throws IOException {
+        AnimationPlayer player = player(animations);
+        player.play("animation.spin", null, 0f);
+        return player;
+    }
+
+    private AnimationPlayer player(String animations) throws IOException {
         Path pack = directory.resolve("pack");
         Files.createDirectories(pack.resolve("animations"));
         Files.writeString(pack.resolve("animations").resolve("test.animation.json"), animations);
@@ -106,9 +171,6 @@ class AnimationPlayerTest {
         PackManifest manifest = PackManifest.tryFrom(Json.parse("""
             {"header": {"uuid": "00000000-0000-0000-0000-000000000000", "name": "test"}}
             """).getAsJsonObject());
-        AnimationPlayer player = new AnimationPlayer(
-            BedrockAssets.read(new BedrockPack(pack, manifest, "test.mcaddon")), null);
-        player.play("animation.spin", null, 0f);
-        return player;
+        return new AnimationPlayer(BedrockAssets.read(new BedrockPack(pack, manifest, "test.mcaddon")), null);
     }
 }

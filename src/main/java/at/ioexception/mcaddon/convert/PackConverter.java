@@ -4,11 +4,11 @@ import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.BedrockAssets;
 import at.ioexception.mcaddon.bedrock.ClientBlockDefinition;
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.BlockStateQueries;
 import at.ioexception.mcaddon.bedrock.model.BedrockGeometry;
 import at.ioexception.mcaddon.bedrock.behaviour.ItemDefinition;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
-import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.bedrock.particle.ParticleDefinition;
 import at.ioexception.mcaddon.block.AddonBlock;
 import at.ioexception.mcaddon.block.BlockComponents;
@@ -44,6 +44,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Predicate;
 
 /**
  * Turns one Bedrock resource pack into a Java Edition resource pack on disk.
@@ -1208,7 +1209,8 @@ public final class PackConverter {
                 ? block.identifier().substring(colon + 1) : block.identifier());
             Path assets = root.resolve("assets").resolve(namespace);
 
-            writeCubeModel(assets, name, faces, particle, geometryOf(block, geometries));
+            writeCubeModel(assets, name, faces, particle, geometryOf(block, geometries),
+                block.drawsBone(block.defaultStates()));
 
             JsonObject blockstate = new JsonObject();
             blockstate.add("variants",
@@ -1221,7 +1223,7 @@ public final class PackConverter {
             String drawnAs = name;
             if (held != null) {
                 drawnAs = name + "_in_hand";
-                writeCubeModel(assets, drawnAs, faces, particle, held);
+                writeCubeModel(assets, drawnAs, faces, particle, held, bone -> true);
             }
 
             JsonObject item = new JsonObject();
@@ -1282,7 +1284,7 @@ public final class PackConverter {
         if (faces.isEmpty()) return;
 
         if (geometry != null) {
-            writeCubeModel(assets, "potted_" + name, faces, null, geometry);
+            writeCubeModel(assets, "potted_" + name, faces, null, geometry, bone -> true);
         } else {
             JsonObject textures = new JsonObject();
             textures.addProperty("plant", faces.values().iterator().next());
@@ -1421,7 +1423,8 @@ public final class PackConverter {
             if (particle != null) sprites.add(particle);
 
             String variantName = name + "_" + combination;
-            writeCubeModel(assets, variantName, faces, particle, geometryOf(block, geometries));
+            writeCubeModel(assets, variantName, faces, particle, geometryOf(block, geometries),
+                block.drawsBone(chosen));
             variants.add(String.join(",", key), modelReference(namespace, variantName,
                 BlockComponents.rotation(components)));
         }
@@ -1448,15 +1451,7 @@ public final class PackConverter {
         Map<String, String> textureKeys, Map<String, ClientBlockDefinition> appearance) {
         Map<String, String> faces = resolveFaces(declaredFaces(block, appearance), textureKeys);
 
-        MolangEnvironment environment = new MolangEnvironment();
-        environment.setQueries((query, arguments) -> {
-            if (!query.equals("block_state") || arguments.isEmpty()) return MolangValue.ZERO;
-            JsonElement value = states.get(arguments.get(0).text());
-            if (value == null || !value.isJsonPrimitive()) return MolangValue.ZERO;
-            if (value.getAsJsonPrimitive().isBoolean()) return MolangValue.of(value.getAsBoolean());
-            if (value.getAsJsonPrimitive().isNumber()) return MolangValue.of(value.getAsDouble());
-            return MolangValue.of(value.getAsString());
-        });
+        MolangEnvironment environment = BlockStateQueries.of(states).environment();
 
         for (BlockDefinition.Permutation permutation : block.permutations()) {
             if (!MolangParser.parse(permutation.condition()).evaluate(environment).truthy()) continue;
@@ -1534,7 +1529,7 @@ public final class PackConverter {
      * `down` face, which is the face Bedrock takes its breaking particles from.
      */
     private static void writeCubeModel(Path assets, String name, Map<String, String> faces,
-        String particle, BedrockGeometry geometry) throws IOException {
+        String particle, BedrockGeometry geometry, Predicate<String> drawsBone) throws IOException {
         if (faces.isEmpty()) return;
 
         JsonObject textures = new JsonObject();
@@ -1548,7 +1543,7 @@ public final class PackConverter {
         JsonObject model = new JsonObject();
         if (geometry != null && !uniform) textures.addProperty("all", faces.values().iterator().next());
         JsonArray elements = geometry == null ? null
-            : BlockGeometry.elements(geometry, textures.keySet());
+            : BlockGeometry.elements(geometry, textures.keySet(), drawsBone);
         textures.addProperty("particle", particle != null ? particle
             : faces.getOrDefault("down", faces.values().iterator().next()));
         if (elements == null) {

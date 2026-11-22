@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.bedrock.particle;
 
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
+import at.ioexception.mcaddon.bedrock.molang.MolangParser;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -21,7 +22,7 @@ public record Vector2Expression(MolangExpression x, MolangExpression y) {
 
         JsonArray array = value.getAsJsonArray();
         if (array.size() < 2) return fallback;
-        return new Vector2Expression(ParticleJson.expression(array.get(0)),
-            ParticleJson.expression(array.get(1)));
+        return new Vector2Expression(MolangParser.parse(array.get(0)),
+            MolangParser.parse(array.get(1)));
     }
 }
