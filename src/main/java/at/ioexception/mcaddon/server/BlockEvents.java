@@ -1,6 +1,7 @@
 package at.ioexception.mcaddon.server;
 
 import at.ioexception.mcaddon.bedrock.behaviour.BlockDefinition;
+import at.ioexception.mcaddon.bedrock.behaviour.BlockStateQueries;
 import at.ioexception.mcaddon.bedrock.behaviour.DamageCause;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangExpression;
@@ -355,42 +356,31 @@ public final class BlockEvents {
         if (!(property instanceof IntegerProperty index)) return state;
 
         for (int at = 0; at < declared.size(); at++) {
-            if (value.matches(molang(declared.get(at)))) return state.setValue(index, at);
+            if (value.matches(BlockStateQueries.value(declared.get(at)))) return state.setValue(index, at);
         }
         return state;
     }
 
     /**
-     * Answers `q.block_state('name')` from the block standing in the world.
+     * Answers the block state queries from the block standing in the world.
      *
      * An event that destroys the block runs while air stands in its place, so every state read here
      * asks the state whether it carries the property before reading it. Its temporaries are the ones
      * every other expression on the server reads and writes.
      */
     private MolangEnvironment environment(BlockState state) {
-        MolangEnvironment environment = new MolangEnvironment();
-        if (ServerHooks.state() != null) environment.shareTemporaries(ServerHooks.state().temporaries());
-        environment.setQueries((query, arguments) -> {
-            if (!query.equals("block_state") || arguments.isEmpty()) return MolangValue.ZERO;
-
-            String name = arguments.get(0).text();
+        MolangEnvironment environment = new BlockStateQueries(name -> {
             Property<?> property = name == null ? null : properties.get(name);
-            if (property == null || !state.hasProperty(property)) return MolangValue.ZERO;
+            if (property == null || !state.hasProperty(property)) return null;
             if (property instanceof BooleanProperty flag) return MolangValue.of(state.getValue(flag));
             if (!(property instanceof IntegerProperty index)) return MolangValue.ZERO;
 
             List<JsonElement> declared = values.getOrDefault(name, List.of());
             int at = state.getValue(index);
-            return at < declared.size() ? molang(declared.get(at)) : MolangValue.of(at);
-        });
+            return at < declared.size() ? BlockStateQueries.value(declared.get(at)) : MolangValue.of(at);
+        }).environment();
+        if (ServerHooks.state() != null) environment.shareTemporaries(ServerHooks.state().temporaries());
         return environment;
-    }
-
-    private static MolangValue molang(JsonElement value) {
-        if (!value.isJsonPrimitive()) return MolangValue.ZERO;
-        if (value.getAsJsonPrimitive().isBoolean()) return MolangValue.of(value.getAsBoolean());
-        if (value.getAsJsonPrimitive().isNumber()) return MolangValue.of(value.getAsDouble());
-        return MolangValue.of(value.getAsString());
     }
 
     /**

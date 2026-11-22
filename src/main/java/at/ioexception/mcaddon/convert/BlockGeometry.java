@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * A Bedrock block geometry, rewritten as a Java block model.
@@ -35,20 +36,26 @@ final class BlockGeometry {
 
     /**
      * Null when the geometry has nothing to draw, which is how a pack writes an invisible block.
+     * Bones `drawsBone` turns down are left out, and a state hiding every cube is an empty list.
      *
      * Each face wears the texture variable of the material instance it names, then the one named
      * after its own direction, then `all`, which is the order Bedrock looks a face's material up
      * in. `textures` is the set of variables the model declares.
      */
-    static JsonArray elements(BedrockGeometry geometry, Set<String> textures) {
+    static JsonArray elements(BedrockGeometry geometry, Set<String> textures, Predicate<String> drawsBone) {
         JsonArray elements = new JsonArray();
+        boolean hidden = false;
         for (BedrockBone bone : geometry.bones()) {
+            if (!drawsBone.test(bone.name())) {
+                hidden |= !bone.cubes().isEmpty();
+                continue;
+            }
             if (!bone.textureMeshes().isEmpty()) AddonEntities.unsupported("block geometry texture_meshes");
             for (BedrockCube cube : bone.cubes()) {
                 elements.add(element(cube, geometry, textures));
             }
         }
-        return elements.isEmpty() ? null : elements;
+        return elements.isEmpty() && !hidden ? null : elements;
     }
 
     /**

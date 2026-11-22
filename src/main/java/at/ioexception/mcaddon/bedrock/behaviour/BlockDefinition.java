@@ -3,7 +3,6 @@ package at.ioexception.mcaddon.bedrock.behaviour;
 import at.ioexception.mcaddon.McAddon;
 import at.ioexception.mcaddon.bedrock.molang.MolangEnvironment;
 import at.ioexception.mcaddon.bedrock.molang.MolangParser;
-import at.ioexception.mcaddon.bedrock.molang.MolangValue;
 import at.ioexception.mcaddon.pack.BedrockPack;
 import at.ioexception.mcaddon.registry.AddonEntities;
 import at.ioexception.mcaddon.util.Json;
@@ -14,9 +13,12 @@ import com.google.gson.JsonPrimitive;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * A block a behaviour pack declares.
@@ -163,21 +165,42 @@ public record BlockDefinition(String identifier, Map<String, String> faceTexture
         JsonObject merged = components.deepCopy();
         if (permutations.isEmpty()) return merged;
 
-        MolangEnvironment environment = new MolangEnvironment();
-        environment.setQueries((query, arguments) -> {
-            if (!query.equals("block_state") || arguments.isEmpty()) return MolangValue.ZERO;
-            JsonElement value = chosen.get(arguments.get(0).text());
-            if (value == null || !value.isJsonPrimitive()) return MolangValue.ZERO;
-            if (value.getAsJsonPrimitive().isBoolean()) return MolangValue.of(value.getAsBoolean());
-            if (value.getAsJsonPrimitive().isNumber()) return MolangValue.of(value.getAsDouble());
-            return MolangValue.of(value.getAsString());
-        });
+        MolangEnvironment environment = BlockStateQueries.of(chosen).environment();
 
         for (Permutation permutation : permutations) {
             if (!MolangParser.parse(permutation.condition()).evaluate(environment).truthy()) continue;
             permutation.components().entrySet().forEach(entry -> merged.add(entry.getKey(), entry.getValue()));
         }
         return merged;
+    }
+
+    /**
+     * Whether `minecraft:geometry` draws a bone while the block holds these states.
+     *
+     * `bone_visibility` maps a bone's name to Molang over the block's states, or to a boolean, and a
+     * bone it leaves out is drawn. Bone names are compared without regard to case, as Bedrock does.
+     * A bone hidden here hides its own cubes and not its children's, as `part_visibility` does.
+     */
+    public Predicate<String> drawsBone(Map<String, JsonElement> chosen) {
+        JsonElement component = componentsFor(chosen).get("minecraft:geometry");
+        JsonObject visibility = component != null && component.isJsonObject()
+            ? object(component.getAsJsonObject(), "bone_visibility") : new JsonObject();
+        if (visibility.isEmpty()) return bone -> true;
+
+        MolangEnvironment environment = BlockStateQueries.of(chosen).environment();
+        Map<String, Boolean> drawn = new HashMap<>();
+        visibility.entrySet().forEach(entry -> drawn.put(entry.getKey().toLowerCase(Locale.ROOT),
+            MolangParser.parse(entry.getValue()).evaluate(environment).truthy()));
+        return bone -> drawn.getOrDefault(bone.toLowerCase(Locale.ROOT), true);
+    }
+
+    /** The state the block is placed in when nothing picks another: each state's first value. */
+    public Map<String, JsonElement> defaultStates() {
+        Map<String, JsonElement> chosen = new LinkedHashMap<>();
+        states.forEach((name, values) -> {
+            if (!values.isEmpty()) chosen.put(name, values.get(0));
+        });
+        return chosen;
     }
 
     /** The named member, or an empty object when the pack left it out or wrote something else. */

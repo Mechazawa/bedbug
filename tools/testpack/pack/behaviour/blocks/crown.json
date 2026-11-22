@@ -1,0 +1,32 @@
+{
+  "format_version": "1.21.60",
+  "minecraft:block": {
+    "description": {
+      "identifier": "tp:crown",
+      "menu_category": {
+        "category": "construction"
+      },
+      "states": {
+        "tp:uses": [0, 1, 2, 3]
+      }
+    },
+    "components": {
+      "minecraft:geometry": {
+        "identifier": "geometry.crown",
+        "bone_visibility": {
+          "cap": "q.block_state('tp:uses') == 2",
+          "Rim": false
+        }
+      },
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "lamp_off",
+          "render_method": "opaque"
+        }
+      },
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 1.0
+      }
+    }
+  }
+}
