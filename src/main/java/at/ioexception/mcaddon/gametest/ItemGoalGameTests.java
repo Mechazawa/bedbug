@@ -171,6 +171,24 @@ public final class ItemGoalGameTests {
             .thenSucceed();
     }
 
+    /** A porter stands at a barrel for its two second `interaction_time` before it takes anything. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 160)
+    public void aPorterStandsAtAContainerForItsInteractionTime(GameTestHelper helper) {
+        container(helper, Blocks.BARREL, new BlockPos(2, 0, 1)).setItem(0, new ItemStack(Items.DIRT));
+        AddonEntity porter = porter(helper, "tp:porter_make_lingering", CORNER);
+        if (porter == null) {
+            helper.succeed();
+            return;
+        }
+
+        helper.startSequence()
+            .thenExecuteAfter(30, () -> helper.assertTrue(porter.getMainHandItem().isEmpty(),
+                PORTER + " took from the barrel before its two second interaction time was up."))
+            .thenWaitUntil(() -> helper.assertFalse(porter.getMainHandItem().isEmpty(),
+                PORTER + " never took from the barrel."))
+            .thenSucceed();
+    }
+
     /**
      * The offerer finds a pig three blocks off inside its `target_range` and leaves it the gift
      * table's feathers, which cannot be picked up for `seconds_before_pickup`.
