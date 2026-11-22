@@ -239,6 +239,76 @@
           "can_teleport": false,
           "ignore_vibration": true
         }
+      },
+      "tp:rover_drinking": {
+        "minecraft:behavior.drink_potion": {
+          "priority": 1,
+          "speed_modifier": -0.25,
+          "potions": [
+            {
+              "id": 12,
+              "chance": 1,
+              "filters": {
+                "none_of": [
+                  {
+                    "test": "has_mob_effect",
+                    "subject": "self",
+                    "value": "fire_resistance"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "tp:rover_magic": {
+        "minecraft:behavior.drink_potion": {
+          "priority": 1,
+          "speed_modifier": -0.25,
+          "potions": [
+            {
+              "id": 12,
+              "chance": 1,
+              "filters": {
+                "none_of": [
+                  {
+                    "test": "has_mob_effect",
+                    "subject": "self",
+                    "value": "fire_resistance"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "minecraft:shooter": {
+          "def": "minecraft:snowball",
+          "magic": true
+        }
+      },
+      "tp:rover_plain_shooter": {
+        "minecraft:behavior.drink_potion": {
+          "priority": 1,
+          "speed_modifier": -0.25,
+          "potions": [
+            {
+              "id": 12,
+              "chance": 1,
+              "filters": {
+                "none_of": [
+                  {
+                    "test": "has_mob_effect",
+                    "subject": "self",
+                    "value": "fire_resistance"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "minecraft:shooter": {
+          "def": "minecraft:snowball"
+        }
       }
     },
     "components": {
@@ -386,6 +456,27 @@
         "add": {
           "component_groups": [
             "tp:rover_following"
+          ]
+        }
+      },
+      "tp:rover_make_drinking": {
+        "add": {
+          "component_groups": [
+            "tp:rover_drinking"
+          ]
+        }
+      },
+      "tp:rover_make_magic": {
+        "add": {
+          "component_groups": [
+            "tp:rover_magic"
+          ]
+        }
+      },
+      "tp:rover_make_plain_shooter": {
+        "add": {
+          "component_groups": [
+            "tp:rover_plain_shooter"
           ]
         }
       }

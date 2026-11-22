@@ -2029,31 +2029,6 @@ public class AddonEntity extends PathfinderMob
         }
     }
 
-    /**
-     * Drinking a potion, which `minecraft:behavior.drink_potion` picks. Milk is {@link DrinkMilkGoal}.
-     *
-     * Each of its `potions` names a Bedrock potion by number, the conditions it is drunk under and a
-     * chance a tick; the first whose conditions hold and whose chance comes up is drunk, and the
-     * entity takes that potion's effects, the way Java's witch takes its own.
-     */
-    private void drink() {
-        Filter.Context context = new Filter.Context(this, this, getTarget(), ServerHooks.state());
-        com.google.gson.JsonObject drinking = liveComponent("minecraft:behavior.drink_potion");
-        if (drinking == null) return;
-
-        at.ioexception.mcaddon.util.Json.list(drinking, "potions").stream()
-            .filter(com.google.gson.JsonElement::isJsonObject)
-            .map(com.google.gson.JsonElement::getAsJsonObject)
-            .filter(potion -> Goals.filter(potion, "filters").matches(context))
-            .filter(potion -> random.nextDouble() < at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits
-                .chanceOverTicks(Goals.number(potion, "chance", 1), Sensors.INTERVAL_TICKS))
-            .findFirst()
-            .flatMap(potion -> at.ioexception.mcaddon.bedrock.behaviour.BedrockPotions.numbered(
-                (int) Goals.number(potion, "id", -1)))
-            .ifPresent(potion -> potion.getEffects()
-                .forEach(effect -> addEffect(new net.minecraft.world.effect.MobEffectInstance(effect))));
-    }
-
     /** Whether the raid underfoot was already won last time the entity looked. */
     private boolean sawRaidWon;
 
@@ -2942,6 +2917,8 @@ public class AddonEntity extends PathfinderMob
         // The first of `projectiles` whose filters hold stands in for the shooter's own `def` and
         // `aux_val`, and may drop the target once it is thrown, as a witch's healing potion does.
         com.google.gson.JsonObject shooter = liveComponent("minecraft:shooter");
+        // A magic shot waits out a drink, as Java's witch throws nothing while it drinks.
+        if (Goals.flag(shooter, "magic", false) && isUsingItem()) return;
         Filter.Context context = new Filter.Context(this, target, target, ServerHooks.state());
         com.google.gson.JsonObject chosen = at.ioexception.mcaddon.util.Json.list(shooter, "projectiles").stream()
             .filter(com.google.gson.JsonElement::isJsonObject)
@@ -3207,6 +3184,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.mingle" -> goals.add(priority, new MingleGoal(this, goal));
             case "minecraft:behavior.sleep" -> goals.add(priority, new SleepGoal(this, goal));
             case "minecraft:behavior.drink_milk" -> goals.add(priority, new DrinkMilkGoal(this, goal));
+            case "minecraft:behavior.drink_potion" -> goals.add(priority, new DrinkPotionGoal(this, goal));
             // `within_radius` is how near the target has to be for the walk towards it, as Java's
             // golem states the same 32 Mojang's iron golem does.
             case "minecraft:behavior.move_towards_target" ->
@@ -3721,7 +3699,6 @@ public class AddonEntity extends PathfinderMob
             rememberSomethingNearby();
             resupply();
             teleportAbout();
-            drink();
             leashChanged(isLeashed());
             noticeRaidWon();
             rise();

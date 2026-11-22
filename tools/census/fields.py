@@ -219,13 +219,6 @@ REASONS = {
                                   "follows nothing: no vanilla entity states it and nothing says what "
                                   "a river is to a flight.",
     },
-    "minecraft:behavior.drink_potion": {
-        "speed_modifier": "The potion's effects arrive the moment it is chosen, so there is no time spent "
-                          "drinking for the entity to be slowed through.",
-
-        "priority": "Drinking runs beside the entity's goals on the sensor pass rather than as one of "
-                    "them, so it has no place among them to take.",
-    },
     "minecraft:behavior.trade_interest": {
         "*": "Java's merchant screen opens on a click rather than after a mob has shown interest.",
     },
@@ -263,10 +256,6 @@ REASONS = {
         "is_dangerous": "Java's one dangerous projectile is the blue wither skull, whose flag is a field of "
                         "WitherSkull that sets its block resistance cap and its look; no goal asks any "
                         "projectile whether it is dangerous.",
-    },
-    "minecraft:shooter": {
-        "magic": "A drink here takes no time, its effects landing the tick its conditions hold, so the "
-                 "ranged attack never runs beside a drink it would have to be kept apart from.",
     },
     "minecraft:area_attack": {
         "death_message_override": "Java words a death by the msgId of the damage type that dealt it, a "

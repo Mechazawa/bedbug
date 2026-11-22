@@ -3326,3 +3326,12 @@ properties the pack named, because a test for a block asks about those and no ot
   counts; the allay is the one vanilla entity stating false, and Java's allay listens for note
   blocks alone, over 16 blocks, and keeps a liked note block for 600 ticks (`AllayAi.hearNoteblock`).
   A movement vibration would hold an allay back whenever its owner walked.
+- `minecraft:behavior.drink_potion` is `DrinkPotionGoal`, Java's wandering trader's `UseItemGoal`
+  shape: the potion is put in the main hand and used for its use duration, its effects land through
+  `LivingEntity.completeUsingItem`, and what the hand held before comes back. `speed_modifier` is
+  added to the movement speed while drinking (`Platform.drinkingSlowdown`), as Java's witch adds
+  -0.25 while it drinks; Mojang's witch states the same -0.25. The goal holds only the controls
+  `control_flags` names, as `drink_milk` does. A per tick `chance` is weighed over the two ticks the
+  selector waits between asks.
+- `minecraft:shooter` `magic` stops a ranged attack while the entity is drinking, as Java's witch
+  throws nothing while `isDrinkingPotion`.

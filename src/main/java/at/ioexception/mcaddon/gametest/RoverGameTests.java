@@ -257,6 +257,59 @@ public final class RoverGameTests {
         });
     }
 
+    /**
+     * A potion is drunk over its use duration: while drinking the entity holds it and moves at its
+     * speed plus `speed_modifier`, and the effect lands at the end.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 80)
+    public void aDrinkTakesTimeAndSlowsTheDrinker(GameTestHelper helper) {
+        AddonEntity rover = rover(helper, "tp:rover_make_drinking", STAND);
+        if (rover == null) {
+            helper.succeed();
+            return;
+        }
+        var speed = rover.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED);
+        helper.runAfterDelay(10, () -> {
+            helper.assertTrue(rover.isUsingItem(), ROVER + " is not drinking ten ticks in.");
+            helper.assertFalse(rover.hasEffect(net.minecraft.world.effect.MobEffects.FIRE_RESISTANCE),
+                ROVER + " has the potion's effect before it finished drinking.");
+            helper.assertTrue(Math.abs(speed.getValue()) < 1.0E-6,
+                ROVER + " drinking with a speed_modifier of -0.25 moves at " + speed.getValue() + ".");
+            helper.succeedWhen(() -> {
+                helper.assertTrue(rover.hasEffect(net.minecraft.world.effect.MobEffects.FIRE_RESISTANCE),
+                    ROVER + " finished no drink.");
+                helper.assertTrue(Math.abs(speed.getValue() - 0.25) < 1.0E-6,
+                    ROVER + " kept its drinking speed of " + speed.getValue() + " after the drink.");
+            });
+        });
+    }
+
+    /** A `magic` shooter throws nothing while it drinks; one that is not magic throws. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 40)
+    public void aMagicShooterDoesNotShootWhileDrinking(GameTestHelper helper) {
+        AddonEntity magic = rover(helper, "tp:rover_make_magic", STAND);
+        if (magic == null) {
+            helper.succeed();
+            return;
+        }
+        AddonEntity plain = rover(helper, "tp:rover_make_plain_shooter", STAND.south(4));
+        Mob pig = pig(helper, STAND.east(5));
+        helper.runAfterDelay(10, () -> {
+            helper.assertTrue(magic.isUsingItem() && plain.isUsingItem(), ROVER + " is not drinking ten ticks in.");
+            magic.performRangedAttack(pig, 1f);
+            plain.performRangedAttack(pig, 1f);
+            helper.assertTrue(snowballsBy(helper, magic) == 0, ROVER + " shot a magic snowball while drinking.");
+            helper.assertTrue(snowballsBy(helper, plain) == 1, ROVER + " that is not magic shot nothing.");
+            helper.succeed();
+        });
+    }
+
+    private static long snowballsBy(GameTestHelper helper, AddonEntity shooter) {
+        return helper.getLevel().getEntitiesOfClass(net.minecraft.world.entity.projectile.Projectile.class,
+                shooter.getBoundingBox().inflate(3))
+            .stream().filter(shot -> shot.getOwner() == shooter).count();
+    }
+
     private static boolean moved(GameTestHelper helper, AddonEntity rover, int x, int z) {
         BlockPos at = helper.absolutePos(new BlockPos(x, 0, z));
         return rover.position().distanceTo(net.minecraft.world.phys.Vec3.atBottomCenterOf(at)) > 0.5;
