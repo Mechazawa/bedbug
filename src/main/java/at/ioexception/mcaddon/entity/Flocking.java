@@ -14,12 +14,14 @@ import java.util.stream.IntStream;
  * How `minecraft:flocking` steers an entity among the others of its kind around it.
  *
  * The flock is every one of its kind within `influence_radius`, the nearest `high_flock_limit` of
- * them where a pack caps it, and under `match_variants` only those drawn the same way. A flockmate
- * nearer than `separation_threshold` pushes the entity away, harder the nearer it is, by
- * `separation_weight`; the middle of the flock pulls it in by `cohesion_weight` while it is further
- * off than `innner_cohesion_threshold` and nearer than `cohesion_threshold`; and `goal_weight` scales
- * the two together. Every weight defaults to what Mojang's documentation states, and `goal_weight`
- * to nothing, so a component with an empty body schools no one.
+ * them where a pack caps it, and under `match_variants` only those drawn the same way. A flock that
+ * with the entity numbers fewer than `low_flock_limit` does not steer it. A flockmate nearer than
+ * `separation_threshold` pushes the entity away, harder the nearer it is, by `separation_weight`; the
+ * middle of the flock under `use_center_of_mass`, and the nearest flockmate otherwise, pulls it in by
+ * `cohesion_weight` while it is further off than `innner_cohesion_threshold` and nearer than
+ * `cohesion_threshold`; and `goal_weight` scales the two together. Every weight defaults to what
+ * Mojang's documentation states, and `goal_weight` to nothing, so a component with an empty body
+ * schools no one.
  *
  * Three more pushes need no flock, and `goal_weight` scales them as well. A solid block level with
  * the entity's middle and nearer than `block_distance` pushes it away by `block_weight`, harder the
@@ -33,6 +35,8 @@ final class Flocking {
 
     private final double influence;
     private final int largest;
+    private final int smallest;
+    private final boolean towardsTheMiddle;
     private final boolean matchesLooks;
     private final double separationDistance;
     private final double separationWeight;
@@ -51,6 +55,8 @@ final class Flocking {
     private Flocking(JsonObject component) {
         this.influence = Goals.number(component, "influence_radius", 0);
         this.largest = (int) Goals.number(component, "high_flock_limit", 0);
+        this.smallest = (int) Goals.number(component, "low_flock_limit", 0);
+        this.towardsTheMiddle = Goals.flag(component, "use_center_of_mass", false);
         this.matchesLooks = Goals.flag(component, "match_variants", false);
         this.separationDistance = Goals.number(component, "separation_threshold", 2);
         this.separationWeight = Goals.number(component, "separation_weight", 1);
@@ -97,7 +103,7 @@ final class Flocking {
             .sorted(Comparator.comparingDouble(self::distanceToSqr))
             .limit(largest > 0 ? largest : Long.MAX_VALUE)
             .toList();
-        if (flock.isEmpty()) return Vec3.ZERO;
+        if (flock.isEmpty() || flock.size() + 1 < smallest) return Vec3.ZERO;
 
         Vec3 apart = flock.stream()
             .map(other -> self.position().subtract(other.position()))
@@ -106,7 +112,9 @@ final class Flocking {
             .reduce(Vec3.ZERO, Vec3::add)
             .scale(separationWeight);
 
-        Vec3 middle = flock.stream().map(AddonEntity::position).reduce(Vec3.ZERO, Vec3::add).scale(1d / flock.size());
+        Vec3 middle = towardsTheMiddle
+            ? flock.stream().map(AddonEntity::position).reduce(Vec3.ZERO, Vec3::add).scale(1d / flock.size())
+            : flock.getFirst().position();
         Vec3 towards = middle.subtract(self.position());
         double off = towards.length();
         Vec3 together = off > innerCohesion && off < cohesionDistance && off > 1.0E-4
