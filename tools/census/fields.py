@@ -47,13 +47,6 @@ INDEX = "Entity component definitions.json"
 # list rather than a regression. `--min-declarations 1` gates on the whole tail.
 GATE = 8
 
-# Reasons several navigation components share.
-DOOR_ANNOTATION = ("Not in the published schema. Mojang writes it beside `minecraft:annotation.open_door`, "
-                   "and that component is what decides whether the pathfinder plans through a closed door.")
-AMPHIBIOUS = ("Walking the bottom under water: a Java mob that may not float sinks and walks it, and water is "
-              "priced at nothing unless `avoid_water` says otherwise, so nothing is left to set.")
-FROM_AIR = "Java's flying navigator starts a path from wherever the entity is, the air included."
-
 TEMPT_SOUND = ("Mojang's documentation counts the gap between tempt sounds in ticks, and its cat writes "
                "[0, 100] where its strider writes 2 to 5, which no one unit fits; the sound is left unmade "
                "rather than made at one of the two rates.")
@@ -170,26 +163,6 @@ REASONS = {
     "minecraft:follow_range": {"max": "Java fixes the attribute's own ceiling."},
     "minecraft:knockback_resistance": {"max": "Java fixes the attribute's own ceiling."},
     "minecraft:movement": {"max": "Java fixes the attribute's own ceiling."},
-
-    # Navigation. Java asks its node evaluator about doors and floating and the mob what each kind of
-    # ground costs; what is left here is what it has no question for.
-    "minecraft:navigation.walk": {
-        "using_door_annotation": DOOR_ANNOTATION,
-        "is_amphibious": AMPHIBIOUS,
-        "avoid_portals": "Java's pathfinder classes a portal block as open ground, so there is no kind of "
-                         "ground to price it by.",
-        "blocks_to_avoid": "Java prices a step by the kind of ground it is rather than by the block, so a "
-                           "list of blocks would take a node evaluator of this mod's own.",
-    },
-    "minecraft:navigation.generic": {
-        "using_door_annotation": DOOR_ANNOTATION,
-        "is_amphibious": AMPHIBIOUS,
-        "can_jump": "Java's ground navigator plans every step up a block as a jump and has no switch for "
-                    "a mob that may not; the one vanilla entity saying no is a dolphin, which swims.",
-    },
-    "minecraft:navigation.float": {"using_door_annotation": DOOR_ANNOTATION},
-    "minecraft:navigation.hover": {"can_path_from_air": FROM_AIR},
-    "minecraft:navigation.fly": {"can_path_from_air": FROM_AIR},
 
     # Movement styles.
     "minecraft:movement.sway": {

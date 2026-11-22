@@ -3285,3 +3285,27 @@ value or a named state picks a member of. A Bedrock id may be a Java block in a 
 the way back starts from a `BlockState`: a lit furnace reports itself as `minecraft:lit_furnace`. A
 command line is translated through `BedrockBlockNames.Resolved.command`, which writes only the
 properties the pack named, because a test for a block asks about those and no others.
+
+## Census reasons: nav
+
+`entity/WalkingNavigation` is the ground navigator of every add-on entity that walks. Its evaluator
+is Java's `WalkNodeEvaluator` with four refusals laid over the nodes Java places.
+`tp:wayfarer` carries one group per field and `PathingGameTests` reads each back off a planned path.
+Mojang publishes the fields and one line each, so these rules are decided here:
+
+- `blocks_to_avoid` and `avoid_portals` refuse a node whose own block or the block under it matches.
+  A descriptor names a block or states `tags` as Molang; only `query.any_tag` and `query.all_tags`
+  are answered (`Goals.blockMatcher`), each tag asked of Java as a block tag of that name. A portal
+  is a block in Java's `minecraft:portals` tag.
+- `can_jump` false plans no step up a block: the evaluator is given a jump size of nothing.
+- `is_amphibious` false refuses a node on the bottom with water over its head, for a mob that does
+  not float. A mob already in water may still plan through such nodes, so it can walk out.
+- `using_door_annotation` is in no schema or document. All 43 vanilla entities writing it write
+  true. It is read as: true, the default, lets a carried `minecraft:annotation.open_door` or
+  `annotation.break_door` open the path through a closed wooden door; false leaves doors to
+  `can_open_doors` and `can_break_doors`. Mojang's vindicator states the break door annotation and
+  no `can_break_doors`, so without this its break door goal never found a door on its path.
+- `can_path_from_air` (default false, as documented) lets `minecraft:navigation.fly` and `hover`
+  plan from the air through `Pathing.AirNavigation`; without it they plan only on the ground or in
+  a liquid. Every vanilla fly and hover entity states it true. `navigation.float` keeps Java's
+  flying navigator, which plans from anywhere.
