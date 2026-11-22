@@ -2977,7 +2977,9 @@ publishes nothing on, decided here:
   so a crowd blocking the far block counts nothing against it.
 
 **The game test world is dark.** `isBrightOutside` answered false there at a clock of 25020, so a test
-about the day runs `time set day` and a goal asks the clock.
+about the day runs in the mod's own `mcaddon:gametest/daytime` environment, a `clock_time` of 1000,
+and a goal asks the clock. The environment puts those tests in a batch of their own: a test in the
+default batches that sets night, such as the sleep tests, otherwise turned the sky dark under them.
 
 **The game test world has more than one biome.** On 26.3 the rain tests stood in a desert, where no
 rain falls, so a test whose answer depends on the biome runs `fillbiome` over its area first.

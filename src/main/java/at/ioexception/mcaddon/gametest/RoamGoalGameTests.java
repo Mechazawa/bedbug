@@ -134,12 +134,11 @@ public final class RoamGoalGameTests {
      * `minecraft:behavior.move_through_village` with `only_at_night` rests while the sky is bright,
      * while a roamer without it walks the same village. The village is a bell a villager has claimed.
      */
-    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS * 2)
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS * 2, environment = DAYTIME)
     public void aVillagePatrolKeptToTheNightRestsByDay(GameTestHelper helper) {
         floor(helper);
         BlockPos bell = new BlockPos(4, 1, 4);
         helper.setBlock(bell, Blocks.BELL);
-        setDay(helper);
         helper.getLevel().getPoiManager().take(type -> type.is(PoiTypeTags.VILLAGE), (type, at) -> true,
             helper.absolutePos(bell), 1);
         AddonEntity night = roamer(helper, "tp:roamer_night_patrol", new BlockPos(1, 1, 1));
@@ -160,7 +159,7 @@ public final class RoamGoalGameTests {
      * `minecraft:behavior.find_cover` walks under the roof by day and, once there, waits its three
      * second `cooldown_time` before it looks for cover again.
      */
-    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS * 3)
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS * 3, environment = DAYTIME)
     public void aMobThatFoundCoverWaitsItsCooldownBeforeLookingAgain(GameTestHelper helper) {
         floor(helper);
         BlockPos.betweenClosed(new BlockPos(4, 3, 0), new BlockPos(7, 3, 7))
@@ -168,7 +167,6 @@ public final class RoamGoalGameTests {
         BlockPos open = new BlockPos(1, 1, 4);
         AddonEntity[] roamer = {null};
         long[] hiddenAt = {-1};
-        setDay(helper);
         helper.startSequence()
             .thenExecuteAfter(LIGHT_SETTLES, () -> roamer[0] = roamer(helper, "tp:roamer_shy", open))
             .thenWaitUntil(() -> helper.assertTrue(roamer[0] == null
@@ -192,14 +190,13 @@ public final class RoamGoalGameTests {
      * `minecraft:behavior.flee_sun` walks a mob under the open sky by day into the shade beside it,
      * burning as Mojang's skeleton is in daylight or not.
      */
-    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS * 2)
+    @GameTest(structure = EMPTY, maxTicks = WALK_TICKS * 2, environment = DAYTIME)
     public void aMobFleeingTheSunEndsInTheShade(GameTestHelper helper) {
         floor(helper);
         BlockPos.betweenClosed(new BlockPos(4, 3, 0), new BlockPos(7, 3, 7))
             .forEach(at -> helper.setBlock(at, Blocks.STONE));
         AddonEntity[] burning = {null};
         AddonEntity[] unburnt = {null};
-        setDay(helper);
         helper.startSequence()
             .thenExecuteAfter(LIGHT_SETTLES, () -> {
                 burning[0] = roamer(helper, "tp:roamer_sunshy", new BlockPos(1, 1, 2));
@@ -229,11 +226,11 @@ public final class RoamGoalGameTests {
     private static final long DAY_TICKS = 24000L;
     private static final long NIGHT_FROM = 12000L;
 
-    /** The game test world is dark until a test asks for the day, as the shelter tests do. */
-    private static void setDay(GameTestHelper helper) {
-        net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
-        server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "time set day");
-    }
+    /**
+     * A test environment of morning, the mod's own so that its batch runs apart from the tests that
+     * set the shared clock to night.
+     */
+    private static final String DAYTIME = "mcaddon:gametest/daytime";
 
     private static boolean hidden(GameTestHelper helper, AddonEntity roamer) {
         return !helper.getLevel().canSeeSky(roamer.blockPosition());
