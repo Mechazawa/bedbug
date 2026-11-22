@@ -2620,6 +2620,44 @@ public final class Platform {
         *///?}
     }
 
+    /**
+     * Adds `amount` to the entity's movement speed while it drinks, as Java's witch slows while
+     * drinking, and takes it off again at nothing.
+     */
+    public static void drinkingSlowdown(net.minecraft.world.entity.Mob mob, double amount) {
+        net.minecraft.world.entity.ai.attributes.AttributeInstance speed =
+            mob.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED);
+        if (speed == null) return;
+
+        //? if >=1.21 {
+        Identifier id = id("mcaddon", "drinking");
+        speed.removeModifier(id);
+        if (amount != 0) {
+            speed.addTransientModifier(new net.minecraft.world.entity.ai.attributes.AttributeModifier(
+                id, amount, net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE));
+        }
+        //?} else {
+        /*java.util.UUID id = java.util.UUID.fromString("3b0c8f7e-5a41-4d6b-9e2f-6c1d8a7b4f20");
+        speed.removeModifier(id);
+        if (amount != 0) {
+            speed.addTransientModifier(new net.minecraft.world.entity.ai.attributes.AttributeModifier(
+                id, "mcaddon drinking", amount,
+                net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADDITION));
+        }
+        *///?}
+    }
+
+    /** A potion in its bottle, as an entity holds one to drink it. */
+    public static net.minecraft.world.item.ItemStack potionStack(net.minecraft.world.item.alchemy.Potion potion) {
+        //? if >=1.21 {
+        return net.minecraft.world.item.alchemy.PotionContents.createItemStack(net.minecraft.world.item.Items.POTION,
+            net.minecraft.core.registries.BuiltInRegistries.POTION.wrapAsHolder(potion));
+        //?} else {
+        /*return net.minecraft.world.item.alchemy.PotionUtils.setPotion(
+            new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.POTION), potion);
+        *///?}
+    }
+
     /** Whether an effect is one an entity would want. What the instance carries became a holder in 1.21. */
     public static boolean beneficial(net.minecraft.world.effect.MobEffectInstance active) {
         //? if >=1.21 {

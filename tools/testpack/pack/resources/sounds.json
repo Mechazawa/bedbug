@@ -37,6 +37,12 @@
           "item_thrown": "tp:keeper.thrown"
         }
       },
+      "tp:rover": {
+        "events": {
+          "retreat": "tp:rover.retreat",
+          "tempt": "tp:rover.tempt"
+        }
+      },
       "villager_v2": {
         "events": {
           "ambient": { "volume": 0 },

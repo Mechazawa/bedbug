@@ -798,8 +798,8 @@ public class AddonEntity extends PathfinderMob
         // holding the entity to it: Mojang writes an empty `minecraft:home` on entities whose events
         // only need somewhere to remember.
         if (component != null && component.equals("minecraft:home")
-            && "none".equals(at.ioexception.mcaddon.util.Json.text(
-                liveComponent("minecraft:home"), "restriction_type", "none"))) {
+            && ("none".equals(at.ioexception.mcaddon.util.Json.text(
+                liveComponent("minecraft:home"), "restriction_type", "none")) || !homeBlockStands())) {
             component = null;
         }
         if (component == null) {
@@ -808,8 +808,38 @@ public class AddonEntity extends PathfinderMob
         }
         if (Platform.hasHome(this)) return;
 
-        Platform.setHome(this, blockPosition(),
-            Math.max(1, (int) liveNumber(component, "restriction_radius", 16)));
+        net.minecraft.core.BlockPos centre = component.equals("minecraft:home") ? homePosition() : blockPosition();
+        Platform.setHome(this, centre, Math.max(1, (int) liveNumber(component, "restriction_radius", 16)));
+    }
+
+    /**
+     * Whether a block `home_block_list` names stands at the home, which holds whenever the list is
+     * empty. The home restricts the entity only while one does.
+     */
+    private boolean homeBlockStands() {
+        java.util.Set<net.minecraft.world.level.block.Block> homes =
+            Goals.blocks(liveComponent("minecraft:home"), "home_block_list");
+        return homes.isEmpty() || homes.contains(level().getBlockState(homePosition()).getBlock());
+    }
+
+    /**
+     * The box a sleeping entity takes, which `minecraft:behavior.sleep` states.
+     *
+     * Java answers the sleeping pose with a fixed fifth of a block in the final
+     * `LivingEntity.getDimensions`, so the box is made here instead: `sleep_collider_width` across,
+     * `sleep_collider_height` high, its bottom `sleep_y_offset` above the floor of the bed's block.
+     */
+    @Override
+    protected net.minecraft.world.phys.AABB makeBoundingBox(net.minecraft.world.phys.Vec3 at) {
+        com.google.gson.JsonObject sleep = definition == null || getPose() != net.minecraft.world.entity.Pose.SLEEPING
+            ? null : liveComponent("minecraft:behavior.sleep");
+        if (sleep == null) return super.makeBoundingBox(at);
+
+        double half = Goals.number(sleep, "sleep_collider_width", 1) / 2;
+        double bottom = getSleepingPos()
+            .map(bed -> bed.getY() + Goals.number(sleep, "sleep_y_offset", 1)).orElse(at.y);
+        return new net.minecraft.world.phys.AABB(at.x - half, bottom, at.z - half,
+            at.x + half, bottom + Goals.number(sleep, "sleep_collider_height", 1), at.z + half);
     }
 
     /** The value the home `minecraft:home` saves is kept under, which a chunk written out keeps. */
@@ -2101,31 +2131,6 @@ public class AddonEntity extends PathfinderMob
         }
     }
 
-    /**
-     * Drinking a potion, which `minecraft:behavior.drink_potion` picks. Milk is {@link DrinkMilkGoal}.
-     *
-     * Each of its `potions` names a Bedrock potion by number, the conditions it is drunk under and a
-     * chance a tick; the first whose conditions hold and whose chance comes up is drunk, and the
-     * entity takes that potion's effects, the way Java's witch takes its own.
-     */
-    private void drink() {
-        Filter.Context context = new Filter.Context(this, this, getTarget(), ServerHooks.state());
-        com.google.gson.JsonObject drinking = liveComponent("minecraft:behavior.drink_potion");
-        if (drinking == null) return;
-
-        at.ioexception.mcaddon.util.Json.list(drinking, "potions").stream()
-            .filter(com.google.gson.JsonElement::isJsonObject)
-            .map(com.google.gson.JsonElement::getAsJsonObject)
-            .filter(potion -> Goals.filter(potion, "filters").matches(context))
-            .filter(potion -> random.nextDouble() < at.ioexception.mcaddon.bedrock.behaviour.BedrockUnits
-                .chanceOverTicks(Goals.number(potion, "chance", 1), Sensors.INTERVAL_TICKS))
-            .findFirst()
-            .flatMap(potion -> at.ioexception.mcaddon.bedrock.behaviour.BedrockPotions.numbered(
-                (int) Goals.number(potion, "id", -1)))
-            .ifPresent(potion -> potion.getEffects()
-                .forEach(effect -> addEffect(new net.minecraft.world.effect.MobEffectInstance(effect))));
-    }
-
     /** Whether the raid underfoot was already won last time the entity looked. */
     private boolean sawRaidWon;
 
@@ -3113,6 +3118,8 @@ public class AddonEntity extends PathfinderMob
         // The first of `projectiles` whose filters hold stands in for the shooter's own `def` and
         // `aux_val`, and may drop the target once it is thrown, as a witch's healing potion does.
         com.google.gson.JsonObject shooter = liveComponent("minecraft:shooter");
+        // A magic shot waits out a drink, as Java's witch throws nothing while it drinks.
+        if (Goals.flag(shooter, "magic", false) && isUsingItem()) return;
         Filter.Context context = new Filter.Context(this, target, target, ServerHooks.state());
         com.google.gson.JsonObject chosen = at.ioexception.mcaddon.util.Json.list(shooter, "projectiles").stream()
             .filter(com.google.gson.JsonElement::isJsonObject)
@@ -3378,6 +3385,7 @@ public class AddonEntity extends PathfinderMob
             case "minecraft:behavior.mingle" -> goals.add(priority, new MingleGoal(this, goal));
             case "minecraft:behavior.sleep" -> goals.add(priority, new SleepGoal(this, goal));
             case "minecraft:behavior.drink_milk" -> goals.add(priority, new DrinkMilkGoal(this, goal));
+            case "minecraft:behavior.drink_potion" -> goals.add(priority, new DrinkPotionGoal(this, goal));
             // `within_radius` is how near the target has to be for the walk towards it, as Java's
             // golem states the same 32 Mojang's iron golem does.
             case "minecraft:behavior.move_towards_target" ->
@@ -3418,10 +3426,8 @@ public class AddonEntity extends PathfinderMob
                 goals.add(priority, new StrollTowardsVillageGoal(this, goal));
             case "minecraft:behavior.follow_owner" ->
                 goals.add(priority, new FollowOwnerGoal(this, goal));
-            // Java steers a mount from its rider: a mob riding another plans with the mount's
-            // navigator and switches the mount's own movement goals off, so the chase a rider's
-            // attack goal runs is the mount's, at the reach that goal keeps.
-            case "minecraft:behavior.mount_pathing" -> { }
+            case "minecraft:behavior.mount_pathing" ->
+                goals.add(priority, new MountPathingGoal(this, goal, speed));
 
             case "minecraft:behavior.pickup_items" ->
                 goals.add(priority, new PickupItemsGoal(this, goal));
@@ -3895,7 +3901,6 @@ public class AddonEntity extends PathfinderMob
             rememberSomethingNearby();
             resupply();
             teleportAbout();
-            drink();
             leashChanged(isLeashed());
             noticeRaidWon();
             rise();
@@ -3907,6 +3912,7 @@ public class AddonEntity extends PathfinderMob
             hurtOverTime();
             breakBlocks();
             giveEffect();
+            refreshHome();
             attackAround();
             leaveTrail();
             growCrops();
@@ -4314,7 +4320,12 @@ public class AddonEntity extends PathfinderMob
      * pack declared the sensor at all; with none the whole feed costs a set lookup.
      */
     public static void rememberGameEvent(net.minecraft.server.level.ServerLevel level,
-        net.minecraft.world.phys.Vec3 where) {
+        net.minecraft.world.phys.Vec3 where, boolean noteBlock) {
+        if (noteBlock) {
+            level.getEntitiesOfClass(AddonEntity.class, net.minecraft.world.phys.AABB.ofSize(where,
+                    NOTE_EARSHOT * 2, NOTE_EARSHOT * 2, NOTE_EARSHOT * 2))
+                .forEach(heard -> heard.heardNoteAt = heard.tickCount);
+        }
         if (!AddonEntities.anyoneDeclares("minecraft:memory_sensor.game_event")) return;
 
         net.minecraft.world.phys.AABB earshot = net.minecraft.world.phys.AABB.ofSize(where,
@@ -4329,6 +4340,17 @@ public class AddonEntity extends PathfinderMob
 
     /** How far a game event carries, which is the range Java gives its own sculk sensor. */
     private static final double GAME_EVENT_EARSHOT = 16;
+
+    /** How far a played note block is heard, the range Java's allay listens over. */
+    private static final double NOTE_EARSHOT = 16;
+
+    /** The entity's own age at which it last heard a note block play, or negative while it has not. */
+    private int heardNoteAt = -1;
+
+    /** Ticks since a note block was last heard playing, or a huge number while none has been. */
+    public int sinceNoteBlock() {
+        return heardNoteAt < 0 ? Integer.MAX_VALUE : tickCount - heardNoteAt;
+    }
 
     /** The entity's own age at which it last heard something, or negative while it has heard nothing. */
     private int heardAt = -1;

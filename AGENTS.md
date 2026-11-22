@@ -3418,3 +3418,59 @@ publishes nothing:
   changes nothing else. `preferred_profession` narrows the job site to that Java profession's
   (`stone_mason` is `mason`, the other names lose their underscores). `SleepGoal` and `WorkGoal` go
   to the claimed bed and job site first.
+
+## Census reasons: goals
+
+`tp:rover` carries one group per field and `RoverGameTests` reads each back.
+
+- `minecraft:behavior.mount_pathing` is `MountPathingGoal`, on the mount. Java moves a mob-ridden
+  mount only through a goal of the rider's that walks (`Mob.getNavigation` hands the rider the
+  mount's navigator), and `Mob.updateControlFlags` switches the mount's own moving goals off, so a
+  rider with a target and no walking goal of its own left the mount standing. The goal holds the
+  controls `control_flags` names (none by default), walks to the controlling rider's target at the
+  mount's `speed_multiplier`, sets that speed every tick ahead of the rider's goals, and stops inside
+  `target_dist`. Mojang publishes nothing on `track_target` false beyond the one line, so such a
+  walk goes to where the target stood as it began and ends there.
+- `minecraft:home` `home_block_list`: Mojang documents that the home restriction is removed once no
+  listed block stands at the home position. Here the home restricts the entity only while a listed
+  block stands at `homePosition()`, the block the entity's feet were in as the component arrived,
+  asked as the component arrives and on every sensor pass, so a broken block lets go within ten
+  ticks and one put back holds the entity again. An entity spawned in the open has no listed block
+  at its home and is not held, which is what a bee summoned away from a hive is.
+- `minecraft:behavior.avoid_mob_type` is `AvoidMobsGoal`, which takes only the spot finding from
+  Java's `AvoidEntityGoal`. Without `ignore_visibility` a candidate has to be in line of sight. The
+  flight lasts until the entity is `max_flee` blocks from what it fled, planning a new spot within
+  `avoid_target_xz` and `avoid_target_y` each time it arrives, and runs at the sprint speed inside
+  `sprint_distance`. `remove_target` clears the target as the flight starts, `avoid_mob_sound` is
+  made then and every `sound_interval` seconds (the schema's unit), and `on_escape_event` is raised
+  when the flight ends at `max_flee`, its `target` naming the fleeing entity (`self`) or what it fled.
+  Mojang documents `probability_per_strength` only as a chance to stop avoiding "based on that
+  entity's strength". Decided here, after Java's wolf, which flees a stronger llama more often: a
+  candidate carrying `minecraft:strength` (a pack's own, or a Java llama's `getStrength`) is fled at
+  `probability_per_strength` times its strength, rolled each time the goal looks, and one carrying
+  none is always fled.
+- `minecraft:behavior.tempt` `tempt_sound` is made as the entity is tempted and every
+  `sound_interval` seconds while it stays so. Mojang's documentation says ticks, but its strider
+  states 2 to 5, a sound several times a second in ticks, where its cat's 0 to 100 reads as seconds
+  too. The schema gives every other sound interval in seconds, so seconds it is.
+- `minecraft:behavior.follow_owner` `ignore_vibration` false holds the follower back for 600 ticks
+  after it hears a note block play within 16 blocks (`AddonEntity.sinceNoteBlock`, fed from
+  `ServerLevelGameEventMixin` by `GameEvent.NOTE_BLOCK_PLAY`). Mojang does not say what vibration
+  counts. The allay is the one vanilla entity stating false, and Java's allay listens for note
+  blocks alone, over 16 blocks, and keeps a liked note block for 600 ticks (`AllayAi.hearNoteblock`).
+  A movement vibration would hold an allay back whenever its owner walked.
+- `minecraft:behavior.drink_potion` is `DrinkPotionGoal`, Java's wandering trader's `UseItemGoal`
+  shape: the potion is put in the main hand and used for its use duration, its effects land through
+  `LivingEntity.completeUsingItem`, and what the hand held before comes back. `speed_modifier` is
+  added to the movement speed while drinking (`Platform.drinkingSlowdown`), as Java's witch adds
+  -0.25 while it drinks, and Mojang's witch states the same -0.25. The goal holds only the controls
+  `control_flags` names, as `drink_milk` does. A per tick `chance` is weighed over the two ticks the
+  selector waits between asks.
+- `minecraft:shooter` `magic` stops a ranged attack while the entity is drinking, as Java's witch
+  throws nothing while `isDrinkingPotion`.
+- `minecraft:behavior.sleep` `sleep_collider_width`, `sleep_collider_height` and `sleep_y_offset`
+  shape the box while the entity sleeps. `LivingEntity.getDimensions` is final and answers the
+  sleeping pose with a fixed fifth of a block, so `AddonEntity` overrides `Entity.makeBoundingBox`.
+  Mojang does not say what the offset is measured from. Here it is the floor of the bed's block,
+  because Java places a sleeper 0.6875 above that floor and Mojang's villager states 0.6 with a
+  height of 0.3, which then rests on the mattress.

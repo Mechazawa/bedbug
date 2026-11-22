@@ -12,8 +12,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * Offers every game event to the entities whose pack asked to remember one.
  *
- * `minecraft:memory_sensor.game_event` is the only thing here that needs a feed of what happens
- * anywhere in the world, and `ServerLevel.gameEvent` is where the whole game funnels one. The
+ * `minecraft:memory_sensor.game_event` needs a feed of what happens anywhere in the world, and a
+ * follower minding vibrations needs the note blocks played, and `ServerLevel.gameEvent` is where the
+ * whole game funnels one. The
  * first parameter is a holder from 1.21 and the event itself before it, which is the only
  * difference between the two bodies.
  */
@@ -23,13 +24,13 @@ public abstract class ServerLevelGameEventMixin {
     @Inject(method = "gameEvent", at = @At("HEAD"))
     private void mcaddon$rememberEvent(net.minecraft.core.Holder<GameEvent> event, Vec3 where,
         GameEvent.Context context, CallbackInfo info) {
-        AddonEntity.rememberGameEvent((ServerLevel) (Object) this, where);
+        AddonEntity.rememberGameEvent((ServerLevel) (Object) this, where, event.is(GameEvent.NOTE_BLOCK_PLAY));
     }
     //?} else {
     /*@Inject(method = "gameEvent", at = @At("HEAD"))
     private void mcaddon$rememberEvent(GameEvent event, Vec3 where, GameEvent.Context context,
         CallbackInfo info) {
-        AddonEntity.rememberGameEvent((ServerLevel) (Object) this, where);
+        AddonEntity.rememberGameEvent((ServerLevel) (Object) this, where, event == GameEvent.NOTE_BLOCK_PLAY);
     }
     *///?}
 }

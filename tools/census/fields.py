@@ -47,20 +47,12 @@ INDEX = "Entity component definitions.json"
 # list rather than a regression. `--min-declarations 1` gates on the whole tail.
 GATE = 8
 
-TEMPT_SOUND = ("Mojang's documentation counts the gap between tempt sounds in ticks, and its cat writes "
-               "[0, 100] where its strider writes 2 to 5, which no one unit fits; the sound is left unmade "
-               "rather than made at one of the two rates.")
-
 SUFFOCATION = ("Mojang documents seconds between suffocation damage with a default of -20, and writes 0 on "
                "every vanilla mob and -1 on the player. The Minecraft Wiki's damage page names one drowning "
                "rate and no edition difference: a hit of 2 when the air reaches -20, which then goes back to "
                "0, and a mob's first hit sixteen seconds under water, where a floor of 0 would hit a pig at "
                "fifteen and then every tick. So the value sets no rate a pack can see, and Java's "
                "`LivingEntity.baseTick` hurts at that rate once `shouldTakeDrowningDamage` finds the air at -20.")
-
-SLEEPING_BOX = ("From 1.21 Java's `LivingEntity.getDimensions` is final and answers a fixed box of a fifth of a "
-                "block for the sleeping pose, which is the pose a sleeping entity takes here, so a box of a "
-                "pack's own has nowhere to go.")
 
 TOUCH_TEXT = ("Mojang documents it as the label of the interact button shown with touch-screen controls. "
               "Java has no touch-screen controls and no interact button, and Bedrock shows the label to no "
@@ -124,38 +116,11 @@ REASONS = {
     "minecraft:knockback_resistance": {"max": "Java fixes the attribute's own ceiling."},
     "minecraft:movement": {"max": "Java fixes the attribute's own ceiling."},
 
-    # Movement styles.
-
-
     # Goals. Java's goal of the same name takes fewer parameters than Bedrock states.
-    "minecraft:behavior.mount_pathing": {
-        "*": "A mob riding another steers it in Java: the rider plans with the mount's navigator and the "
-             "mount's own movement goals are switched off while it is ridden, so the chase and the "
-             "distance kept belong to the rider's attack goal.",
-    },
-    "minecraft:behavior.sleep": {
-        "sleep_collider_width": SLEEPING_BOX,
-        "sleep_collider_height": SLEEPING_BOX,
-        "sleep_y_offset": SLEEPING_BOX,
-    },
-    "minecraft:behavior.tempt": {
-        "tempt_sound": TEMPT_SOUND,
-        "sound_interval": TEMPT_SOUND,
-    },
     "minecraft:behavior.avoid_mob_type": {
-        "*": "Java's avoid goal flees whatever it is given at the speed it is given, with no sound, no "
-             "probability and no event when it gets away.",
-    },
-    "minecraft:behavior.follow_owner": {
-        "ignore_vibration": "Whether a vibration interrupts the following. Only the allay says it does, and "
-                            "its note block goals sit above this one in priority, which is what interrupts it.",
-    },
-    "minecraft:behavior.drink_potion": {
-        "speed_modifier": "The potion's effects arrive the moment it is chosen, so there is no time spent "
-                          "drinking for the entity to be slowed through.",
-
-        "priority": "Drinking runs beside the entity's goals on the sensor pass rather than as one of "
-                    "them, so it has no place among them to take.",
+        "river_speed_multiplier": "Documented only as the speed 'when following river', and the goal "
+                                  "follows nothing: no vanilla entity states it and nothing says what "
+                                  "a river is to a flight.",
     },
     "minecraft:behavior.trade_with_player": {"filters": "Java's merchant screen opens for whoever clicks."},
     "minecraft:behavior.swim_wander": {
@@ -164,22 +129,20 @@ REASONS = {
                       "the entity moves, so there is no distance ahead to look for an obstacle.",
     },
     "minecraft:behavior.player_ride_tamed": {
-        "priority": "The behaviour is answered as a rule on who may get on, asked whenever somebody tries, "
-                    "so there is no goal for a priority to place.",
+        "priority": "Mojang's goal holds no controls by default, so its priority orders it against "
+                    "nothing, and Java moves a player-ridden mount in LivingEntity.travelRidden rather "
+                    "than through any goal, so what it would place has no effect here. The behaviour "
+                    "is answered as the rule on who may get on.",
     },
 
     # The rest, one component at a time.
-    "minecraft:home": {
-        "home_block_list": "Bedrock checks the list against the block an event set the home at; the home here "
-                           "is where the entity stood as the component arrived, which is no such block, so "
-                           "the list has nothing to be checked against.",
-    },
     "minecraft:rideable": {"interact_text": TOUCH_TEXT},
     "minecraft:is_dyeable": {"interact_text": TOUCH_TEXT},
     "minecraft:tamemount": {"feed_text": TOUCH_TEXT, "ride_text": TOUCH_TEXT},
     "minecraft:behavior.dragondeath": {
-        "priority": "The long death runs in LivingEntity.tickDeath, once the entity is dead and no goal "
-                    "runs, so there is no goal for a priority to order.",
+        "priority": "The long death runs in LivingEntity.tickDeath, and LivingEntity.aiStep skips "
+                    "serverAiStep, where the goals run, while isImmobile answers isDeadOrDying, so no "
+                    "goal is left for a priority to order against.",
     },
     "minecraft:projectile": {
         "is_dangerous": "Mojang's schema says it affects AI reactions and client behaviour and names none, and "
@@ -187,10 +150,6 @@ REASONS = {
                         "`WitherSkull.getBlockExplosionResistance` and `WitherSkullRenderer` read "
                         "`isDangerous`, and Mojang's dangerous skull states its inertia, its blast's "
                         "`max_resistance` and its texture in fields of their own.",
-    },
-    "minecraft:shooter": {
-        "magic": "A drink here takes no time, its effects landing the tick its conditions hold, so the "
-                 "ranged attack never runs beside a drink it would have to be kept apart from.",
     },
 }
 
