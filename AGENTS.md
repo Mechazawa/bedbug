@@ -3548,8 +3548,7 @@ publishes nothing:
   free bed, bell and job site within 48 blocks, Java's `AcquirePoi` range, every
   `update_interval_base` plus up to `update_interval_variant` ticks (60 and 40 where unstated, as
   every vanilla dweller writes them), and gives them back when it dies or is discarded. The other
-  roles claim nothing: Java counts only `Villager` for golems and `Raider` for raids, so a role
-  changes nothing else. `preferred_profession` narrows the job site to that Java profession's
+  roles claim nothing. What each counts for is under `## Census gap: dweller-roles`. `preferred_profession` narrows the job site to that Java profession's
   (`stone_mason` is `mason`, the other names lose their underscores). `SleepGoal` and `WorkGoal` go
   to the claimed bed and job site first.
 
@@ -3608,3 +3607,18 @@ publishes nothing:
   Mojang does not say what the offset is measured from. Here it is the floor of the bed's block,
   because Java places a sleeper 0.6875 above that floor and Mojang's villager states 0.6 with a
   height of 0.3, which then rests on the mattress.
+
+## Census gap: dweller-roles
+
+`tp:townsfolk` carries a `defender` and a `passive` group and `DwellerRoleGameTests` reads each back.
+Mojang documents the four roles by name only. Its own files decide the rest:
+
+- **`defender`** is the role of the iron golem a village made (only Mojang's `minecraft:village_created`
+  group carries the dweller), and Bedrock lets a village make a golem only while it holds fewer
+  than its villagers call for. Java's villager wants no golem while `GolemSensor` has seen one, so
+  `GolemSensorMixin` counts a defender among what the villager sees as a golem.
+- **`passive`** is the cat's role, and Bedrock caps a village's cats by its beds. Java's
+  `CatSpawner.spawnInVillage` adds a cat while fewer than five stand within 48 blocks across and 8
+  up or down, and `CatSpawnerMixin` counts the passive dwellers in the same box among them.
+- **`hostile`** is the role of a raid's raiders. Java's `Raid` holds only `Raider`, so it changes
+  nothing here. The reason is in `REASONS` in `tools/census/fields.py`.
