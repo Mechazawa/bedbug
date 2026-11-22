@@ -18,6 +18,14 @@
             "effect": "loose",
             "locator": "tip",
             "bind_to_actor": false
+          },
+          {
+            "effect": "tether",
+            "locator": "tip"
+          },
+          {
+            "effect": "fling",
+            "locator": "tip"
           }
         ]
       },

@@ -54,6 +54,18 @@ public final class AddonEmitters {
     private AddonEmitters() {
     }
 
+    /**
+     * The frame an emitter's particles move in when its `emitter_local_space` puts them in the
+     * entity's space: they keep their place relative to the anchor as it moves and, when `turns`,
+     * as the entity turns.
+     */
+    public record Space(Supplier<Vec3> anchor, Entity entity, boolean turns) {
+        /** The way the entity faces, which is the way its drawn model is turned. */
+        public float yaw() {
+            return entity instanceof LivingEntity living ? living.yBodyRot : entity.getYRot();
+        }
+    }
+
     /** One effect in flight, at a place or following something. */
     private static final class Running {
         private final ParticleDefinition definition;
@@ -62,6 +74,9 @@ public final class AddonEmitters {
 
         /** Null for an effect standing still, which is how a one-off burst is left behind. */
         private final Entity following;
+
+        /** The entity's space its particles move in, or null where they move in the world's. */
+        private final Space space;
 
         /** Where the emitter stands at this moment, which moves with the entity or locator it is bound to. */
         private final Supplier<Vec3> anchor;
@@ -86,6 +101,9 @@ public final class AddonEmitters {
         private float travelled;
         private Vec3 was;
 
+        /** How far the emitter moved in its last tick, in blocks a tick. */
+        private Vec3 velocity = Vec3.ZERO;
+
         /** Set once whatever started the effect ends it, which it does on its next tick. */
         private boolean ended;
 
@@ -97,6 +115,10 @@ public final class AddonEmitters {
             this.following = following;
             this.anchor = anchor;
             this.depth = depth;
+
+            ParticleDefinition.Emitter.LocalSpace local = definition.emitter().localSpace();
+            this.space = local == null || !local.position() || following == null ? null
+                : new Space(anchor, following, local.rotation());
 
             if (queries != null) environment.setQueries(queries);
             randomise(environment, "emitter_random_");
@@ -230,9 +252,25 @@ public final class AddonEmitters {
         return emitting == null ? new MolangEnvironment() : emitting.environment.copy();
     }
 
-    /** Counts a particle the emitter making particles at this moment just made among its own. */
+    /**
+     * Counts a particle the emitter making particles at this moment just made among its own, and
+     * puts it in the entity's space where the emitter's `emitter_local_space` asks for that.
+     */
     public static void adopt(AddonParticle particle) {
-        if (emitting != null) emitting.alive.add(particle);
+        if (emitting == null) return;
+        emitting.alive.add(particle);
+        if (emitting.space != null) particle.carriedBy(emitting.space);
+    }
+
+    /**
+     * The velocity a particle made at this moment takes on from its emitter, in blocks a tick:
+     * the emitter's own where its `emitter_local_space` asks for it and it is bound to an entity.
+     */
+    public static Vec3 inheritedVelocity() {
+        if (emitting == null || emitting.following == null) return Vec3.ZERO;
+
+        ParticleDefinition.Emitter.LocalSpace local = emitting.definition.emitter().localSpace();
+        return local != null && local.velocity() ? emitting.velocity : Vec3.ZERO;
     }
 
     /** Writes each curve's answer to the Molang variable it is named after. */
@@ -285,7 +323,10 @@ public final class AddonEmitters {
     private static void travelled(Running effect) {
         Vec3 here = effect.where();
         float before = effect.travelled;
-        if (effect.was != null) effect.travelled += (float) effect.was.distanceTo(here);
+        if (effect.was != null) {
+            effect.velocity = here.subtract(effect.was);
+            effect.travelled += (float) effect.velocity.length();
+        }
         effect.was = here;
 
         for (ParticleEvent.Travel travel : effect.definition.emitter().events().travel()) {

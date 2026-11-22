@@ -17,7 +17,9 @@
         "puff": "tp:puff",
         "wake": "tp:wake",
         "loose": "tp:wake_loose",
-        "glow": "tp:glow"
+        "glow": "tp:glow",
+        "tether": "tp:tether",
+        "fling": "tp:fling"
       },
       "animations": {
         "rise": "animation.tp.flare.rise",

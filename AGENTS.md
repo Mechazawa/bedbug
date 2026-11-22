@@ -3103,8 +3103,14 @@ first standing place; 0, the default, checks every place in one tick and picks t
   the locator was as it started and outlives the entity. An `emitter_bound` event raised by such an
   emitter starts an effect bound to the same locator, as Mojang's particle documentation says: it
   stands wherever the raising emitter stands at each tick. Raised by an emitter bound to nothing, or
-  by a particle, it is left where it was made, as an `emitter` event's effect is. The emitter's own
-  orientation does not follow the bone, because `emitter_local_space` is not acted on.
+  by a particle, it is left where it was made, as an `emitter` event's effect is.
+- `emitter_local_space` applies only to an emitter bound to an entity, as Mojang says. `position`
+  keeps each particle's place relative to the emitter's anchor as it moves (`AddonParticle.carry`),
+  `rotation` also turns the particle and its velocity about the anchor by however far the entity's
+  body turned since the last tick, and `velocity` adds the anchor's movement over its last tick to a
+  new particle's velocity. Mojang calls `rotation` without `position` invalid, so it is ignored. The
+  turn read is the body's yaw, which the model is drawn with; a locator's own orientation and the
+  emitter's shape are not turned with the bone, since Mojang publishes no rule for either.
 - A controller state's `particle_effects` end as the state is left, as Mojang's particle
   documentation says: `EffectSink.particle` hands back what ends the emitter and the controller's
   `ControllerState` runs it on the transition. Mojang does not say what an ended emitter does, so it
