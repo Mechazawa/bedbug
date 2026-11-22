@@ -1780,6 +1780,9 @@ the weight. `FogClientGameTest.media` reads each back off the frame's `FogData`.
   **The census sees a method only by its modifier.** A reader written as a package-private method
   with no `public`, `private`, `static` or `final` in front of it is not found, so the fields it reads
   are credited to nothing and a field read there can fail `--strict`. Give such a method a modifier.
+  A constructor with a modifier is a reader like any method. A field read by walking an enum's
+  `values()`, whose constants are written `NAME("field", ...)`, counts as read, which is how
+  `PlayerDefinition.Action` names the `minecraft:exhaustion_values` prices.
 
   With no `scratchpad/bedrock/bedrock-samples` checkout it reports that there is nothing to measure
   and passes, the way the rest of the harness does with no add-on present.

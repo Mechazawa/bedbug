@@ -136,23 +136,6 @@ REASONS = {
                                             "alone, and a pack's entity is not one, so it has no command block "
                                             "to stop ticking.",
     },
-    "minecraft:player.exhaustion": {
-        "*": "Read by `PlayerDefinition.Attribute`, which takes `value` and `max` of the five player "
-             "attributes from one helper. `value` is written into `FoodData`'s exhaustion at join and "
-             "respawn and `max` holds it under the ceiling.",
-    },
-    "minecraft:player.level": {
-        "*": "Read by `PlayerDefinition.Attribute`: `value` sets `Player.experienceLevel` and `max` holds "
-             "the level under the ceiling, which Java does not state.",
-    },
-    "minecraft:player.experience": {
-        "*": "Read by `PlayerDefinition.Attribute`: `value` sets `Player.experienceProgress` and `max` "
-             "holds it under the ceiling.",
-    },
-    "minecraft:exhaustion_values": {
-        "*": "Read by `PlayerDefinition.Action`, whose key is the field name. Each price scales the "
-             "amount Java passes to `Player.causeFoodExhaustion` at that call site.",
-    },
     "minecraft:loot": {"table": "Read by the loot table converter, which files the table under this path."},
     "minecraft:trade_table": {
         "table": "Read where the trades are loaded, while the pack is still open.",
@@ -316,9 +299,16 @@ TYPE = re.compile(r"\b([A-Z]\w+)\s*[.(]")
 COMPONENT = re.compile(r"\"(minecraft:[a-z0-9_.]+)\"")
 METHOD = re.compile(
     r"^[ \t]*(?:(?:public|private|protected|static|final|abstract|synchronized|default)\s+)+"
-    r"[\w.<>,\[\]?\s]+\s+(\w+)\s*\([^;{]*\)\s*(?:throws [\w.,\s]+)?\{",
+    r"(?:[\w.<>,\[\]?\s]+\s+)?(\w+)\s*\([^;{]*\)\s*(?:throws [\w.,\s]+)?\{",
     re.M,
 )
+
+# An enum whose constants name the fields they stand for, read by walking `values()`: the constant's
+# first argument is the field.
+ENUM = re.compile(r"\benum\s+(\w+)\s*\{([^;]*);")
+ENUM_KEY = re.compile(r"^\s*[A-Z][A-Z0-9_]*\(\s*\"([a-z][a-z0-9_]*)\"", re.M)
+VALUES = re.compile(r"\b([A-Z]\w*)\.values\(\)")
+ENUM_FIELDS: dict[str, set[str]] = collections.defaultdict(set)
 CALL = re.compile(r"(\w+)\s*\(")
 
 # How far a reader is followed into the helpers it calls. Two steps reach the value types that turn
@@ -524,6 +514,8 @@ def harvest(text: str, methods: dict[str, list[str]], seen: set[str], depth: int
     that turn a component into a value live in their own files.
     """
     fields = direct(text)
+    for walked in VALUES.findall(text):
+        fields.update(ENUM_FIELDS.get(walked, set()))
     if depth == 0 and types:
         for named in set(TYPE.findall(text)) & set(types):
             fields.update(types[named])
@@ -608,6 +600,9 @@ def main() -> int:
             methods[name].extend(overloads)
 
     types = {path.stem: direct(source) for path, source in java.items()}
+    for source in java.values():
+        for name, constants in ENUM.findall(source):
+            ENUM_FIELDS[name].update(ENUM_KEY.findall(constants))
 
     taken: dict[str, set[str]] = collections.defaultdict(set)
     for source in java.values():
