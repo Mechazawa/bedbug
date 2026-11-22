@@ -221,7 +221,7 @@ REASONS = {
     "minecraft:behavior.player_ride_tamed": {
         "priority": "Mojang's goal holds no controls by default, so its priority orders it against "
                     "nothing, and Java moves a player-ridden mount in LivingEntity.travelRidden rather "
-                    "than through any goal, so what it would place has no effect here; the behaviour "
+                    "than through any goal, so what it would place has no effect here. The behaviour "
                     "is answered as the rule on who may get on.",
     },
     "minecraft:flocking": {

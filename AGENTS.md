@@ -3319,18 +3319,18 @@ properties the pack named, because a test for a block asks about those and no ot
 - `minecraft:behavior.tempt` `tempt_sound` is made as the entity is tempted and every
   `sound_interval` seconds while it stays so. Mojang's documentation says ticks, but its strider
   states 2 to 5, a sound several times a second in ticks, where its cat's 0 to 100 reads as seconds
-  too; the schema gives every other sound interval in seconds, so seconds it is.
+  too. The schema gives every other sound interval in seconds, so seconds it is.
 - `minecraft:behavior.follow_owner` `ignore_vibration` false holds the follower back for 600 ticks
   after it hears a note block play within 16 blocks (`AddonEntity.sinceNoteBlock`, fed from
   `ServerLevelGameEventMixin` by `GameEvent.NOTE_BLOCK_PLAY`). Mojang does not say what vibration
-  counts; the allay is the one vanilla entity stating false, and Java's allay listens for note
+  counts. The allay is the one vanilla entity stating false, and Java's allay listens for note
   blocks alone, over 16 blocks, and keeps a liked note block for 600 ticks (`AllayAi.hearNoteblock`).
   A movement vibration would hold an allay back whenever its owner walked.
 - `minecraft:behavior.drink_potion` is `DrinkPotionGoal`, Java's wandering trader's `UseItemGoal`
   shape: the potion is put in the main hand and used for its use duration, its effects land through
   `LivingEntity.completeUsingItem`, and what the hand held before comes back. `speed_modifier` is
   added to the movement speed while drinking (`Platform.drinkingSlowdown`), as Java's witch adds
-  -0.25 while it drinks; Mojang's witch states the same -0.25. The goal holds only the controls
+  -0.25 while it drinks, and Mojang's witch states the same -0.25. The goal holds only the controls
   `control_flags` names, as `drink_milk` does. A per tick `chance` is weighed over the two ticks the
   selector waits between asks.
 - `minecraft:shooter` `magic` stops a ranged attack while the entity is drinking, as Java's witch
@@ -3338,6 +3338,6 @@ properties the pack named, because a test for a block asks about those and no ot
 - `minecraft:behavior.sleep` `sleep_collider_width`, `sleep_collider_height` and `sleep_y_offset`
   shape the box while the entity sleeps. `LivingEntity.getDimensions` is final and answers the
   sleeping pose with a fixed fifth of a block, so `AddonEntity` overrides `Entity.makeBoundingBox`.
-  Mojang does not say what the offset is measured from; here it is the floor of the bed's block,
+  Mojang does not say what the offset is measured from. Here it is the floor of the bed's block,
   because Java places a sleeper 0.6875 above that floor and Mojang's villager states 0.6 with a
   height of 0.3, which then rests on the mattress.
