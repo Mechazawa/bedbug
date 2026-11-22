@@ -1,5 +1,9 @@
 package at.ioexception.mcaddon.clientgametest;
 
+import at.ioexception.mcaddon.bedrock.EntitySounds;
+import at.ioexception.mcaddon.convert.ConvertedPack;
+import at.ioexception.mcaddon.registry.ActiveAddons;
+import java.util.Map;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -17,12 +21,15 @@ import net.minecraft.world.entity.player.Player;
  * The test pack keys an entry under `villager_v2`, Bedrock's bare name for Java's villager: its
  * idle sound has a volume of nothing, its hurt sound an empty name, and its `haggle.no` names a sound
  * of the pack's own. The villager's `haggle.yes` is left alone, so Java's own sound still plays for it.
+ * Another add-on keying the villager later than the test pack decides its voice instead, the way
+ * Villager News silences every moment, so the test asks nothing then.
  */
 public final class VanillaVoiceClientGameTest implements FabricClientGameTest {
     private static final int PATIENCE = 100;
 
     @Override
     public void runTest(ClientGameTestContext context) {
+        if (!testPackVoicesTheVillager()) return;
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
             Worlds.waitForChunks(world);
             world.getServer().runCommand("execute as @p at @s run summon minecraft:villager ~2 ~ ~ {NoAI:1b}");
@@ -53,6 +60,17 @@ public final class VanillaVoiceClientGameTest implements FabricClientGameTest {
                 }
             });
         }
+    }
+
+    private static boolean testPackVoicesTheVillager() {
+        String byFullName = null;
+        String byBareName = null;
+        for (ConvertedPack pack : ActiveAddons.active().converted()) {
+            Map<String, EntitySounds> voices = EntitySounds.readAll(pack.pack());
+            if (voices.containsKey("minecraft:villager_v2")) byFullName = pack.namespace();
+            if (voices.containsKey("villager_v2")) byBareName = pack.namespace();
+        }
+        return "tp".equals(byFullName != null ? byFullName : byBareName);
     }
 
     private static Villager villager(MinecraftServer server) {
