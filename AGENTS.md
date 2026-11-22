@@ -2954,6 +2954,12 @@ publishes nothing on, decided here:
   mob, and `aPathNeverStepsOnABlockItsNavigationAvoids` reads it back. A mob needs to have landed
   for a ground navigator to plan at all, so the test lets its roamers fall first.
 
+- A test of a random choice fails by construction when every draw goes the other way, so it
+  takes enough draws to make that one run in tens of thousands.
+  `aRandomBlockWalkTakesAnyMatchingBlockInRange` had eight roamers, one failed run in 256; it has sixteen and reads the walk each planned
+  (`getPath().getTarget()`) rather than where it stands, so a crowd blocking the far block counts
+  nothing against it.
+
 **The game test world is dark.** `isBrightOutside` answered false there at a clock of 25020, so a test
 about the day runs `time set day` and a goal asks the clock.
 ## Carrying blocks, laying, working and giving

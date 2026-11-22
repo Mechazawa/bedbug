@@ -365,8 +365,11 @@ public final class RoamGoalGameTests {
 
     /**
      * `minecraft:behavior.move_to_block` with `target_selection_method` set to `random` takes any
-     * matching block in range rather than the nearest. Of eight roamers between a near gold block
-     * and a far one, some walk to the far one.
+     * matching block in range rather than the nearest. Of sixteen roamers between a near gold block
+     * and a far one, some plan their walk to the far one.
+     *
+     * The walk each roamer planned is read rather than where it stands, so a crowd in the way of the
+     * far block cannot hide a roamer that picked it.
      */
     @GameTest(structure = EMPTY, maxTicks = WALK_TICKS)
     public void aRandomBlockWalkTakesAnyMatchingBlockInRange(GameTestHelper helper) {
@@ -377,7 +380,7 @@ public final class RoamGoalGameTests {
         helper.setBlock(far, Blocks.GOLD_BLOCK);
         List<AddonEntity> roamers = new ArrayList<>();
         for (int i = 0; i < CHOOSERS; i++) {
-            AddonEntity roamer = roamer(helper, "tp:roamer_fickle", new BlockPos(1, RAISED + 1, 1 + i % 6));
+            AddonEntity roamer = roamer(helper, "tp:roamer_fickle", new BlockPos(i / 8, RAISED + 1, i % 8));
             if (roamer == null) {
                 helper.succeed();
                 return;
@@ -385,14 +388,15 @@ public final class RoamGoalGameTests {
             roamers.add(roamer);
         }
 
-        Vec3 gold = Vec3.atBottomCenterOf(helper.absolutePos(far));
+        BlockPos gold = helper.absolutePos(far);
         helper.succeedWhen(() -> helper.assertTrue(roamers.stream()
-                .anyMatch(roamer -> Math.hypot(roamer.getX() - gold.x, roamer.getZ() - gold.z) < 2),
-            "None of " + CHOOSERS + " roamers picking a gold block at random walked to the far one."));
+                .map(roamer -> roamer.getNavigation().getPath())
+                .anyMatch(path -> path != null && path.getTarget().distManhattan(gold) <= 1),
+            "None of " + CHOOSERS + " roamers picking a gold block at random set off for the far one."));
     }
 
-    /** Enough that all of them picking the near block by chance is one run in two hundred and fifty. */
-    private static final int CHOOSERS = 8;
+    /** Enough that all of them picking the near block by chance is one run in 65536. */
+    private static final int CHOOSERS = 16;
 
     /**
      * `minecraft:behavior.move_to_random_block` walks to blocks up to `block_distance` blocks off,
