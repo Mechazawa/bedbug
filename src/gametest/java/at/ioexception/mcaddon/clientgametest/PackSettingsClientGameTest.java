@@ -161,9 +161,7 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
             int scale = client.getWindow().getGuiScale();
             return new double[] {(row.getX() + 100) * scale, (row.getY() + 8) * scale};
         });
-        context.getInput().setCursorPos(point[0], point[1]);
-        context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
-        context.waitTick();
+        press(context, point);
     }
 
     private static void changeTheWorlds(ClientGameTestContext context, TestServerContext server) {
@@ -215,7 +213,6 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
         server.runOnServer(minecraft -> Platform.setOperator(minecraft, player(minecraft), false));
         context.runOnClient(client -> Platform.setScreen(new AddonsScreen(null)));
         context.waitForScreen(AddonsScreen.class);
-        context.waitTick();
         clickOnRow(context, "Settings");
         Worlds.waitForClient(context, client -> Platform.currentScreen() instanceof PackSettingsScreen, PATIENCE,
             () -> "Expected Settings to open the add-on's settings, and found " + Platform.currentScreen() + " "
@@ -238,7 +235,6 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
         server.runOnServer(minecraft -> Platform.setOperator(minecraft, player(minecraft), true));
         context.runOnClient(client -> Platform.setScreen(new AddonsScreen(null)));
         context.waitForScreen(AddonsScreen.class);
-        context.waitTick();
         clickOnRow(context, "Settings");
         Worlds.waitForClient(context, client -> Platform.currentScreen() instanceof PackSettingsScreen, PATIENCE,
             () -> "Expected Settings to open the add-on's settings, and found " + Platform.currentScreen() + " "
@@ -292,11 +288,7 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
                 : java.util.stream.Stream.of(child));
     }
 
-    /**
-     * A click with the pointer on the button labelled `label` laid over the test add-on's row. A screen
-     * opened straight from play lets the mouse go and moves the cursor to the middle of the window, and
-     * a click sent before the next tick lands there, so such a screen is given a tick first.
-     */
+    /** A click with the pointer on the button labelled `label` laid over the test add-on's row. */
     private static void clickOnRow(ClientGameTestContext context, String label) {
         double[] point = context.computeOnClient(client -> {
             AddonRow row = widgets(Platform.currentScreen()).stream()
@@ -314,6 +306,17 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
             return new double[] {(button.getX() + button.getWidth() / 2.0) * scale,
                 (button.getY() + button.getHeight() / 2.0) * scale};
         });
+        press(context, point);
+    }
+
+    /**
+     * A press of the left button with the pointer at `point`, in window pixels. The game hands a click
+     * to no screen while an overlay is drawn, and the reload a join's add-ons ask for leaves its overlay
+     * fading over the world for a while after the world has opened.
+     */
+    private static void press(ClientGameTestContext context, double[] point) {
+        Worlds.waitForClient(context, client -> Worlds.overlay(client) == null, PATIENCE,
+            () -> "Expected the resource reload's overlay gone before a click.");
         context.getInput().setCursorPos(point[0], point[1]);
         context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
         context.waitTick();
@@ -338,9 +341,7 @@ public final class PackSettingsClientGameTest implements FabricClientGameTest {
             return new double[] {(widget.getX() + inset + along * (widget.getWidth() - 2 * inset)) * scale,
                 (widget.getY() + widget.getHeight() / 2.0) * scale};
         });
-        context.getInput().setCursorPos(point[0], point[1]);
-        context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
-        context.waitTick();
+        press(context, point);
     }
 
     /** Turns the wheel until the widget lies wholly between the heading and the Done button. */

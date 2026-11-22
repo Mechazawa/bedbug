@@ -304,6 +304,11 @@ These are the checks it runs, and what each one catches:
   away, and a widget with no label is pressed with `onPress`, the way `clickScreenButton` presses
   one, because a click placed with the pointer did not always land.
 
+  **The game hands a click to no screen while an overlay is drawn.** Joining a dedicated server
+  reloads the resources for the server's add-ons, and the reload's overlay goes on fading over the
+  world after the world has opened, so a test that clicks right after the join clicks nothing. Wait
+  for `Worlds.overlay` to answer null first, as `PackSettingsClientGameTest.press` does.
+
   `VillageClientGameTest` makes a normal world with structures, teleports to the nearest village and
   waits for villagers to be standing in it, which is what a player calls a village. Two traps met
   while writing it:
