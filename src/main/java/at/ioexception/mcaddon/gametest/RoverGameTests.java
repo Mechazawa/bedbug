@@ -252,7 +252,7 @@ public final class RoverGameTests {
         }
         rover.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).setBaseValue(0);
         helper.succeedWhen(() -> {
-            List<Long> heard = listener.heard("tp:rover.tempt", rover);
+            List<Long> heard = listener.heard("tp:rover.tempt", helper.getBounds());
             helper.assertTrue(heard.size() >= 2, ROVER + " made its tempt sound " + heard.size() + " times.");
             long gap = heard.get(1) - heard.get(0);
             helper.assertTrue(gap >= 9 && gap <= 12, ROVER + " left " + gap + " ticks between half second sounds.");
