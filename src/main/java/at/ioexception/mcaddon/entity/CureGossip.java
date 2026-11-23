@@ -33,7 +33,7 @@ final class CureGossip {
     private long decayed;
 
     /** The player cured the trader whose `minecraft:economy_trade_table` this is. */
-    void cure(UUID player, JsonObject economy, long now) {
+    public void cure(UUID player, JsonObject economy, long now) {
         int[] added = pair(economy.get("cured_discount"));
         int[] ceiling = pair(economy.get("max_cured_discount"));
         int[] gossip = players.computeIfAbsent(player, id -> new int[2]);

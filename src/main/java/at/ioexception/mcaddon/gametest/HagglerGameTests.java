@@ -182,6 +182,28 @@ public final class HagglerGameTests {
         helper.succeed();
     }
 
+    /**
+     * A table's own `cured_discount` and `max_cured_discount` decide the gossip: sixty minor and twenty
+     * major capped at eight make a reputation of 100, so bread at eight emeralds costs three. Bedrock's
+     * defaults in either field would make it two or five.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 40)
+    public void aCuredTraderPricesByItsOwnDiscountAndCap(GameTestHelper helper) {
+        AddonEntity trader = haggler(helper, "tp:haggler_name");
+        if (trader == null) {
+            helper.succeed();
+            return;
+        }
+
+        Customer curer = Customer.join(helper);
+        AddonEntity cured = transformed(helper, trader, "tp:haggler_cure_frugally", curer.player());
+        int toCurer = breadPrice(cured, curer);
+        curer.leave();
+        helper.assertTrue(toCurer == FRUGAL_BREAD,
+            HAGGLER + " charges the player who cured it " + toCurer + " emeralds for bread.");
+        helper.succeed();
+    }
+
     static int breadPrice(AddonEntity trader, Customer customer) {
         trader.mobInteract(customer.player(), InteractionHand.MAIN_HAND);
         int price = trader.getOffers().stream()
@@ -194,6 +216,7 @@ public final class HagglerGameTests {
 
     private static final int CURED_BREAD = 2;
     private static final int FULL_BREAD = 8;
+    private static final int FRUGAL_BREAD = 3;
 
     /** Raises the event whose group transforms the trader and finds what it became. */
     static AddonEntity transformed(GameTestHelper helper, AddonEntity trader, String event,

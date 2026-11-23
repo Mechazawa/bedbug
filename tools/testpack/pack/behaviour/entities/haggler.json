@@ -102,6 +102,21 @@
           "cured_discount": [-25, -20],
           "max_cured_discount": [-25, -20]
         }
+      },
+      "tp:haggler_curing_frugally": {
+        "minecraft:transformation": {
+          "into": "tp:haggler",
+          "add": {
+            "component_groups": ["tp:haggler_cured_frugally"]
+          }
+        }
+      },
+      "tp:haggler_cured_frugally": {
+        "minecraft:economy_trade_table": {
+          "table": "trading/haggler_trades.json",
+          "cured_discount": [-60, -20],
+          "max_cured_discount": [-200, -8]
+        }
       }
     },
     "events": {
@@ -112,7 +127,8 @@
       "tp:haggler_convert": {"add": {"component_groups": ["tp:haggler_converting"]}},
       "tp:haggler_turn": {"add": {"component_groups": ["tp:haggler_turning"]}},
       "tp:haggler_return": {"add": {"component_groups": ["tp:haggler_returning"]}},
-      "tp:haggler_cure": {"add": {"component_groups": ["tp:haggler_curing"]}}
+      "tp:haggler_cure": {"add": {"component_groups": ["tp:haggler_curing"]}},
+      "tp:haggler_cure_frugally": {"add": {"component_groups": ["tp:haggler_curing_frugally"]}}
     }
   }
 }
