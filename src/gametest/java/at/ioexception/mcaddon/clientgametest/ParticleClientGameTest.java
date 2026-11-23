@@ -440,7 +440,9 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
         for (int tick = 0; tick < 100; tick++) {
             context.waitTick();
             heights.add(context.computeOnClient(client -> bounce.particle().getBoundingBox().minY));
-            if (tick == 79) lastSecondX = context.computeOnClient(client -> bounce.particle().getBoundingBox().getCenter().x);
+            if (tick == 79) {
+                lastSecondX = context.computeOnClient(client -> bounce.particle().getBoundingBox().getCenter().x);
+            }
         }
         double travelled = context.computeOnClient(client -> bounce.particle().getBoundingBox().getCenter().x)
             - lastSecondX;
