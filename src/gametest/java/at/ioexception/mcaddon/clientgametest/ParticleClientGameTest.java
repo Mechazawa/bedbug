@@ -10,6 +10,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -420,7 +421,12 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
 
     /**
      * `tp:bounce` falls a block onto the ground with a `coefficient_of_restitution` of 0.8, so it
-     * comes back up after every landing and lands again.
+     * comes back up after every landing and lands again. A rebound keeps 0.8 of the landing speed,
+     * so each apex stands at 0.64 of the one before it. Java stops a particle for good at its first
+     * landing unless its `stoppedByCollision` is cleared, so three apexes in a row say it rebounds
+     * by that share. Once the rebounds are too small to see the particle rests on the floor, and
+     * Java would stop it there for good, so its slide along x in the fifth second says the clearing
+     * runs.
      */
     private static void bounce(ClientGameTestContext context, TestSingleplayerContext world) {
         context.runOnClient(client -> Born.clear());
@@ -429,21 +435,31 @@ public final class ParticleClientGameTest implements FabricClientGameTest {
             () -> "tp:bounce emits one particle at once and none was made.");
         Born.Particle bounce = context.computeOnClient(client -> Born.of("tp:bounce").get(0));
 
-        int rises = 0;
-        boolean falling = false;
-        double was = context.computeOnClient(client -> bounce.particle().getBoundingBox().minY);
-        for (int tick = 0; tick < 50; tick++) {
+        List<Double> heights = new ArrayList<>();
+        double lastSecondX = 0;
+        for (int tick = 0; tick < 100; tick++) {
             context.waitTick();
-            double now = context.computeOnClient(client -> bounce.particle().getBoundingBox().minY);
-            if (now < was) falling = true;
-            if (now > was && falling) {
-                rises++;
-                falling = false;
-            }
-            was = now;
+            heights.add(context.computeOnClient(client -> bounce.particle().getBoundingBox().minY));
+            if (tick == 79) lastSecondX = context.computeOnClient(client -> bounce.particle().getBoundingBox().getCenter().x);
         }
-        Assert.that(rises >= 2, "tp:bounce bounces at 0.8 of its landing speed and came back up " + rises
-            + " times in two and a half seconds.");
+        double travelled = context.computeOnClient(client -> bounce.particle().getBoundingBox().getCenter().x)
+            - lastSecondX;
+        Assert.that(travelled > 1.5, "tp:bounce moves two blocks a second along x, and after the rebounds have"
+            + " died away it still slides, and moved " + travelled + " blocks in its fifth second.");
+        double floor = heights.stream().mapToDouble(Double::doubleValue).min().orElseThrow();
+        List<Double> apexes = new ArrayList<>();
+        apexes.add(heights.get(0) - floor);
+        for (int tick = 1; tick < heights.size() - 1; tick++) {
+            double height = heights.get(tick);
+            if (height > heights.get(tick - 1) && height >= heights.get(tick + 1)) apexes.add(height - floor);
+        }
+        Assert.that(apexes.size() >= 3, "tp:bounce lands and rebounds again and again, and its apexes above the"
+            + " floor were " + apexes + ".");
+        for (int i = 1; i < 3; i++) {
+            double ratio = apexes.get(i) / apexes.get(i - 1);
+            Assert.that(ratio > 0.5 && ratio < 0.8, "tp:bounce rebounds to 0.64 of its last apex and apex " + i
+                + " stood at " + ratio + " of apex " + (i - 1) + " in " + apexes + ".");
+        }
     }
 
     /**
