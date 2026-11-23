@@ -3584,7 +3584,9 @@ publishes nothing:
   are Java's own cure gossip and ceilings (`GossipType` `MINOR_POSITIVE` and `MAJOR_POSITIVE`). The
   price is Java's `Villager.updateSpecialPrices`: a reputation of minor plus five times major moves
   each offer by the reputation times its price multiplier, for that player only, until the screen
-  closes. The gossip decays as Java's does (see `## Census gap: cure-decay`). `use_legacy_price_formula` and the nearby cure fields are not read.
+  closes. The gossip decays as Java's does (see `## Census gap: cure-decay`).
+  `aCuredTraderPricesByItsOwnDiscountAndCap` cures into `tp:haggler_cured_frugally`, whose values
+  differ from the defaults, so a default standing in for either field changes the price. `use_legacy_price_formula` and the nearby cure fields are not read.
 - **`container_type`** opens Java's chest grid in whole rows (at most six) over the slots, the cells
   past the last slot shut: `container`, `minecart_chest`, `chest_boat`, `hopper` and
   `minecart_hopper` on any use, `horse` only to a crouching player, `inventory` never. Java's horse,
