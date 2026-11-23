@@ -396,6 +396,22 @@ public final class KeeperGoalGameTests {
             .thenSucceed();
     }
 
+    /** A stated `use_block_min` and `use_block_max` of 5 brings the first visit well before the default 100. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 300)
+    public void aCompostingWorkerWithAShortUseIntervalVisitsAtOnce(GameTestHelper helper) {
+        visitingComposter(helper, "quick", SEEDS, 0, SHORT_OF_INTERVAL, (keeper, level) ->
+            helper.assertTrue(seedsOf(keeper) < SEEDS,
+                KEEPER + " had not composted " + SHORT_OF_INTERVAL + " ticks into a use interval of 5."));
+    }
+
+    /** A stated interval of 300 holds the visit back past the 200 ticks the default never exceeds. */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 500)
+    public void aCompostingWorkerWithALongUseIntervalHoldsTheVisitBack(GameTestHelper helper) {
+        visitingComposter(helper, "long", SEEDS, 0, 250, (keeper, level) ->
+            helper.assertTrue(seedsOf(keeper) == SEEDS,
+                KEEPER + " composted within 250 ticks of a use interval of 300."));
+    }
+
     private static final int SEEDS = 30;
     private static final int PER_USE = 3;
     private static final int FULL = 8;

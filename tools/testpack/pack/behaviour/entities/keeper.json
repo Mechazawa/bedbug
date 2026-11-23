@@ -352,6 +352,42 @@
           "min_item_count": 0
         }
       },
+      "tp:keeper_composting_quick": {
+        "minecraft:inventory": {
+          "inventory_size": 5
+        },
+        "minecraft:behavior.work_composter": {
+          "priority": 0,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          },
+          "active_time": 200,
+          "can_work_in_rain": true,
+          "use_block_min": 5,
+          "use_block_max": 5,
+          "items_per_use_max": 3,
+          "min_item_count": 0
+        }
+      },
+      "tp:keeper_composting_long": {
+        "minecraft:inventory": {
+          "inventory_size": 5
+        },
+        "minecraft:behavior.work_composter": {
+          "priority": 0,
+          "on_arrival": {
+            "event": "tp:keeper_arrived",
+            "target": "self"
+          },
+          "active_time": 600,
+          "can_work_in_rain": true,
+          "use_block_min": 300,
+          "use_block_max": 300,
+          "items_per_use_max": 3,
+          "min_item_count": 0
+        }
+      },
       "tp:keeper_working_aloud": {
         "minecraft:behavior.work": {
           "priority": 0,
@@ -557,6 +593,20 @@
         "add": {
           "component_groups": [
             "tp:keeper_composting_slow"
+          ]
+        }
+      },
+      "tp:keeper_make_composting_quick": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_composting_quick"
+          ]
+        }
+      },
+      "tp:keeper_make_composting_long": {
+        "add": {
+          "component_groups": [
+            "tp:keeper_composting_long"
           ]
         }
       },
