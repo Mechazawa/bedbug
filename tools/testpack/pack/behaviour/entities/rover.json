@@ -102,6 +102,7 @@
             }
           ],
           "max_flee": 4,
+          "avoid_target_xz": 3,
           "on_escape_event": {
             "event": "tp:rover_escaped",
             "target": "self"
@@ -161,10 +162,11 @@
               "max_dist": 5
             }
           ],
+          "avoid_target_xz": 3,
           "avoid_mob_sound": "retreat",
           "sound_interval": {
-            "min": 0.5,
-            "max": 0.5
+            "min": 0.55,
+            "max": 0.55
           }
         }
       },

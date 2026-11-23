@@ -2400,6 +2400,16 @@ a circle on 26.2, so the tests subtract `absolutePos(BlockPos.ZERO)`; and a navi
 `getTargetPos` moves whenever a path is asked for, so a goal that tests paths is read through
 `getPath().getTarget()`.
 
+## Avoiding mobs
+
+`minecraft:behavior.avoid_mob_type` is `entity/AvoidMobsGoal`, read back by `RoverGameTests`.
+Mojang's `max_flee` is how far the entity must be before it stops fleeing, so the run holds until
+then: an entity that arrives and finds no spot further off stays put, still fleeing, and looks again
+on the next check. The goal ticks every tick, so `sound_interval` is counted exactly; ticked every
+second tick, an 11 tick interval came out at 12. The flight tests lay stone over the structure first,
+because no spot a flight picks lies on the barrier floor, and a flight over it heads off the
+structure on paths that end at once, so it stopped and started again at random.
+
 ## Molang structs
 
 A `MolangValue` is a number, a string or a struct of lowercase members, and it is never changed in

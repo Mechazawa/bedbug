@@ -138,7 +138,8 @@ public final class AvoidMobsGoal extends AvoidEntityGoal<LivingEntity> {
     /**
      * The run holds until the entry's `max_flee` is reached; under `must_see` it also ends once what
      * is fled has been out of sight for `must_see_forget_duration`, and under
-     * `reevaluate_description` once it stops answering the entry's filters.
+     * `reevaluate_description` once it stops answering the entry's filters. An entity that finds no
+     * spot further off stays where it is, still fleeing, and looks again.
      */
     @Override
     public boolean canContinueToUse() {
@@ -151,9 +152,8 @@ public final class AvoidMobsGoal extends AvoidEntityGoal<LivingEntity> {
             }
         }
         if (fleeing.reevaluates() && !fleeing.answers(mob, toAvoid)) return false;
-        if (!pathNav.isDone()) return true;
-
-        return plan() && pathNav.moveTo(path, fleeing.walk());
+        if (pathNav.isDone() && plan()) pathNav.moveTo(path, fleeing.walk());
+        return true;
     }
 
     private boolean escaped() {
@@ -167,6 +167,12 @@ public final class AvoidMobsGoal extends AvoidEntityGoal<LivingEntity> {
         if (dropsTarget) mob.setTarget(null);
         nextSoundAt = mob.tickCount;
         lastSeenAt = mob.tickCount;
+    }
+
+    /** `sound_interval` is counted in ticks, so every tick has to reach it. */
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return true;
     }
 
     @Override

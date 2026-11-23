@@ -21,6 +21,9 @@ public final class RoverGameTests {
 
     private static final BlockPos STAND = new BlockPos(1, 0, 1);
 
+    /** The middle of the stone floor `floor` lays, where a flight has room every way. */
+    private static final BlockPos MIDDLE = new BlockPos(4, 1, 4);
+
     /** How far the pig stands from the mount, along X. */
     private static final int APART = 8;
 
@@ -101,14 +104,40 @@ public final class RoverGameTests {
     /** The flight ends `max_flee` blocks from the pig, with `on_escape_event`. */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
     public void anEntityEscapesAtItsMaxFleeAndSaysSo(GameTestHelper helper) {
-        AddonEntity rover = rover(helper, "tp:rover_make_avoid_escaping", STAND);
+        floor(helper);
+        AddonEntity rover = rover(helper, "tp:rover_make_avoid_escaping", MIDDLE);
         if (rover == null) {
             helper.succeed();
             return;
         }
-        pig(helper, STAND.east(2));
+        pig(helper, MIDDLE.east(2));
         helper.succeedWhen(() -> helper.assertTrue(rover.declaresNow("minecraft:is_chested"),
             ROVER + " never raised on_escape_event."));
+    }
+
+    /**
+     * A flight lasts until `max_flee`, so an entity cornered on a strip of stone, with no spot
+     * further from the pig left to run to, still flees. The barrier floor round the strip is no
+     * spot at all.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
+    public void aCorneredEntityKeepsFleeing(GameTestHelper helper) {
+        for (int x = 1; x <= 4; x++) helper.setBlock(new BlockPos(x, 0, 4), Blocks.STONE);
+        AddonEntity rover = rover(helper, "tp:rover_make_avoid_near", new BlockPos(3, 1, 4));
+        if (rover == null) {
+            helper.succeed();
+            return;
+        }
+        Mob pig = pig(helper, new BlockPos(4, 1, 4));
+        net.minecraft.world.phys.Vec3 end = net.minecraft.world.phys.Vec3.atBottomCenterOf(
+            helper.absolutePos(new BlockPos(1, 1, 4)));
+        helper.runAfterDelay(80, () -> {
+            helper.assertTrue(rover.position().distanceTo(end) < 0.5,
+                ROVER + " never reached the end of the strip, standing " + rover.distanceTo(pig) + " from the pig.");
+            helper.assertTrue(rover.value("is_avoiding_mobs") == Boolean.TRUE,
+                ROVER + " cornered " + rover.distanceTo(pig) + " blocks from a pig stopped fleeing.");
+            helper.succeed();
+        });
     }
 
     /** `remove_target` drops what the entity was after as it starts to flee. */
@@ -149,22 +178,26 @@ public final class RoverGameTests {
         });
     }
 
-    /** `avoid_mob_sound` is made as the flight starts and again every `sound_interval` seconds. */
+    /**
+     * `avoid_mob_sound` is made as the flight starts and again every `sound_interval` seconds. The
+     * interval is 11 ticks, which a goal ticked every second tick stretches to 12.
+     */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 100)
     public void aFleeingEntityMakesItsAvoidSound(GameTestHelper helper) {
-        KeeperGoalGameTests.Listener listener = KeeperGoalGameTests.Listener.join(helper, STAND.south(3));
-        AddonEntity rover = rover(helper, "tp:rover_make_avoid_aloud", STAND);
+        floor(helper);
+        KeeperGoalGameTests.Listener listener = KeeperGoalGameTests.Listener.join(helper, MIDDLE.south(3));
+        AddonEntity rover = rover(helper, "tp:rover_make_avoid_aloud", MIDDLE);
         if (rover == null) {
             listener.leave();
             helper.succeed();
             return;
         }
-        pig(helper, STAND.east(2));
+        pig(helper, MIDDLE.east(2));
         helper.succeedWhen(() -> {
-            List<Long> heard = listener.heard("tp:rover.retreat", rover);
+            List<Long> heard = listener.heard("tp:rover.retreat", helper.getBounds());
             helper.assertTrue(heard.size() >= 2, ROVER + " made its retreat sound " + heard.size() + " times.");
-            helper.assertTrue(heard.get(1) - heard.get(0) >= 9 && heard.get(1) - heard.get(0) <= 12,
-                ROVER + " left " + (heard.get(1) - heard.get(0)) + " ticks between half second sounds.");
+            helper.assertTrue(heard.get(1) - heard.get(0) == 11,
+                ROVER + " left " + (heard.get(1) - heard.get(0)) + " ticks between sounds 0.55 seconds apart.");
             listener.leave();
         });
     }
@@ -188,9 +221,7 @@ public final class RoverGameTests {
     /** `avoid_target_xz` and `avoid_target_y` bound the spot the flight heads for. */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 40)
     public void aFleeingEntityPicksItsSpotWithinItsAvoidTargetBox(GameTestHelper helper) {
-        for (int x = 0; x < 8; x++) {
-            for (int z = 0; z < 8; z++) helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
-        }
+        floor(helper);
         AddonEntity rover = rover(helper, "tp:rover_make_avoid_near", new BlockPos(2, 1, 4));
         if (rover == null) {
             helper.succeed();
@@ -327,6 +358,16 @@ public final class RoverGameTests {
                 ROVER + " sleeps " + (box.minY - bed.getY()) + " above its bed's floor.");
             helper.succeed();
         });
+    }
+
+    /**
+     * Stone over the whole structure. Java's random walks end on no barrier, so on the bare test floor
+     * every spot a flight picks is off the structure and out of reach.
+     */
+    private static void floor(GameTestHelper helper) {
+        for (int x = 0; x < 8; x++) {
+            for (int z = 0; z < 8; z++) helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+        }
     }
 
     private static long snowballsBy(GameTestHelper helper, AddonEntity shooter) {

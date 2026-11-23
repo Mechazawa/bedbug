@@ -563,6 +563,14 @@ public final class KeeperGoalGameTests {
                 .toList();
         }
 
+        /** The game times at which the server sent this player a sound made inside the box, oldest first. */
+        List<Long> heard(String sound, net.minecraft.world.phys.AABB within) {
+            return sounds.getOrDefault(sound, List.of()).stream()
+                .filter(heard -> within.contains(heard.at))
+                .map(Heard::when)
+                .toList();
+        }
+
         void leave() {
             player.level().getServer().getPlayerList().remove(player);
         }
